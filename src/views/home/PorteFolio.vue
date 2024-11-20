@@ -33,18 +33,21 @@
         </section>
       </div>
     </div>
-    <div v-if="activeProject" class="overlay" :style="overlayStyle">
-      <p class="title" :class="{'visible': activeProject.visible}"> {{ activeProject.name }} </p>
-      <p class="information" :class="{'visible': activeProject.visible}"> {{ activeProject.type }} - {{ activeProject.year }} </p>
-      <svg v-if="activeProject.url" @click="href(activeProject.url)" :class="{'visible': activeProject.visible}" class="goto-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="share">
-        <g>
-          <path fill="var(--background-color)" d="M22,12a1,1,0,0,0-1,1v6a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2V5A2,2,0,0,1,5,3h6a1,1,0,0,0,0-2H5A4,4,0,0,0,1,5V19a4,4,0,0,0,4,4H19a4,4,0,0,0,4-4V13A1,1,0,0,0,22,12Z"></path>
-          <path fill="var(--background-color)" d="M22.922,1.614a.989.989,0,0,0-.186-.278c-.012-.013-.016-.03-.029-.043s-.03-.017-.043-.029A.939.939,0,0,0,22,1H16a1,1,0,0,0,0,2h3.586l-7.293,7.293a1,1,0,1,0,1.414,1.414L21,4.414V8a1,1,0,0,0,2,0V2A.99.99,0,0,0,22.922,1.614Z"></path>
-        </g>
-      </svg>
+    <div v-if="activeProject" class="overlay" :style="overlayStyle" >
       <svg @click="closeProject()" class="svg-icon" :class="{'visible': activeProject.visible}" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M810.65984 170.65984q18.3296 0 30.49472 12.16512t12.16512 30.49472q0 18.00192-12.32896 30.33088l-268.67712 268.32896 268.67712 268.32896q12.32896 12.32896 12.32896 30.33088 0 18.3296-12.16512 30.49472t-30.49472 12.16512q-18.00192 0-30.33088-12.32896l-268.32896-268.67712-268.32896 268.67712q-12.32896 12.32896-30.33088 12.32896-18.3296 0-30.49472-12.16512t-12.16512-30.49472q0-18.00192 12.32896-30.33088l268.67712-268.32896-268.67712-268.32896q-12.32896-12.32896-12.32896-30.33088 0-18.3296 12.16512-30.49472t30.49472-12.16512q18.00192 0 30.33088 12.32896l268.32896 268.67712 268.32896-268.67712q12.32896-12.32896 30.33088-12.32896z"  /></svg>
-      <Carousel v-if="activeProject.imgs" :items="activeProject.imgs" />
-      <p class="description" :class="{'visible': activeProject.visible}" v-html="activeProject.description" />
+      <PDF v-if="activeProject.pdf" :src="activeProject.pdf" class="pdf"></PDF>
+      <div v-else>
+        <p class="title" :class="{'visible': activeProject.visible}"> {{ activeProject.name }} </p>
+        <p class="information" :class="{'visible': activeProject.visible}"> {{ activeProject.type }} - {{ activeProject.year }} </p>
+        <svg v-if="activeProject.url" @click="href(activeProject.url)" :class="{'visible': activeProject.visible}" class="goto-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="share">
+          <g>
+            <path fill="var(--background-color)" d="M22,12a1,1,0,0,0-1,1v6a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2V5A2,2,0,0,1,5,3h6a1,1,0,0,0,0-2H5A4,4,0,0,0,1,5V19a4,4,0,0,0,4,4H19a4,4,0,0,0,4-4V13A1,1,0,0,0,22,12Z"></path>
+            <path fill="var(--background-color)" d="M22.922,1.614a.989.989,0,0,0-.186-.278c-.012-.013-.016-.03-.029-.043s-.03-.017-.043-.029A.939.939,0,0,0,22,1H16a1,1,0,0,0,0,2h3.586l-7.293,7.293a1,1,0,1,0,1.414,1.414L21,4.414V8a1,1,0,0,0,2,0V2A.99.99,0,0,0,22.922,1.614Z"></path>
+          </g>
+        </svg>
+        <Carousel v-if="activeProject.imgs" :items="activeProject.imgs" />
+        <p class="description" :class="{'visible': activeProject.visible}" v-html="activeProject.description" />
+      </div>
     </div>
   </div>
 </template>
@@ -53,6 +56,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { SiteStore } from '../../stores/Site.js'
 import Carousel from '../../components/carousel/carousel.vue';
+import PDF from 'pdf-vue3'
 
 const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
@@ -79,11 +83,10 @@ const projects = [
     description: "Rapport de projet d'alternance, incluant des études de cas et des contributions à des projets réels en entreprise.",
     year: '2023',
     type: frSelect.value?'Projet scolaire':'School project',
-    url: '/assets/projects/alternance/memoire.pdf',
+    pdf: '/projects/alternance/Mémoire.pdf',
     techno: [{name: 'Python', url: 'https://www.python.org/'}, {name: 'PostgreSQL', url: 'https://www.postgresql.org/'}],
     path: "/projects/alternance",
-    color: "89, 95, 140",
-    action: 'pdf'
+    color: "69, 73, 103",
   },
   {
     name: 'CityZen',
@@ -167,7 +170,8 @@ const activeProject = ref()
 const overlayStyle = ref({});
 
 const openProject = (project) => {
-  SiteStore().preventScrollEvent()
+  if(!project.pdf)
+    SiteStore().preventScrollEvent()
   activeProject.value = project;
   const projectElement = document.getElementById(project.name);
   const rect = projectElement.getBoundingClientRect();
@@ -181,7 +185,7 @@ const openProject = (project) => {
     height: '0',
     left: `${centerX}px`,
     top: `${centerY}px`,
-    backgroundColor: `rgb(${project.color||'0, 0, 0'})`
+    backgroundColor: `rgba(${project.color||'0, 0, 0'},${project.pdf?'0':'1'})`
   };
 
   setTimeout(() => {
@@ -191,7 +195,7 @@ const openProject = (project) => {
       left: '5vw',
       top: '5vh',
       borderRadius: '15px',
-      backgroundColor: `rgb(${project.color||'0, 0, 0'})`
+      backgroundColor: `rgba(${project.color||'0, 0, 0'},${project.pdf?'0':'1'})`
     };
   }, 0);
   setTimeout(() => {
@@ -223,7 +227,7 @@ const closeProject = () => {
       borderRadius: '15px',
       left: `${centerX}px`,
       top: `${centerY}px`,
-      backgroundColor: `rgb(${activeProject.value.color || '0, 0, 0'})`
+      backgroundColor: `rgba(${activeProject.value.color || '0, 0, 0'},${activeProject.value.pdf?'0':'1'})`
     };
 
     setTimeout(() => {
@@ -401,6 +405,7 @@ const closeProject = () => {
   position: absolute; 
   top: 35px; 
   right: -5px; 
+  z-index: 2;
   width: 40px; 
   height: 40px;
   vertical-align: middle;
@@ -434,6 +439,10 @@ const closeProject = () => {
 .visible {
   opacity: 1 !important;
 }
+.pdf{
+    margin: auto;
+    min-width: 60%;
+}
 @media (max-width: 800px) {
   .portefolio-left-section {
     height: unset;
@@ -451,8 +460,10 @@ const closeProject = () => {
   .overlay .description {
     font-size: 14px;
   }
+  .pdf {
+  }
 }
-@media (max-width: 800px) {
+@media (max-width: 600px) {
   .project {
     height: 100px;
   }
