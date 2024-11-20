@@ -1,0 +1,113 @@
+/* #app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    place-items: center;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 2rem;
+  }
+} */
+/* @font-face {
+  font-family: 'Tilt Wrap';
+  src:
+    url('./fonts/Tilt_Wrap/TiltWarp-Regular.ttf') format('truetype'),
+    url('./fonts/Tilt_Wrap/TiltWarp-Regular-VariableFont_XROT\,YROT.ttf') format('truetype');
+} */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+/* Barre de défilement elle-même */
+::-webkit-scrollbar-thumb {
+  background-color: #696969; /* Couleur de la barre de défilement */
+  border-radius: 5px; /* Coins arrondis */
+}
+
+/* Gutter, la zone grise autour de la barre de défilement */
+::-webkit-scrollbar-track {
+  background-color: #f1f1f1; /* Couleur du gutter */
+}
+
+/* Styles pour la barre de défilement horizontale (si nécessaire) */
+::-webkit-scrollbar-thumb:horizontal {
+  height: 2px;
+}
+
+::-webkit-scrollbar-thumb:horizontal {
+  background-color: #696969;
+}
+
+::-webkit-scrollbar-track:horizontal {
+  background-color: #f1f1f1;
+}
+
+html,
+body {
+  margin: 0;
+  overflow-x: hidden !important;
+  background: var(--background-color);
+  color: var(--text);
+  transition: background 0.5s linear;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  font-family: 'Playfair Display', serif;
+}
+.primary {
+  color: '#7d6167';
+}
+.secondary {
+  color: '#e5dbd1';
+}
+.gray {
+  color: '#e5dbd1';
+}
+.text_color {
+  color: '#8e9092';
+}
+.contact_button {
+  padding: 10px 15px;
+  margin: auto;
+  border-radius: 10px;
+  background-color: var(--primary);
+  color: var(--secondary);
+  border: none;
+  cursor: pointer;
+  pointer-events: all;
+  z-index: 4;
+  font-weight: bold;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.contact_button:hover {
+  background-color: var(--secondary);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
