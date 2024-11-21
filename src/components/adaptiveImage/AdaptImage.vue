@@ -7,10 +7,10 @@
       loading="lazy"
       decoding="async"
       :alt="props.alt"
-      style="  width: 100%;
-  height: 100%;
-  border-radius: 10px;
-  object-fit: contain;"
+      style="width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      object-fit: contain;"
     />
   </picture>
 </template>
