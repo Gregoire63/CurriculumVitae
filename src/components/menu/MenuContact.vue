@@ -45,6 +45,7 @@
             required
             autocomplete="off"
             :lang="frSelect ? 'fr' : 'en'"
+            aria-label="Nom"
           />
           <label for="email"><span>Email</span></label>
         </div>
@@ -60,6 +61,7 @@
             required
             autocomplete="off"
             :lang="frSelect ? 'fr' : 'en'"
+             aria-label="Question"
           ></textarea>
           <label for="msg"><span>Message </span></label>
         </div>

@@ -2,7 +2,7 @@
   <div style="height: 450vh" id="app_container">
     <div style="position: fixed; top: 0; right: 0; width: 100vw; height: 100vh; overflow: hidden">
       <div class="presentation">
-        <img src="../assets/photoCV.png" class="photo" />
+        <img rel="preload" src="../assets/photoCV.webp" class="photo" alt="photo cv"  type="image/webp" />
         <div class="text">
           <h1 class="slogan">
             Grégoire Raturat - {{ frSelect ? 'Développeur FullStack' : 'FullStack Developer' }}

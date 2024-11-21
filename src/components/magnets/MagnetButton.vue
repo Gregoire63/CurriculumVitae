@@ -48,9 +48,9 @@ onUnmounted(() => {
 </script>
 <template>
   <div style="display: flex; justify-content: center; width: 100%">
-    <div class="gravityButton">
+    <div class="gravityButton" aria-labelledby="GitHub">
       <button style="--color: var(--primary); --_fill: var(--primary)">
-        <a target="_blank" href="https://github.com/Gregoire63">
+        <a target="_blank" href="https://github.com/Gregoire63" aria-label="GitHub">
           <svg
             class="buttonIcon"
             xmlns="http://www.w3.org/2000/svg"
@@ -66,8 +66,8 @@ onUnmounted(() => {
       </button>
     </div>
     <div class="gravityButton">
-      <button style="--color: var(--primary); --_fill: var(--primary)">
-        <a target="_blank" href="https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/">
+      <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="Linkedin">
+        <a target="_blank" href="https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/" aria-label="Linkedin">
           <svg
             class="buttonIcon"
             xmlns="http://www.w3.org/2000/svg"
@@ -83,8 +83,8 @@ onUnmounted(() => {
       </button>
     </div>
     <div class="gravityButton">
-      <button style="--color: var(--primary); --_fill: var(--primary)">
-        <a href="./assets/cv/CV_Gregoire_Raturat.pdf" download="CV_Gregoire_Raturat.pdf">
+      <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="CV">
+        <a href="./assets/cv/CV_Gregoire_Raturat.pdf" download="CV_Gregoire_Raturat.pdf" aria-label="CV">
           <svg
             class="buttonIcon"
             style="width: 60%; height: 60%; margin-top: 3px"

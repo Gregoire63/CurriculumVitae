@@ -4,7 +4,7 @@
     <div class="carrousel-cards">
       <label v-for="(item, index) in items" :key="index" class="carrousel-card" :for="'item-' + (index + 1)" :id="'song-' + (index + 1)" :style="getCardStyle(index)">
         <video v-if="item.type === 'video'" :src="item.src" loop muted autoplay></video>
-        <img v-else :src="item.src" :alt="item.title">
+        <AdaptImage v-else :src="item.src" :alt="item.title"></AdaptImage>
         <div class="carrousel-title">{{ item.title }}</div>
       </label>
     </div>
@@ -12,6 +12,7 @@
 </template>
 <script setup>
 import { ref, computed } from 'vue';
+import AdaptImage from "../adaptiveImage/AdaptImage.vue"
 const props = defineProps(['items'])
 const selected = ref(0)
 
@@ -83,7 +84,7 @@ input[type=radio] {
   margin-bottom: 20px;
 }
 
-img, video {
+video {
   width: 100%;
   height: 100%;
   border-radius: 10px;

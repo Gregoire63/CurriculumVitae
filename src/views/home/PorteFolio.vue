@@ -4,7 +4,7 @@
     <div id="portefolio-left-section" class="portefolio-left-section" style="transform: translateY(-30vh);">
       <div v-for="(project, index) in leftProjects" :key="index" class="project" :id="project.name">
         <h2>{{ project.name }}</h2>
-        <img :src="`${project.path}/logo.png`" class="project_logo"/>
+        <img :src="`${project.path}/logo.webp`" :alt="`${project.name}_logo`" class="project_logo"/>
         <section>
           <p style="margin-bottom: 5px; font-weight: 600;">
             {{ project.type }} <br/>
@@ -20,7 +20,7 @@
   <div v-show="windowWidth>=800" id="portefolio-right-section" class="portefolio-right-section" style="transform: translateY(30vh);">
     <div v-for="(project, index) in rightProjects" :key="index" class="project" :id="project.name">
         <h2>{{ project.name }}</h2>
-        <img :src="`${project.path}/logo.png`" class="project_logo"/>
+        <img :src="`${project.path}/logo.webp`" :alt="`${project.name}_logo`" class="project_logo"/>
         <section>
           <p style="margin-bottom: 5px; font-weight: 600;">
             {{ project.type }} <br/>
@@ -36,7 +36,7 @@
     <div v-if="activeProject" class="overlay" :style="overlayStyle" >
       <svg @click="closeProject()" class="svg-icon" :class="{'visible': activeProject.visible}" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M810.65984 170.65984q18.3296 0 30.49472 12.16512t12.16512 30.49472q0 18.00192-12.32896 30.33088l-268.67712 268.32896 268.67712 268.32896q12.32896 12.32896 12.32896 30.33088 0 18.3296-12.16512 30.49472t-30.49472 12.16512q-18.00192 0-30.33088-12.32896l-268.32896-268.67712-268.32896 268.67712q-12.32896 12.32896-30.33088 12.32896-18.3296 0-30.49472-12.16512t-12.16512-30.49472q0-18.00192 12.32896-30.33088l268.67712-268.32896-268.67712-268.32896q-12.32896-12.32896-12.32896-30.33088 0-18.3296 12.16512-30.49472t30.49472-12.16512q18.00192 0 30.33088 12.32896l268.32896 268.67712 268.32896-268.67712q12.32896-12.32896 30.33088-12.32896z"  /></svg>
       <PDF v-if="activeProject.pdf" :src="activeProject.pdf" class="pdf"></PDF>
-      <div v-else>
+      <div v-else style="height: 100%;">
         <p class="title" :class="{'visible': activeProject.visible}"> {{ activeProject.name }} </p>
         <p class="information" :class="{'visible': activeProject.visible}"> {{ activeProject.type }} - {{ activeProject.year }} </p>
         <svg v-if="activeProject.url" @click="href(activeProject.url)" :class="{'visible': activeProject.visible}" class="goto-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="share">
@@ -72,10 +72,10 @@ const projects = [
     path: "/projects/nextmusic",
     color: "18, 18, 18",
     imgs: [
-      { src: "/projects/nextmusic/next-music-homescreen.png", title: frSelect?"Acceuil":"Home page"},
-      { src: "/projects/nextmusic/next-music-biblioscreen.png", title: frSelect?"Bibliothèque":"Library"},
-      { src: "/projects/nextmusic/next-music-search.png", title: frSelect?"Recherche":"Search"},
-      { src: "/projects/nextmusic/next-music-favoritescreen.png", title: frSelect?"Favoris":"Favorite"},
+      { src: "/projects/nextmusic/next-music-homescreen.webp", title: frSelect?"Acceuil":"Home page"},
+      { src: "/projects/nextmusic/next-music-biblioscreen.webp", title: frSelect?"Bibliothèque":"Library"},
+      { src: "/projects/nextmusic/next-music-search.webp", title: frSelect?"Recherche":"Search"},
+      { src: "/projects/nextmusic/next-music-favoritescreen.webp", title: frSelect?"Favoris":"Favorite"},
     ]
   },
   {
@@ -100,12 +100,12 @@ const projects = [
     imgs: [
       { src: "/projects/cityzen/cityzen_2.mp4", type:"video", title: frSelect?"Acceuil":"Home page"},
       { src: "/projects/cityzen/cityzen_1.mp4", type:"video", title: frSelect?"Gallerie":"Gallery"},
-      { src: "/projects/cityzen/avis.png", title: frSelect?"Avis":"Avis"},
-      { src: "/projects/cityzen/contact.png", title: frSelect?"Contact":"Contact"},
-      { src: "/projects/cityzen/menu.png", title: frSelect?"Menu":"Menu"},
+      { src: "/projects/cityzen/avis.webp", title: frSelect?"Avis":"Avis"},
+      { src: "/projects/cityzen/contact.webp", title: frSelect?"Contact":"Contact"},
+      { src: "/projects/cityzen/menu.webp", title: frSelect?"Menu":"Menu"},
 
-      { src: "/projects/cityzen/admin-login.png", title: frSelect?"Connexion à l'administration":"Admin login"},
-      { src: "/projects/cityzen/admin_1.png", title: frSelect?"Administration":"Admin"},
+      { src: "/projects/cityzen/admin-login.webp", title: frSelect?"Connexion à l'administration":"Admin login"},
+      { src: "/projects/cityzen/admin_1.webp", title: frSelect?"Administration":"Admin"},
     ]
   },
   {
@@ -117,9 +117,9 @@ const projects = [
     path: "/projects/cutwait",
     color: "7, 26, 24",
     imgs: [
-      { src: "/projects/cutwait/dashboard.png", title: frSelect?"Tableau de bord":"Dashboard"},
-      { src: "/projects/cutwait/map.png", title: frSelect?"Carte":"Map"},
-      { src: "/projects/cutwait/profile.png", title: frSelect?"Profil":"Profile"},
+      { src: "/projects/cutwait/dashboard.webp", title: frSelect?"Tableau de bord":"Dashboard"},
+      { src: "/projects/cutwait/map.webp", title: frSelect?"Carte":"Map"},
+      { src: "/projects/cutwait/profile.webp", title: frSelect?"Profil":"Profile"},
     ]
   },
   {
@@ -142,8 +142,8 @@ const projects = [
     path: "/projects/modelviewer",
     imgs: [
       { src: "/projects/modelviewer/vue_modelviewer.mp4", type:'video'},
-      { src: "/projects/modelviewer/vue_modelviewer.png" },
-      { src: "/projects/modelviewer/init.png"},
+      { src: "/projects/modelviewer/vue_modelviewer.webp" },
+      { src: "/projects/modelviewer/init.webp"},
     ]
   },
 ];
@@ -459,8 +459,6 @@ const closeProject = () => {
   }
   .overlay .description {
     font-size: 14px;
-  }
-  .pdf {
   }
 }
 @media (max-width: 600px) {

@@ -3,7 +3,6 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 
-import './assets/main.css'
 import Vue3Lottie from 'vue3-lottie'
 
 const app = createApp(App)

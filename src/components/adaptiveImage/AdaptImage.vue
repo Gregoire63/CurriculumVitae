@@ -1,29 +1,25 @@
 <template>
   <picture>
-    <source type="image/png" :srcset="getSrcSet('png')" />
-    <source type="image/webp" :srcset="getSrcSet('webp')" />
+    <source type="image/webp" :srcset="getSrcSet()" />
     <img
-      :src="defaultSrc"
-      :srcset="getDefaultSrcSet()"
-      :sizes="sizes"
+      :src="props.src"
+      :srcset="getSrcSet()"
       loading="lazy"
       decoding="async"
-      style="width: 100%; aspect-ratio: 16/9"
+      :alt="props.alt"
+      style="  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  object-fit: contain;"
     />
   </picture>
 </template>
 
 <script setup>
-const props = defineProps(['src'])
+const props = defineProps(['src', 'alt'])
 
-const getSrcSet = (format) => {
-  return `/${props.src}.${format}?width=100 100w, /${props.src}.${format}`
+const getSrcSet = () => {
+  return `${props.src}?width=100 100w, ${props.src}`
 }
 
-const getDefaultSrcSet = () => {
-  return `/${props.src}.png?width=100 100w, /${props.src}.png`
-}
-
-const defaultSrc = `/${props.src}.png`
-const sizes = '(max-width: 900px) 100vw, 50vw'
 </script>
