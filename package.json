@@ -17,7 +17,8 @@
     "pinia": "^2.2.6",
     "ripple-effects": "^1.0.2",
     "vivid-ripples": "^1.0.3",
-    "vue": "^3.5.12"
+    "vue": "^3.5.12",
+    "vue3-lottie": "^3.3.1"
   },
   "devDependencies": {
     "@rushstack/eslint-patch": "^1.10.4",
