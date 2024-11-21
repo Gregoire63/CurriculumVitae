@@ -1,22 +1,34 @@
 <template>
   <div class="degrees-container" id="degrees_container">
-    <div class="degree-title">{{ frSelect ? 'Diplômes' : 'Degrees' }}</div>
+    <h3 class="degree-title">{{ frSelect ? 'Diplômes' : 'Degrees' }}</h3>
     <div class="degrees">
-      <div class="degree">
+      <article class="degree">
         <div class="year">2021 - 2023</div>
-        <div class="title">MASTER - {{ frSelect? 'Expert en Système d\'Information':'Information System Expert'}}</div>
-        <div class="school" @click="openWindow('https://www.ecole-isitech.com/')">ISITECH - Lyon</div>
-      </div>
-      <div class="degree">
+        <div class="title">
+          MASTER - {{ frSelect ? "Expert en Système d'Information" : 'Information System Expert' }}
+        </div>
+        <div class="school" @click="openWindow('https://www.ecole-isitech.com/')">
+          ISITECH - Lyon
+        </div>
+      </article>
+      <article class="degree">
         <div class="year">2020 - 2021</div>
-        <div class="title">BACHELOR - {{ frSelect? 'Responsable de Projet Informatique':'IT Project Manager'}}</div>
-        <div class="school" @click="openWindow('https://www.ecole-isitech.com/')">ISITECH - Lyon</div>
-      </div>
-      <div class="degree">
+        <div class="title">
+          BACHELOR - {{ frSelect ? 'Responsable de Projet Informatique' : 'IT Project Manager' }}
+        </div>
+        <div class="school" @click="openWindow('https://www.ecole-isitech.com/')">
+          ISITECH - Lyon
+        </div>
+      </article>
+      <article class="degree">
         <div class="year">2017 - 2020</div>
-        <div class="title">LICENCE - {{frSelect? 'Licence Informatique':'Computer Science Degree'}}</div>
-        <div class="school" @click="openWindow('https://www.uca.fr/')">Université Clermont Auvergne - Clermont-Ferrand</div>
-      </div>
+        <div class="title">
+          LICENCE - {{ frSelect ? 'Licence Informatique' : 'Computer Science Degree' }}
+        </div>
+        <div class="school" @click="openWindow('https://www.uca.fr/')">
+          Université Clermont Auvergne - Clermont-Ferrand
+        </div>
+      </article>
     </div>
   </div>
 </template>
@@ -28,7 +40,7 @@ const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
 })
 onMounted(() => {
-  if(window.innerWidth<800) return
+  if (window.innerWidth < 800) return
   const degrees = document.querySelectorAll('.degree')
   const setHoverData = (e, degree) => {
     const rect = degree.getBoundingClientRect()
@@ -74,8 +86,8 @@ const openWindow = (name) => {
   color: var(--gray);
   display: flex;
   flex-direction: column;
-  transition: opacity .5s ease;
-  transition-delay: .5s;
+  transition: opacity 0.5s ease;
+  transition-delay: 0.5s;
 }
 .degree-title {
   font-size: 30px;
@@ -141,7 +153,7 @@ const openWindow = (name) => {
     height: 220px;
   }
 }
-  @media (max-width: 768px) {
+@media (max-width: 768px) {
   .degree {
     width: 200px;
     height: 200px;
@@ -152,7 +164,7 @@ const openWindow = (name) => {
     width: 210px;
     height: 130px;
   }
-  .year{
+  .year {
     font-size: 18px;
   }
   .title {
@@ -166,7 +178,7 @@ const openWindow = (name) => {
     height: 100px;
     flex-direction: row;
   }
-  .year{
+  .year {
     font-size: 16px;
   }
   .title {

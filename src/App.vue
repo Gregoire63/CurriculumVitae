@@ -51,4 +51,24 @@ main {
   min-height: 400vh;
   background-color: var(--gray);
 }
+::-webkit-scrollbar {
+  width: 10px !important;
+  height: 8px !important;
+}
+
+/* Couleur de fond de la barre de défilement */
+::-webkit-scrollbar-track {
+  background-color: #f1f1f1;
+}
+
+/* Couleur de la poignée de la barre de défilement */
+::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 5px;
+}
+
+/* Couleur de la poignée de la barre de défilement au survol */
+::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
 </style>

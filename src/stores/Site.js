@@ -98,17 +98,17 @@ export const SiteStore = defineStore('SiteStore', {
           break
       }
     },
-    preventScrollEvent(){
-        window.addEventListener('DOMMouseScroll', preventDefault, false)
-        window.addEventListener('wheel', preventDefault, { passive: false })
-        window.addEventListener('touchmove', preventDefault, { passive: false })
-        window.addEventListener('keydown', preventDefaultForScrollKeys, false)
+    preventScrollEvent() {
+      window.addEventListener('DOMMouseScroll', preventDefault, false)
+      window.addEventListener('wheel', preventDefault, { passive: false })
+      window.addEventListener('touchmove', preventDefault, { passive: false })
+      window.addEventListener('keydown', preventDefaultForScrollKeys, false)
     },
-    stopPreventScrollEvent(){
-        window.removeEventListener('DOMMouseScroll', preventDefault, false)
-        window.removeEventListener('wheel', preventDefault, { passive: false })
-        window.removeEventListener('touchmove', preventDefault, { passive: false })
-        window.removeEventListener('keydown', preventDefaultForScrollKeys, false)
+    stopPreventScrollEvent() {
+      window.removeEventListener('DOMMouseScroll', preventDefault, false)
+      window.removeEventListener('wheel', preventDefault, { passive: false })
+      window.removeEventListener('touchmove', preventDefault, { passive: false })
+      window.removeEventListener('keydown', preventDefaultForScrollKeys, false)
     }
   },
   getters: {

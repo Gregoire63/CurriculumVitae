@@ -16,17 +16,33 @@
         font-size: 19px;
       "
     >
-      <span class="nav-text" @click="SiteStore().flyTo('presentation')" :style="getBackgroundStep==0?'filter: brightness(70%) !important;':''">
+      <span
+        class="nav-text"
+        @click="SiteStore().flyTo('presentation')"
+        :style="getBackgroundStep == 0 ? 'filter: brightness(70%) !important;' : ''"
+      >
         <b style="font-size: 22px !important">1</b> -
         {{ frSelect ? 'Présentation' : 'Presentation' }}
       </span>
-      <span class="nav-text" @click="SiteStore().flyTo('degrees')" :style="getBackgroundStep==2?'filter: brightness(70%) !important;':''">
+      <span
+        class="nav-text"
+        @click="SiteStore().flyTo('degrees')"
+        :style="getBackgroundStep == 2 ? 'filter: brightness(70%) !important;' : ''"
+      >
         <b style="font-size: 22px !important">2</b> - {{ frSelect ? 'Diplômes' : 'Degrees' }}
       </span>
-      <span class="nav-text" @click="SiteStore().flyTo('skills')" :style="getBackgroundStep==5?'filter: brightness(70%) !important;':''">
+      <span
+        class="nav-text"
+        @click="SiteStore().flyTo('skills')"
+        :style="getBackgroundStep == 5 ? 'filter: brightness(70%) !important;' : ''"
+      >
         <b style="font-size: 22px !important">3</b> - {{ frSelect ? 'Compétences' : 'Skills' }}
       </span>
-      <span class="nav-text" @click="SiteStore().flyTo('portefolio')" :style="getBackgroundStep==8?'filter: brightness(70%) !important;':''">
+      <span
+        class="nav-text"
+        @click="SiteStore().flyTo('portefolio')"
+        :style="getBackgroundStep == 8 ? 'filter: brightness(70%) !important;' : ''"
+      >
         <b style="font-size: 22px !important">4</b> - PorteFolio
       </span>
     </div>
@@ -61,7 +77,7 @@
             required
             autocomplete="off"
             :lang="frSelect ? 'fr' : 'en'"
-             aria-label="Question"
+            aria-label="Question"
           ></textarea>
           <label for="msg"><span>Message </span></label>
         </div>

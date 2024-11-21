@@ -67,7 +67,11 @@ onUnmounted(() => {
     </div>
     <div class="gravityButton">
       <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="Linkedin">
-        <a target="_blank" href="https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/" aria-label="Linkedin">
+        <a
+          target="_blank"
+          href="https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/"
+          aria-label="Linkedin"
+        >
           <svg
             class="buttonIcon"
             xmlns="http://www.w3.org/2000/svg"
