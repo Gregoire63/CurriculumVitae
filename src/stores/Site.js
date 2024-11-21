@@ -26,10 +26,14 @@ export const SiteStore = defineStore('SiteStore', {
     scrollYPosition: 0,
     menuOpen: false,
     darkTheme: false,
+    activeProject: null,
     backgroundStep: 0,
     langage: localStorage.getItem('langage') || 'fr'
   }),
   actions: {
+    setActiveProject(data) {
+      this.activeProject = data
+    },
     loadingEnded() {
       this.finishLoading = true
     },
@@ -95,19 +99,22 @@ export const SiteStore = defineStore('SiteStore', {
       }
     },
     preventScrollEvent(){
-      window.addEventListener('DOMMouseScroll', preventDefault, false)
-      window.addEventListener('wheel', preventDefault, { passive: false })
-      window.addEventListener('touchmove', preventDefault, { passive: false })
-      window.addEventListener('keydown', preventDefaultForScrollKeys, false)
+        window.addEventListener('DOMMouseScroll', preventDefault, false)
+        window.addEventListener('wheel', preventDefault, { passive: false })
+        window.addEventListener('touchmove', preventDefault, { passive: false })
+        window.addEventListener('keydown', preventDefaultForScrollKeys, false)
     },
     stopPreventScrollEvent(){
-      window.removeEventListener('DOMMouseScroll', preventDefault, false)
-      window.removeEventListener('wheel', preventDefault, { passive: false })
-      window.removeEventListener('touchmove', preventDefault, { passive: false })
-      window.removeEventListener('keydown', preventDefaultForScrollKeys, false)
+        window.removeEventListener('DOMMouseScroll', preventDefault, false)
+        window.removeEventListener('wheel', preventDefault, { passive: false })
+        window.removeEventListener('touchmove', preventDefault, { passive: false })
+        window.removeEventListener('keydown', preventDefaultForScrollKeys, false)
     }
   },
   getters: {
+    getActiveProject() {
+      return this.activeProject
+    },
     menuIsOpen() {
       return this.menuOpen
     },

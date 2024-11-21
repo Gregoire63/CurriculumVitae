@@ -177,6 +177,7 @@ watch(
     }
     if (y_position < 220) {
       SiteStore().setBackgroundStep(7)
+      SiteStore().setActiveProject(null)
       const bars = document.getElementsByClassName('bars')
       for (let i = 0; i < bars.length; i++) {
         bars[i].style.backgroundColor = 'var(--secondary)'
@@ -219,6 +220,7 @@ watch(
     } 
     if (y_position < 350) {
       document.getElementById('degrees_container').style.opacity = 0
+      SiteStore().setActiveProject(null)
       if(window.innerWidth>=800)
         document.getElementById("portefolio-right-section").style.opacity = 0
       document.getElementById("portefolio-left-section").style.opacity = 0

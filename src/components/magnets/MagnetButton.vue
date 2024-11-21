@@ -84,7 +84,7 @@ onUnmounted(() => {
     </div>
     <div class="gravityButton">
       <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="CV">
-        <a href="./assets/cv/CV_Gregoire_Raturat.pdf" download="CV_Gregoire_Raturat.pdf" aria-label="CV">
+        <a href="/cv/CV_Gregoire_Raturat.pdf" download="CV_Gregoire_Raturat.pdf" aria-label="CV">
           <svg
             class="buttonIcon"
             style="width: 60%; height: 60%; margin-top: 3px"
