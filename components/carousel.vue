@@ -27,7 +27,7 @@
 </template>
 <script setup>
 import { ref, computed } from 'vue'
-import AdaptImage from '../adaptiveImage/AdaptImage.vue'
+import AdaptImage from './AdaptImage.vue'
 const props = defineProps(['items'])
 const selected = ref(0)
 

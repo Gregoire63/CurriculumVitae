@@ -28,7 +28,7 @@ export const SiteStore = defineStore('SiteStore', {
     darkTheme: false,
     activeProject: null,
     backgroundStep: 0,
-    langage: localStorage.getItem('langage') || 'fr'
+    langage: 'fr'
   }),
   actions: {
     setActiveProject(data) {
@@ -64,7 +64,8 @@ export const SiteStore = defineStore('SiteStore', {
     setLangage(data) {
       this.langage = data
       document.documentElement.setAttribute('lang', data)
-      localStorage.setItem('langage', data)
+      if(import.meta.client) 
+        localStorage.setItem('langage', data)
     },
     setMenuOpen(open) {
       this.menuOpen = open

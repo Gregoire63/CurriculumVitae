@@ -23,9 +23,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { SiteStore } from '../../stores/Site'
+import { SiteStore } from '../stores/Site'
 
-const darkActive = computed(() => SiteStore().getDarkTheme)
 const _SiteStore = SiteStore()
 const frSelect = computed(() => {
   return _SiteStore.getLangage == 'fr'

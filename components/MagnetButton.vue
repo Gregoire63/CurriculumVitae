@@ -1,8 +1,6 @@
 <script setup>
-import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { SiteStore } from '../../stores/Site'
+import { onMounted, onUnmounted, ref} from 'vue'
 
-const darkActive = computed(() => SiteStore().getDarkTheme)
 const delay = ref(false)
 const mouseMove = (e) => {
   if (delay.value) return

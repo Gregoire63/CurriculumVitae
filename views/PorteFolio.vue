@@ -1,10 +1,10 @@
 <template>
-  <h3 class="portefolio-title">PorteFolio</h3>
   <div class="portefolio-container">
+    <h3 class="portefolio-title" id="portefolio-title">PorteFolio</h3>
     <div
       id="portefolio-left-section"
       class="portefolio-left-section"
-      style="transform: translateY(-30vh)"
+      style="transform: translateY(-30dvh)"
     >
       <article
         v-for="(project, index) in leftProjects"
@@ -38,10 +38,10 @@
       </article>
     </div>
     <div
-      v-show="windowWidth >= 800"
+      v-show="innerWidth >= 800"
       id="portefolio-right-section"
       class="portefolio-right-section"
-      style="transform: translateY(30vh)"
+      style="transform: translateY(30dvh)"
     >
       <article
         v-for="(project, index) in rightProjects"
@@ -144,8 +144,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { SiteStore } from '../../stores/Site.js'
-import Carousel from '../../components/carousel/carousel.vue'
+import { SiteStore } from '../stores/Site.js'
+import Carousel from '../components/carousel.vue'
 import PDF from 'pdf-vue3'
 
 const frSelect = computed(() => {
@@ -293,22 +293,23 @@ const projects = [
   }
 ]
 
-const windowWidth = ref(window.innerWidth)
+let innerWidth = ref(0)
 onMounted(() => {
-  window.addEventListener('resize', () => {
-    windowWidth.value = window.innerWidth
+    innerWidth.value = window.innerWidth
+    window.addEventListener('resize', () => {
+    innerWidth.value = window.innerWidth
   })
 })
 onUnmounted(() => {
   window.removeEventListener('resize', () => {
-    windowWidth.value = window.innerWidth
+    innerWidth.value = window.innerWidth
   })
 })
 const leftProjects = computed(() =>
-  windowWidth.value < 800 ? projects : projects.filter((_, index) => index % 2 === 0)
+innerWidth.value < 800 ? projects : projects.filter((_, index) => index % 2 === 0)
 )
 const rightProjects = computed(() =>
-  windowWidth.value < 800 ? [] : projects.filter((_, index) => index % 2 !== 0)
+innerWidth.value < 800 ? [] : projects.filter((_, index) => index % 2 !== 0)
 )
 
 const href = (url) => {
@@ -346,9 +347,9 @@ const openProject = (project) => {
   setTimeout(() => {
     overlayStyle.value = {
       width: '90vw',
-      height: '90vh',
+      height: '90dvh',
       left: '5vw',
-      top: '5vh',
+      top: '5dvh',
       borderRadius: '15px',
       backgroundColor: `rgba(${project.color || '0, 0, 0'},${project.pdf ? '0' : '1'})`
     }
@@ -365,13 +366,6 @@ const closeProject = () => {
   const rect = projectElement.getBoundingClientRect()
   const centerX = rect.left + rect.width / 2
   const centerY = rect.top + rect.height / 2
-
-  // overlayStyle.value = {
-  //   width: '100vw',
-  //   height: '100vh',
-  //   left: '0',
-  //   top: '0',
-  // };
 
   setTimeout(() => {
     overlayStyle.value = {
@@ -394,7 +388,7 @@ const closeProject = () => {
 
 <style scoped>
 .portefolio-container {
-  height: 100vh;
+  height: 100dvh;
   width: 70vw;
   position: absolute;
   top: 0;
@@ -431,12 +425,14 @@ const closeProject = () => {
 }
 
 .portefolio-title {
-  position: absolute;
+  position: fixed;
+  opacity: 0;
   right: 50vw;
   transform: translateX(50%) translateY(-50%);
-  top: 50vh;
+  top: 50dvh;
   font-size: 30px;
   font-weight: 600;
+  transition: opacity .5s ease;
   color: var(--primary);
 }
 
@@ -607,11 +603,16 @@ const closeProject = () => {
   margin: auto;
   min-width: 100%;
 }
+
 @media (max-width: 800px) {
   .portefolio-left-section {
     height: unset;
     width: unset;
+    animation: moveUpDown 20s infinite ease-in-out;
   }
+  .portefolio-left-section:hover {
+      animation-play-state: paused;
+    }
   .portefolio-left-section h4 {
     font-size: 19px;
   }
@@ -643,4 +644,15 @@ const closeProject = () => {
     width: 40%;
   }
 }
+@keyframes moveUpDown {
+      0% {
+        transform: translateY(20%);
+      }
+      50% {
+        transform: translateY(-20%);
+      }
+      100% {
+        transform: translateY(20%);
+      }
+    }
 </style>

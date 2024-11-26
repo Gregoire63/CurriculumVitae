@@ -34,13 +34,14 @@
 </template>
 <script setup>
 import { onMounted, computed } from 'vue'
-import { SiteStore } from '../../stores/Site.js'
+import { SiteStore } from '../stores/Site.js'
 
 const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
 })
-onMounted(() => {
-  if (window.innerWidth < 800) return
+  const innerWidth = computed(()=>window.innerWidth || 0)
+  onMounted(() => {
+  if (innerWidth.value < 800) return
   const degrees = document.querySelectorAll('.degree')
   const setHoverData = (e, degree) => {
     const rect = degree.getBoundingClientRect()
@@ -123,8 +124,8 @@ const openWindow = (name) => {
 .degree:hover {
   background: radial-gradient(
     circle at var(--x) var(--y),
-    var(--secondary),
-    rgba(125, 97, 103, 0.01) 70px
+    rgba(229, 219, 209,.5),
+    rgba(125, 97, 103, 0.005) 130px /* Augmenter la transparence et la taille */
   ) !important;
   transform: perspective(500px) rotateX(var(--rotate-x)) rotateY(var(--rotate-y)) !important;
 }

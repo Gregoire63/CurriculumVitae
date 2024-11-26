@@ -197,14 +197,14 @@
   width: 400px;
   height: 535px;
   min-height: 535px;
-  max-height: 90vh;
+  max-height: 90dvh;
 }
 #overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   background-color: rgba(26, 26, 29, 0);
   user-select: none;
   pointer-events: none;
@@ -214,8 +214,8 @@
 <script setup>
 import { gsap } from 'gsap'
 import { computed, watch } from 'vue'
-import { SiteStore } from '../../stores/Site'
-import MenuContact from '../menu/MenuContact.vue'
+import { SiteStore } from '../stores/Site'
+import MenuContact from './MenuContact.vue'
 
 const getBackgroundStep = computed(() => {
   return SiteStore().getBackgroundStep

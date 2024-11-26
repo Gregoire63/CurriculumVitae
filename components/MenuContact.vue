@@ -98,14 +98,13 @@
   </div>
 </template>
 <script setup>
-import { useRipples } from 'vivid-ripples'
 import { onMounted, onUnmounted, ref, watch, computed } from 'vue'
 import { Vue3Lottie } from 'vue3-lottie'
-import sendJSON from '../../assets/send-contact.json'
-import { SiteStore } from '../../stores/Site.js'
+import sendJSON from '../assets/send-contact.json'
+import { SiteStore } from '../stores/Site.js'
 import gsap from 'gsap'
-import MagnetButton from '../magnets/MagnetButton.vue'
-import LangageChoice from '../langageChoice/LangageChoice.vue'
+import MagnetButton from './MagnetButton.vue'
+import LangageChoice from './LangageChoice.vue'
 
 let intervalId = null
 
@@ -113,18 +112,6 @@ const getBackgroundStep = computed(() => {
   return SiteStore().getBackgroundStep
 })
 
-const setNewWaves = () => {
-  const time = Math.random() * 2000
-  setTimeout(() => {
-    const x = Math.random() * 400 + 50
-    const y = Math.random() * 700 + 50
-    ripplesObject.drop(x, y, 10, 0.1)
-  }, time)
-}
-setNewWaves()
-intervalId = setInterval(() => {
-  setNewWaves()
-}, 2000)
 const loaded = ref(false)
 const playState = ref(false)
 const name = ref('')
@@ -163,7 +150,6 @@ const submitForm = () => {
   playState.value = true
   const x = Math.random() * 400 + 50
   const y = Math.random() * 700 + 50
-  ripplesObject.drop(x, y, 20, 0.2)
   // Vous pouvez ajouter ici la logique pour envoyer le formulaire (par exemple, via une requête HTTP)
   console.log('Nom:', name.value)
   console.log('Email:', email.value)
@@ -178,7 +164,6 @@ const submitForm = () => {
   }, 2000)
 }
 
-let ripplesObject
 
 onMounted(() => {
   loaded.value = true
@@ -189,16 +174,11 @@ onMounted(() => {
       opacity: 1,
       duration: 1
     })
-    ripplesObject = useRipples(document.getElementById('menu-ripple'), {
-      resolution: 512,
-      dropRadius: 20,
-      perturbance: 0.04
-    })
+
   }, 10)
 })
 onUnmounted(() => {
   clearInterval(intervalId)
-  ripplesObject.destroy()
 })
 
 watch(
@@ -526,8 +506,8 @@ textarea.question:invalid ~ input[type='submit'] {
   width: 0;
   z-index: 0;
   height: 0;
-  border-bottom: 20vh solid transparent;
-  border-right: 15vh solid var(--primary);
+  border-bottom: 20dvh solid transparent;
+  border-right: 15dvh solid var(--primary);
   opacity: 0.7;
 }
 .menu-triangle-bottom-left {
@@ -537,8 +517,8 @@ textarea.question:invalid ~ input[type='submit'] {
   width: 0;
   z-index: 0;
   height: 0;
-  border-top: 15vh solid transparent;
-  border-left: 20vh solid var(--gray);
+  border-top: 15dvh solid transparent;
+  border-left: 20dvh solid var(--gray);
   opacity: 0.7;
 }
 

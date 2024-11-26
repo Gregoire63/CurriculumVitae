@@ -72,8 +72,8 @@
   </section>
 </template>
 <script setup>
-import { SiteStore } from '../../stores/Site.js'
-import { computed, ref } from 'vue'
+import { SiteStore } from '../stores/Site.js'
+import { computed } from 'vue'
 
 const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
@@ -81,7 +81,7 @@ const frSelect = computed(() => {
 </script>
 <style scoped>
 .skills-container {
-  height: 100vh;
+  height: 100dvh;
   position: absolute;
   top: 0;
   left: 0;
