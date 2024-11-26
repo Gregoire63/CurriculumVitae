@@ -529,7 +529,7 @@ textarea.question:invalid ~ input[type='submit'] {
   transition: all 0.3s ease-out;
   top: 5px;
   opacity: 0.6;
-  right: 370px;
+  right: 90%;
   z-index: 3;
   cursor: pointer;
 }

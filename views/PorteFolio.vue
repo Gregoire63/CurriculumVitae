@@ -295,8 +295,8 @@ const projects = [
 
 let innerWidth = ref(0)
 onMounted(() => {
-    innerWidth.value = window.innerWidth
-    window.addEventListener('resize', () => {
+  innerWidth.value = window.innerWidth
+  window.addEventListener('resize', () => {
     innerWidth.value = window.innerWidth
   })
 })
@@ -306,10 +306,10 @@ onUnmounted(() => {
   })
 })
 const leftProjects = computed(() =>
-innerWidth.value < 800 ? projects : projects.filter((_, index) => index % 2 === 0)
+  innerWidth.value < 800 ? projects : projects.filter((_, index) => index % 2 === 0)
 )
 const rightProjects = computed(() =>
-innerWidth.value < 800 ? [] : projects.filter((_, index) => index % 2 !== 0)
+  innerWidth.value < 800 ? [] : projects.filter((_, index) => index % 2 !== 0)
 )
 
 const href = (url) => {

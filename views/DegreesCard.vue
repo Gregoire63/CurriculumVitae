@@ -39,8 +39,8 @@ import { SiteStore } from '../stores/Site.js'
 const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
 })
-  const innerWidth = computed(()=>window.innerWidth || 0)
-  onMounted(() => {
+const innerWidth = computed(()=>window.innerWidth || 0)
+onMounted(() => {
   if (innerWidth.value < 800) return
   const degrees = document.querySelectorAll('.degree')
   const setHoverData = (e, degree) => {
