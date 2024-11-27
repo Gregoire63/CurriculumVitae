@@ -5,7 +5,7 @@
       <article class="degree">
         <div class="year">2021 - 2023</div>
         <div class="title">
-          MASTER - {{ frSelect ? "Expert en Système d'Information" : 'Information System Expert' }}
+          MASTERE - {{ frSelect ? "Expert en Système d'Information" : 'Information System Expert' }}
         </div>
         <div class="school" @click="openWindow('https://www.ecole-isitech.com/')">
           ISITECH - Lyon
