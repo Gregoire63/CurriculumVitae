@@ -39,6 +39,10 @@ onMounted(() => {
 const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
 })
+
+definePageMeta({
+  title: frSelect?'Tu es perdu':'You\'r lost'
+})
 </script>
   
 <style scoped>
