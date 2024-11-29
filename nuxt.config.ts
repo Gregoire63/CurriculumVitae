@@ -4,6 +4,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap', '@zadigetvoltaire/nuxt-gtm'],
   css: ['~/assets/main.css'],
+  site: { url: 'resume.gregoire-raturat.fr' },
   app: {
     head: {
       link: [{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }, { rel: 'canonical', href: 'https://resume.gregoire-raturat.fr/' }],
@@ -33,7 +34,7 @@ export default defineNuxtConfig({
     },
   },
   gtm: {
-    id: 'G-ZEHQTGC6EE',
+    id: 'GTM-ZEHQTGC6EE',
     queryParams: {
       gtm_auth: 'AB7cDEf3GHIjkl-MnOP8qr',
       gtm_preview: 'env-4',
@@ -52,7 +53,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       gtm: {
-        id: 'G-ZEHQTGC6EE',
+        id: 'GTM-ZEHQTGC6EE',
         queryParams: {
           gtm_auth: 'AB7cDEf3GHIjkl-MnOP8qr',
           gtm_preview: 'env-4',
