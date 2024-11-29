@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref} from 'vue'
 
+const gtm = useGtm()
 const delay = ref(false)
 const mouseMove = (e) => {
   if (delay.value) return
@@ -43,11 +44,19 @@ onUnmounted(() => {
     btn.removeEventListener('mouseleave', mouseLeave)
   })
 })
+const sendEvent = (event) => {
+  gtm.trackEvent({
+    event: event,
+    action: 'form submit',
+    value: 5000,
+    noninteraction: false,
+  })
+}
 </script>
 <template>
   <div style="display: flex; justify-content: center; width: 100%">
     <div class="gravityButton" aria-labelledby="GitHub">
-      <button style="--color: var(--primary); --_fill: var(--primary)">
+      <button style="--color: var(--primary); --_fill: var(--primary)" @click="sendEvent('github')">
         <a target="_blank" href="https://github.com/Gregoire63" aria-label="GitHub">
           <svg
             class="buttonIcon"
@@ -64,7 +73,7 @@ onUnmounted(() => {
       </button>
     </div>
     <div class="gravityButton">
-      <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="Linkedin">
+      <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="Linkedin" @click="sendEvent('linkedin')">
         <a
           target="_blank"
           href="https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/"
@@ -85,7 +94,7 @@ onUnmounted(() => {
       </button>
     </div>
     <div class="gravityButton">
-      <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="CV">
+      <button style="--color: var(--primary); --_fill: var(--primary)" aria-labelledby="CV" @click="sendEvent('cv')">
         <a href="/cv/CV_Gregoire_Raturat.pdf" download="CV_Gregoire_Raturat.pdf" aria-label="CV">
           <svg
             class="buttonIcon"

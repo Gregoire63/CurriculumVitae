@@ -2,7 +2,7 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
-  modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap'],
+  modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap', '@zadigetvoltaire/nuxt-gtm'],
   css: ['~/assets/main.css'],
   app: {
     head: {
@@ -25,29 +25,49 @@ export default defineNuxtConfig({
           { name: 'twitter:description', content: 'Portfolio de Grégoire Raturat, développeur FullStack passionné par l\'innovation et le travail en équipe.' },
           { name: 'twitter:image', content: '/screen.webp' }
         ],
-        script: [
-          {
-            src: 'https://www.googletagmanager.com/gtag/js?id=G-ZEHQTGC6EE',
-            async: true,
-            innerHTML: `
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', 'G-ZEHQTGC6EE');
-            `
-          },
-        ],
         noscript: [
-          {
-            innerHTML: `
-              <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-JCR79FL8"
-              height="0" width="0" style="display:none;visibility:hidden"></iframe>
-            `
-          },
           {
             innerHTML: 'Votre navigateur ne supporte pas JavaScript. Veuillez activer JavaScript pour une meilleure expérience.'
           }
         ]
     },
   },
+  gtm: {
+    id: 'G-ZEHQTGC6EE',
+    queryParams: {
+      gtm_auth: 'AB7cDEf3GHIjkl-MnOP8qr',
+      gtm_preview: 'env-4',
+      gtm_cookies_win: 'x',
+    },
+    defer: false,
+    compatibility: false,
+    nonce: '2726c7f26c',
+    enabled: true,
+    debug: true,
+    loadScript: true,
+    enableRouterSync: true,
+    trackOnNextTick: false,
+    devtools: true,
+  },
+  runtimeConfig: {
+    public: {
+      gtm: {
+        id: 'G-ZEHQTGC6EE',
+        queryParams: {
+          gtm_auth: 'AB7cDEf3GHIjkl-MnOP8qr',
+          gtm_preview: 'env-4',
+          gtm_cookies_win: 'x',
+        },
+        defer: false,
+        compatibility: false,
+        nonce: '2726c7f26c',
+        enabled: true,
+        debug: true,
+        loadScript: true,
+        enableRouterSync: true,
+        trackOnNextTick: false,
+        devtools: true,
+      }
+    }
+  }
 })

@@ -106,6 +106,7 @@ import gsap from 'gsap'
 import MagnetButton from './MagnetButton.vue'
 import LangageChoice from './LangageChoice.vue'
 
+const gtm = useGtm()
 let intervalId = null
 
 const getBackgroundStep = computed(() => {
@@ -114,7 +115,6 @@ const getBackgroundStep = computed(() => {
 
 const loaded = ref(false)
 const playState = ref(false)
-const name = ref('')
 const email = ref('')
 const message = ref('')
 
@@ -151,12 +151,17 @@ const submitForm = () => {
   const x = Math.random() * 400 + 50
   const y = Math.random() * 700 + 50
   // Vous pouvez ajouter ici la logique pour envoyer le formulaire (par exemple, via une requête HTTP)
-  console.log('Nom:', name.value)
   console.log('Email:', email.value)
   console.log('Message:', message.value)
+  gtm.trackEvent({
+    event: 'contact',
+    action: 'form submit',
+    label: `Email: ${email.value}, message: ${message.value}`,
+    value: 5000,
+    noninteraction: false,
+  })
   // Réinitialiser le formulaire après l'envoi
   setTimeout(() => {
-    name.value = ''
     email.value = ''
     message.value = ''
     document.getElementsByClassName('open')[0].style.height = '380px'
