@@ -2,9 +2,13 @@
 export default defineNuxtConfig({
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
-  modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap', '@zadigetvoltaire/nuxt-gtm'],
+  modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-gtag'],
   css: ['~/assets/main.css'],
   site: { url: 'resume.gregoire-raturat.fr' },
+  gtag: {
+    enabled: process.env.NODE_ENV === 'production',
+    id: 'G-ZEHQTGC6EE'
+  },
   app: {
     head: {
       link: [{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }, { rel: 'canonical', href: 'https://resume.gregoire-raturat.fr/' }],
@@ -33,42 +37,4 @@ export default defineNuxtConfig({
         ]
     },
   },
-  gtm: {
-    id: 'GTM-ZEHQTGC6EE',
-    queryParams: {
-      gtm_auth: 'AB7cDEf3GHIjkl-MnOP8qr',
-      gtm_preview: 'env-4',
-      gtm_cookies_win: 'x',
-    },
-    defer: false,
-    compatibility: false,
-    nonce: '2726c7f26c',
-    enabled: true,
-    debug: true,
-    loadScript: true,
-    enableRouterSync: true,
-    trackOnNextTick: false,
-    devtools: true,
-  },
-  runtimeConfig: {
-    public: {
-      gtm: {
-        id: 'GTM-ZEHQTGC6EE',
-        queryParams: {
-          gtm_auth: 'AB7cDEf3GHIjkl-MnOP8qr',
-          gtm_preview: 'env-4',
-          gtm_cookies_win: 'x',
-        },
-        defer: false,
-        compatibility: false,
-        nonce: '2726c7f26c',
-        enabled: true,
-        debug: true,
-        loadScript: true,
-        enableRouterSync: true,
-        trackOnNextTick: false,
-        devtools: true,
-      }
-    }
-  }
 })
