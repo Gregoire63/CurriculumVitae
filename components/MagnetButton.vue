@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref} from 'vue'
 
+const gtm = useGtm()
 const { gtag } = useGtag()
 const delay = ref(false)
 const mouseMove = (e) => {
@@ -49,6 +50,14 @@ const sendEvent = (event) => {
     app_name: 'Resume',
     screen_name: 'Magnet'
   })
+  gtm.trackEvent({
+      event: event,
+      category: 'category',
+      action: 'click',
+      label: 'Magnet event',
+      value: 5000,
+      noninteraction: false,
+    })
 }
 </script>
 <template>
