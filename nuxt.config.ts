@@ -5,8 +5,8 @@ export default defineNuxtConfig({
   modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-gtag', '@zadigetvoltaire/nuxt-gtm'],
   css: ['~/assets/main.css'],
   site: { url: 'resume.gregoire-raturat.fr' },
+  pages: false,
   gtag: {
-    enabled: process.env.NODE_ENV === 'production',
     id: 'G-ZEHQTGC6EE'
   },
   app: {

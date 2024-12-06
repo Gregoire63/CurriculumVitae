@@ -1,8 +1,10 @@
 <script setup>
 import { SiteStore } from './stores/Site.js'
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import fav from './public/favicon-w.ico'
 import fav_dark from './public/favicon.ico'
+import LoadingIndicator from './components/LoadingIndicator.vue'
+import HomeView from './views/HomeView.vue'
 
 function handleDarkmode(e) {
   var darkModeOn = e.matches
@@ -34,7 +36,8 @@ onUnmounted(() => {
 
 <template>
   <NuxtLayout>
-      <NuxtPage />
+    <LoadingIndicator/>
+    <HomeView />
   </NuxtLayout>
 </template>
 <style>

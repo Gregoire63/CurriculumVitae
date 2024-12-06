@@ -44,9 +44,9 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import { SiteStore } from '../stores/Site.js'
-import DegreesCard from '../views/DegreesCard.vue'
-import SkillsCard from '../views/SkillsCard.vue'
-import PorteFolio from '../views/PorteFolio.vue'
+import DegreesCard from './DegreesCard.vue'
+import SkillsCard from './SkillsCard.vue'
+import PorteFolio from './PorteFolio.vue'
 
 const frSelect = computed(() => {
   return SiteStore().getLangage == 'fr'
