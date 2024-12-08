@@ -4,7 +4,7 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   modules: ['@pinia/nuxt', '@nuxtjs/robots', '@nuxtjs/sitemap', 'nuxt-gtag', '@zadigetvoltaire/nuxt-gtm'],
   css: ['~/assets/main.css'],
-  site: { url: 'resume.gregoire-raturat.fr' },
+  site: { url: 'https://resume.gregoire-raturat.fr/' },
   pages: false,
   gtag: {
     id: 'G-ZEHQTGC6EE'
