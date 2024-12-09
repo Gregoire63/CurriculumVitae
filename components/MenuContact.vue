@@ -48,7 +48,7 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form @submit.prevent="submitForm" style="height: 100%">
+      <form @submit.prevent="submitForm" style="height: 100%" netlify>
         <div class="form-group">
           <input
             type="text"
