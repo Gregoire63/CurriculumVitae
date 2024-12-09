@@ -125,10 +125,6 @@ const menuIsOpen = computed(() => {
   return SiteStore().menuIsOpen
 })
 const handleBlur = () => {
-  console.log(
-    message.value.length && email.value.length,
-    message.value.length || email.value.length
-  )
   document.getElementsByClassName('open')[0].style.height =
     message.value.length && email.value.length
       ? '570px'
@@ -138,7 +134,6 @@ const handleBlur = () => {
 }
 const handleFocus = (isQuestion = false) => {
   if (isQuestion) {
-    console.log(email.value, email.value.length)
     document.getElementsByClassName('open')[0].style.height = email.value.length ? '570px' : '550px'
   } else {
     document.getElementsByClassName('open')[0].style.height = message.value.length
@@ -148,11 +143,6 @@ const handleFocus = (isQuestion = false) => {
 }
 const submitForm = () => {
   playState.value = true
-  const x = Math.random() * 400 + 50
-  const y = Math.random() * 700 + 50
-  // Vous pouvez ajouter ici la logique pour envoyer le formulaire (par exemple, via une requête HTTP)
-  console.log('Email:', email.value)
-  console.log('Message:', message.value)
   gtag('event', 'contact', {
     app_name: 'Resume',
     screen_name: 'Contact',
