@@ -140,7 +140,6 @@ const handleFocus = (isQuestion = false) => {
       : '550px'
   }
 }
-document.querySelector("contact-form").addEventListener("submit", handleSubmit);
 const encode = (data) => {
       return Object.keys(data)
         .map(
@@ -184,6 +183,7 @@ const handleSubmit = (event) => {
 
 onMounted(() => {
   loaded.value = true
+  document.querySelector("contact-form").addEventListener("submit", handleSubmit);
   setTimeout(() => {
     const card = document.getElementById('form-card')
     gsap.to(card, {
