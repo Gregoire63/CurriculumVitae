@@ -78,7 +78,7 @@
             :lang="frSelect ? 'fr' : 'en'"
             aria-label="Question"
           ></textarea>
-          <label for="msg"><span>Message </span></label>
+          <label for="message"><span>Message </span></label>
         </div>
         <button v-if="!playState" type="submit" class="contact_button">
           {{ frSelect ? 'ENVOYER' : 'SEND' }}
