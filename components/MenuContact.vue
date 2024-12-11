@@ -161,11 +161,11 @@ const handleSubmit = (event) => {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: encode({
+      "form-name": "contact",
       "name": email.value,
       "message": message.value
     })
   })
-    .then(() => console.log("Thank you for your submission"))
     .catch(error => alert(error));
   // Réinitialiser le formulaire après l'envoi
   setTimeout(() => {
