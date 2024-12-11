@@ -48,7 +48,7 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form id="contact-form" data-netlify-recaptcha="true" style="height: 100%" netlify name="contact">
+      <form id="contact-form" data-netlify-recaptcha="true" style="height: 100%" data-netlify="true" name="contact" action="/">
         <input type="hidden" name="form-name" value="contact" />
         <div class="form-group">
           <input
@@ -161,6 +161,7 @@ const handleSubmit = (event) => {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: encode({
+      "Location": "https://resume.gregoire-raturat.fr/",
       "form-name": "contact",
       "name": email.value,
       "message": message.value
