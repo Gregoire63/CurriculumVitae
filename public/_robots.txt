@@ -2,5 +2,6 @@
 User-agent: *
 Allow: /
 Disallow: /_nuxt/
+Disallow: /contact.html
 
 Sitemap: https://resume.gregoire-raturat.fr/sitemap.xml
