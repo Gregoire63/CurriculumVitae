@@ -48,15 +48,13 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form onSubmit={submitForm} style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST">
+      <form @submit.prevent="submitForm" style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST">
         <input type="hidden" name="form-name" value="contact" />
         <div class="form-group">
           <input
             type="text"
             name="name"
-            @blur="handleBlur"
-            @focus="handleFocus(false)"
-            v-model="email"
+            @input="ev => email = ev.target.value"
             class="question"
             id="nme"
             required
@@ -72,7 +70,7 @@
             @focus="handleFocus(true)"
             name="message"
             rows="2"
-            v-model="message"
+            @input="ev => message = ev.target.value"
             class="question"
             id="msg"
             required
@@ -142,7 +140,14 @@ const handleFocus = (isQuestion = false) => {
       : '550px'
   }
 }
-const submitForm = (event) => {
+const encode = (data) => {
+      return Object.keys(data)
+        .map(
+          key => `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`
+        )
+        .join("&");
+    }
+const submitForm = () => {
   playState.value = true
   gtag('event', 'contact', {
     app_name: 'Resume',
@@ -150,18 +155,21 @@ const submitForm = (event) => {
     email: email.value,
     message: message.value,
   })
-  const myForm = event.target;
-  const formData = new FormData(myForm);
 
   fetch("/", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams(formData).toString()
+    body: encode({
+      "name": email.value,
+      "message": message.value
+    })
   })
     .catch(error => alert(error));
   // Réinitialiser le formulaire après l'envoi
   setTimeout(() => {
     email.value = ''
+    document.getElementById('msg').value = "";
+    document.getElementById('nme').value = "";
     message.value = ''
     document.getElementsByClassName('open')[0].style.height = '380px'
     playState.value = false

@@ -6,21 +6,13 @@
   <title>Form Submission Success</title>
 </head>
 <body>
-  <form style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST" action="/">
+  <form netlify data-netlify-honeypot="bot-field" name="contact" hidden>
     <input
       type="email"
       name="name"
-      id="nme"
-      autocomplete="off"
-      placeholder="Your Name"
-      aria-label="Nom"
     />
     <textarea
       name="message"
-      rows="2"
-      id="msg"
-      autocomplete="off"
-      aria-label="Question"
     ></textarea>
     <button type="submit">Submit</button>
   </form>
