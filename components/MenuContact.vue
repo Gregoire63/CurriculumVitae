@@ -48,7 +48,7 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form @submit.prevent="submitForm" style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST">
+      <form id="contact-form" style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST">
         <input type="hidden" name="form-name" value="contact" />
         <div class="form-group">
           <input
@@ -140,14 +140,19 @@ const handleFocus = (isQuestion = false) => {
       : '550px'
   }
 }
+document.querySelector("contact-form").addEventListener("submit", handleSubmit);
 const encode = (data) => {
       return Object.keys(data)
         .map(
           key => `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`
         )
         .join("&");
-    }
-const submitForm = () => {
+}
+const handleSubmit = (event) => {
+  event.preventDefault();
+  const myForm = event.target;
+  const formData = new FormData(myForm);
+  console.log(formData)
   playState.value = true
   gtag('event', 'contact', {
     app_name: 'Resume',
