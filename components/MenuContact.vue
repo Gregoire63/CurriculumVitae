@@ -48,7 +48,7 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form id="contact-form" style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST">
+      <form id="contact-form" style="height: 100%" data-netlify="true" name="contact">
         <input type="hidden" name="form-name" value="contact" />
         <div class="form-group">
           <input
@@ -56,7 +56,6 @@
             name="name"
             @input="ev => email = ev.target.value"
             class="question"
-            id="nme"
             required
             autocomplete="off"
             :lang="frSelect ? 'fr' : 'en'"
@@ -72,7 +71,6 @@
             rows="2"
             @input="ev => message = ev.target.value"
             class="question"
-            id="msg"
             required
             autocomplete="off"
             :lang="frSelect ? 'fr' : 'en'"
@@ -156,7 +154,7 @@ const handleSubmit = (event) => {
     email: email.value,
     message: message.value,
   })
-
+  console.log(event.target)
   fetch("/", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
