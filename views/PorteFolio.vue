@@ -133,6 +133,11 @@
         </g>
       </svg>
       <Carousel v-if="activeProject.imgs" :items="activeProject.imgs" />
+      <div class="chips-active-project">
+            <div v-for="tech of activeProject.techno" :key="tech" class="chip" @click="href(tech.url)">
+              {{ tech.name }}
+            </div>
+          </div>
       <p
         class="description"
         :class="{ visible: activeProject.visible }"
@@ -518,6 +523,10 @@ const closeProject = () => {
   color: var(--secondary_1);
   background-color: #8a8082;
 }
+.chips-active-project{
+  display: flex;
+  justify-content: center;
+}
 
 .overlay {
   position: fixed;
@@ -603,7 +612,19 @@ const closeProject = () => {
   margin: auto;
   min-width: 100%;
 }
-
+@media (max-height: 600px) {
+  .portefolio-left-section h4, .portefolio-right-section h4 {
+    font-size: 19px;
+    padding-bottom: 10px;
+    margin-top: 2px;
+  }
+  .project{
+    padding: 2px;
+  }
+  .chips{
+    display: none;
+  }
+}
 @media (max-width: 800px) {
   .portefolio-left-section {
     height: unset;

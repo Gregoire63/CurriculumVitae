@@ -48,7 +48,8 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form @submit.prevent="submitForm" style="height: 100%" data-netlify="true" action="./contact.html">
+      <form @submit.prevent="submitForm" style="height: 100%" data-netlify="true" data-netlify-honeypot="bot-field" name="contact" method="POST" action="./contact.html">
+        <input type="hidden" name="form-name" value="contact" />
         <div class="form-group">
           <input
             type="text"

@@ -187,4 +187,17 @@ const openWindow = (name) => {
     margin-inline: 10px;
   }
 }
+@media (max-height: 600px) {
+  .degree {
+    width: 200px ;
+    height: 150px;
+  }
+  .year {
+    font-size: 16px;
+  }
+  .title {
+    font-size: 18px;
+    margin-inline: 10px;
+  }
+}
 </style>
