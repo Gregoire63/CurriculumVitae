@@ -54,6 +54,7 @@
           <input
             type="text"
             name="name"
+            id="nme"
             @input="ev => email = ev.target.value"
             class="question"
             required
@@ -61,13 +62,14 @@
             :lang="frSelect ? 'fr' : 'en'"
             aria-label="Nom"
           />
-          <label for="email"><span>Email</span></label>
+          <label for="name"><span>Email</span></label>
         </div>
         <div class="form-group">
           <textarea
             @blur="handleBlur"
             @focus="handleFocus(true)"
             name="message"
+            id="msg"
             rows="2"
             @input="ev => message = ev.target.value"
             class="question"
