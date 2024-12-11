@@ -183,7 +183,7 @@ const handleSubmit = (event) => {
 
 onMounted(() => {
   loaded.value = true
-  document.querySelector("contact-form").addEventListener("submit", handleSubmit);
+  document.getElementById("contact-form").addEventListener("submit", handleSubmit);
   setTimeout(() => {
     const card = document.getElementById('form-card')
     gsap.to(card, {
