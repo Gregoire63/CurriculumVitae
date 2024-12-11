@@ -149,9 +149,6 @@ const encode = (data) => {
 }
 const handleSubmit = (event) => {
   event.preventDefault();
-  const myForm = event.target;
-  const formData = new FormData(myForm);
-  console.log(formData)
   playState.value = true
   gtag('event', 'contact', {
     app_name: 'Resume',
@@ -168,6 +165,7 @@ const handleSubmit = (event) => {
       "message": message.value
     })
   })
+    .then(() => console.log("Thank you for your submission"))
     .catch(error => alert(error));
   // Réinitialiser le formulaire après l'envoi
   setTimeout(() => {
