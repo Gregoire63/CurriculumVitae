@@ -157,7 +157,7 @@ const handleSubmit = (event) => {
     message: message.value,
   })
   // "form-id": "675a01966442240008958941",
-  fetch("/", {
+  fetch("/contact.html", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: encode({
