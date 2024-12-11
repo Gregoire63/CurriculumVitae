@@ -160,6 +160,7 @@ const handleSubmit = (event) => {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: encode({
       "form-name": "contact",
+      "form-id": "675a01966442240008958941",
       "name": email.value,
       "message": message.value
     })
