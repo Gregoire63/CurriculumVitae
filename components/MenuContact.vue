@@ -48,7 +48,7 @@
     </div>
     <div class="form-card" id="form-card">
       <h2 class="title">{{ frSelect ? 'Contactez-moi' : 'Contact Me' }}</h2>
-      <form id="contact-form" style="height: 100%" data-netlify="true" name="contact">
+      <form id="contact-form" data-netlify-recaptcha="true" style="height: 100%" netlify name="contact">
         <input type="hidden" name="form-name" value="contact" />
         <div class="form-group">
           <input
@@ -156,13 +156,12 @@ const handleSubmit = (event) => {
     email: email.value,
     message: message.value,
   })
-  console.log(event.target)
+  // "form-id": "675a01966442240008958941",
   fetch("/", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: encode({
       "form-name": "contact",
-      "form-id": "675a01966442240008958941",
       "name": email.value,
       "message": message.value
     })
