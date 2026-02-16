@@ -7,7 +7,7 @@
   publish = ".output/public"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "24"
   NPM_FLAGS = "--legacy-peer-deps"
 
 # ============================================================
@@ -21,11 +21,6 @@
   status = 301
   force  = true
 
-# Fallback SPA (Nuxt génère des fichiers statiques, mais au cas où)
-[[redirects]]
-  from   = "/*"
-  to     = "/index.html"
-  status = 200
 
 # ============================================================
 # HEADERS DE SÉCURITÉ & PERFORMANCE
@@ -81,7 +76,7 @@
     Permissions-Policy           = "camera=(), microphone=(), geolocation=(), payment=()"
 
     # CSP — adapte les domaines si tu ajoutes des services tiers
-    Content-Security-Policy      = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; frame-ancestors 'none';"
+    Content-Security-Policy      = "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; frame-ancestors 'none';"
 
     # HSTS (HTTPS strict — active uniquement si ton domaine est 100% HTTPS)
     Strict-Transport-Security    = "max-age=31536000; includeSubDomains; preload"

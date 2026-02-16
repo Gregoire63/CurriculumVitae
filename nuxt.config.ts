@@ -9,8 +9,6 @@ export default defineNuxtConfig({
         '@pinia/nuxt',
         '@nuxt/fonts',
         '@nuxt/content',
-        '@nuxt/eslint',
-        '@nuxt/fonts',
         '@nuxt/hints',
         '@nuxt/image',
         '@nuxt/scripts',
@@ -22,7 +20,6 @@ export default defineNuxtConfig({
         '@nuxtjs/robots',
     ],
     css: ['~/assets/css/main.css'],
-    ssr: false,
     spaLoadingTemplate: 'spa-loading-template.html',
     gtag: {
         id: 'G-ZEHQTGC6EE',
@@ -185,6 +182,13 @@ export default defineNuxtConfig({
             preprocessorOptions: {
                 scss: {
                     additionalData: '@use "~/assets/scss/variables.scss" as *;',
+                },
+            },
+        },
+        vue: {
+            template: {
+                compilerOptions: {
+                    isCustomElement: (tag) => tag.includes('-'),
                 },
             },
         },
