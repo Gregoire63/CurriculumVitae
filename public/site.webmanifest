@@ -1,0 +1,29 @@
+{
+  "name": "Grégoire Raturat — Full Stack Developer",
+  "short_name": "G. Raturat",
+  "description": "Portfolio de Grégoire Raturat, développeur Full Stack spécialisé en Vue.js, Nuxt, Python et Node.js, basé à Lyon.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fefcf8",
+  "theme_color": "#8b6f5c",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "type": "image/x-icon",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

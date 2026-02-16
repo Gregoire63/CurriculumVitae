@@ -1,75 +1,95 @@
-# Nuxt Minimal Starter
+# Nuxt3 Starter Simple
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+A simple and clean Vue 3 starter project with TypeScript, Pinia, Vue Router, TailwindCSS, and Vite.
 
-## Setup
+This setup includes:
 
-Make sure to install dependencies:
+- **Nuxt 3**: A vuejs framework for building modern web applications.
+- **Vue 3**: A progressive JavaScript framework for building user interfaces.
+- **Pinia**: State management for Vue.js with auto imports from `@pinia/nuxt`.
+- **Vue Router**: Router for single-page applications.
+- **Vite**: A next-generation frontend build tool.
+- **TailwindCSS**: A utility-first CSS framework.
+- **Prettier & ESLint**: Code formatting and linting for maintaining clean and consistent code.
+- **Husky & lint-staged**: Git hooks and automated formatting/linting before commits.
+
+---
+
+## Features
+
+- 🚀 **Fast Development** with Vite.
+- 🔧 **Code Quality** with ESLint, Prettier, and TypeScript.
+- 💅 **TailwindCSS** for modern styling.
+- 🔒 **Pinia** for state management.
+- 🔄 **Vue Router** for managing views.
+- ⚙️ **Husky & lint-staged** for automated code formatting and linting.
+
+---
+
+## Installation
+
+### 1. Clone this repository:
 
 ```bash
-# npm
-npm install
+git clone https://github.com/yourusername/nuxt3-starter-simple.git
+cd nuxt3-starter-simple
+```
 
-# pnpm
+### 2. Install dependencies:
+
+```bash
 pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
+### 3. Run the development server:
 
 ```bash
-# npm
-npm run dev
-
-# pnpm
 pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
 
-## Production
+This project uses **ESLint** and **Prettier** for linting and formatting. It enforces consistent code style and helps avoid errors.
 
-Build the application for production:
+- **Lint**:
 
-```bash
-# npm
-npm run build
+    ```bash
+    pnpm lint
+    ```
 
-# pnpm
-pnpm build
+- **Format**:
+    ```bash
+    pnpm format
+    ```
 
-# yarn
-yarn build
+## 🐶 Husky & Lint-staged
 
-# bun
-bun run build
-```
+Husky and lint-staged are set up to ensure that any staged files are linted and formatted before they are committed. This ensures that the code in the repository is always clean and follows the defined standards.
 
-Locally preview production build:
+## 🔧 Configuration
 
-```bash
-# npm
-npm run preview
+- ESLint configuration is in `eslint.config.js`
+- Prettier configuration is in `prettier.config.js`
+- Nuxt configuration is in `nuxt.config.ts`
+- Tailwind configuration is in `tailwind.config.js`
 
-# pnpm
-pnpm preview
+## 📚 Learning Resources
 
-# yarn
-yarn preview
+- [Nuxt 3 Documentation](https://nuxt.com/docs/getting-started/introduction)
+- [Vue 3 Documentation](https://v3.vuejs.org/)
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
+- [VueUse Documentation](https://vueuse.org/)
 
-# bun
-bun run preview
-```
+## 📄 License
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](link-to-your-issues-page).
+
+## 🙏 Acknowledgements
+
+- [Nuxt.js team](https://nuxt.com/) for the amazing framework
+- [Tailwind CSS team](https://tailwindcss.com/) for the utility-first CSS framework
+- [VueUse team](https://vueuse.org/) for the collection of Vue Composition Utilities
+
+Happy coding! 🎉
