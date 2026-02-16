@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Loader qui masque le FOUC avant hydration */
+        #nuxt-loading {
+            position: fixed;
+            inset: 0;
+            z-index: 999999;
+            background: linear-gradient(135deg, #fefcf8 0%, #f5f0e8 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            transition: opacity 0.5s ease-out;
+        }
+
+        #nuxt-loading.loaded {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .loading-logo {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-circle {
+            position: absolute;
+            inset: 0;
+            border: 3px solid #e5dbc8;
+            border-top-color: #8b6f5c;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .logo-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 2rem;
+            font-weight: 700;
+            color: #8b6f5c;
+            z-index: 1;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading-bar {
+            width: 200px;
+            height: 4px;
+            background: #e5dbc8;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #8b6f5c, #c9b299);
+            border-radius: 2px;
+            animation: progress 1.5s ease-in-out infinite;
+        }
+
+        @keyframes progress {
+            0% {
+                width: 0;
+                transform: translateX(0);
+            }
+            50% {
+                width: 70%;
+                transform: translateX(0);
+            }
+            100% {
+                width: 70%;
+                transform: translateX(200px);
+            }
+        }
+
+        /* Masquer le contenu non stylé pendant le chargement */
+        body:not(.hydrated) > #__nuxt {
+            opacity: 0;
+        }
+
+        body.hydrated > #__nuxt {
+            opacity: 1;
+            transition: opacity 0.3s ease-in;
+        }
+    </style>
+</head>
+<body>
+    <div id="nuxt-loading">
+        <div class="loading-content">
+            <div class="loading-logo">
+                <div class="logo-circle"></div>
+                <div class="logo-text">GR</div>
+            </div>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Attendre que Vue soit prêt et que les fonts soient chargées
+        window.addEventListener('load', function() {
+            // Attendre les fonts critiques
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(hideLoader);
+            } else {
+                // Fallback si fonts API pas disponible
+                setTimeout(hideLoader, 800);
+            }
+        });
+
+        function hideLoader() {
+            // Petit délai pour l'animation
+            setTimeout(function() {
+                var loader = document.getElementById('nuxt-loading');
+                if (loader) {
+                    loader.classList.add('loaded');
+                    document.body.classList.add('hydrated');
+                    
+                    // Supprimer le loader du DOM après l'animation
+                    setTimeout(function() {
+                        loader.remove();
+                    }, 500);
+                }
+            }, 300);
+        }
+
+        // Fallback si window.load ne se déclenche pas
+        setTimeout(hideLoader, 3000);
+    </script>
+</body>
+</html>
