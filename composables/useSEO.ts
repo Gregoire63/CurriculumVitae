@@ -34,7 +34,7 @@ export const useSEO = (options: SEOOptions = {}) => {
         author: 'Grégoire Raturat',
         defaultTitle: SITE_NAME,
         defaultDescription: DEFAULT_DESCRIPTION,
-        defaultImage: '/og-image.jpg',
+        defaultImage: '/og-image.webp',
         email: 'gregoireraturatpro@gmail.com',
         city: 'Lyon',
         country: 'FR',

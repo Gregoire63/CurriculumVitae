@@ -28,7 +28,11 @@ export default defineNuxtConfig({
             cookie_flags: 'SameSite=None;Secure',
         },
     },
-
+    scripts: {
+        registry: {
+            googleAnalytics: true,
+        },
+    },
     imports: { dirs: ['./composables/*/*.{ts,js}'] },
     devtools: { enabled: true },
     pinia: {
@@ -76,6 +80,7 @@ export default defineNuxtConfig({
     },
     robots: {
         disallow: ['/_nuxt/', '/api/'],
+        sitemap: 'https://gregoire-raturat.fr/sitemap.xml',
     },
     app: {
         head: {
@@ -134,6 +139,55 @@ export default defineNuxtConfig({
                     href: 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap',
                 },
             ],
+            script: [
+                {
+                    type: 'application/ld+json',
+                    innerHTML: JSON.stringify({
+                        '@context': 'https://schema.org',
+                        '@graph': [
+                            {
+                                '@type': 'Person',
+                                '@id': 'https://gregoire-raturat.fr/#person',
+                                name: 'Grégoire Raturat',
+                                jobTitle: 'Développeur Full Stack',
+                                url: 'https://gregoire-raturat.fr',
+                                image: 'https://gregoire-raturat.fr/og-image.webp',
+                                sameAs: [
+                                    'https://github.com/Gregoire63',
+                                    'https://www.linkedin.com/in/gregoire-raturat',
+                                ],
+                                address: {
+                                    '@type': 'PostalAddress',
+                                    addressLocality: 'Lyon',
+                                    addressCountry: 'FR',
+                                },
+                                knowsAbout: [
+                                    'Vue.js', 'Nuxt.js', 'React', 'Node.js',
+                                    'TypeScript', 'JavaScript', 'Python',
+                                    'Full Stack Development', 'Web Development',
+                                ],
+                                alumniOf: {
+                                    '@type': 'EducationalOrganization',
+                                    name: 'ISITECH',
+                                },
+                                worksFor: {
+                                    '@type': 'Organization',
+                                    name: 'Sogedo',
+                                },
+                            },
+                            {
+                                '@type': 'WebSite',
+                                '@id': 'https://gregoire-raturat.fr/#website',
+                                url: 'https://gregoire-raturat.fr',
+                                name: 'Grégoire Raturat — Portfolio',
+                                description: 'Portfolio de Grégoire Raturat, développeur Full Stack basé à Lyon.',
+                                author: { '@id': 'https://gregoire-raturat.fr/#person' },
+                                inLanguage: ['fr-FR', 'en-US'],
+                            },
+                        ],
+                    }),
+                },
+            ],
         },
         pageTransition: { name: 'page', mode: 'out-in' },
     },
@@ -156,7 +210,7 @@ export default defineNuxtConfig({
     },
     // Optimisations de performance
     experimental: {
-        payloadExtraction: true,
+        payloadExtraction: false,
         renderJsonPayloads: true,
         viewTransition: true,
     },
@@ -173,6 +227,19 @@ export default defineNuxtConfig({
         },
         routeRules: {
             '/_nuxt/**': { headers: { 'Cache-Control': 'public, max-age=31536000, immutable' } },
+            '/': { 
+                prerender: true 
+            },
+            // Headers de sécurité pour toutes les routes
+            '/**': {
+                headers: {
+                    'X-Content-Type-Options': 'nosniff',
+                    'X-Frame-Options': 'DENY',
+                    'X-XSS-Protection': '1; mode=block',
+                    'Referrer-Policy': 'strict-origin-when-cross-origin',
+                    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+                },
+            },
         },
     },
 

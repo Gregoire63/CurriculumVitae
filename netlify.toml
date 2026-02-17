@@ -76,10 +76,20 @@
     Permissions-Policy           = "camera=(), microphone=(), geolocation=(), payment=()"
 
     # CSP — adapte les domaines si tu ajoutes des services tiers
-    Content-Security-Policy      = "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://www.google-analytics.com https://analytics.google.com; frame-ancestors 'none';"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://formsubmit.co https://api.netlify.com;"
 
     # HSTS (HTTPS strict — active uniquement si ton domaine est 100% HTTPS)
     Strict-Transport-Security    = "max-age=31536000; includeSubDomains; preload"
 
     # Performance
     X-DNS-Prefetch-Control       = "on"
+
+[[headers]]
+  for = "/_payload.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/_payload.json*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
