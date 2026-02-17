@@ -28,6 +28,7 @@ export default defineNuxtConfig({
             cookie_flags: 'SameSite=None;Secure',
         },
     },
+    content: {},
     scripts: {
         registry: {
             googleAnalytics: true,
@@ -38,7 +39,10 @@ export default defineNuxtConfig({
     pinia: {
         storesDirs: ['./stores/**', './custom-folder/stores/**'],
     },
-
+    sourcemap: {
+        server: false,
+        client: false,
+    },
     // ============================================================
     // SITEMAP (@nuxtjs/sitemap)
     // ============================================================
@@ -79,7 +83,7 @@ export default defineNuxtConfig({
         },
     },
     robots: {
-        disallow: ['/_nuxt/', '/api/'],
+        disallow: [],
         sitemap: 'https://gregoire-raturat.fr/sitemap.xml',
     },
     app: {
@@ -245,6 +249,9 @@ export default defineNuxtConfig({
 
     // Vite configuration
     vite: {
+        build: {
+            sourcemap: false,
+        },
         css: {
             preprocessorOptions: {
                 scss: {

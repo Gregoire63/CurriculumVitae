@@ -8,8 +8,6 @@ User-agent: *
 Allow: /
 
 # Bloquer les assets inutiles pour les crawlers
-Disallow: /_nuxt/
-Disallow: /api/
 Disallow: /__nuxt_devtools__/
 
 # Googlebot spécifique

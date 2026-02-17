@@ -7,17 +7,12 @@ const store = usePortfolioStore()
 const prefersReducedMotion = usePreferredReducedMotion()
 const { gtag } = useGtag()
 
+const name = ref('')
 const email = ref('')
 const message = ref('')
 const isSubmitting = ref(false)
 const isSuccess = ref(false)
 const isError = ref(false)
-
-const encode = (data: Record<string, string>) => {
-    return Object.keys(data)
-        .map((key) => encodeURIComponent(`${key}=${data[key]}`))
-        .join('&')
-}
 
 const socialLinks = [
     {
@@ -81,7 +76,7 @@ if (import.meta.client) {
 const handleSubmit = async (e: Event) => {
     e.preventDefault()
 
-    if (!email.value || !message.value) return
+    if (!name.value || !email.value || !message.value) return
 
     isSubmitting.value = true
     isError.value = false
@@ -89,41 +84,40 @@ const handleSubmit = async (e: Event) => {
     try {
         // Google Analytics tracking
         if (typeof gtag !== 'undefined') {
-            gtag('event', 'contact', {
-                app_name: 'Portfolio',
-                screen_name: 'Contact',
-                email: email.value,
-                message_length: message.value.length,
+            gtag('event', 'contact_form_submit', {
+                event_category: 'engagement',
+                event_label: 'Contact Form',
+                value: message.value.length,
             })
         }
 
-        // Soumission à Netlify Forms
-        const response = await fetch('/contact.html', {
+        // ✅ CORRECTION : POST vers / avec form-name requis par Netlify
+        const response = await fetch('/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: encode({
-                'form-name': 'contact',
-                name: email.value,
-                message: message.value,
-            }),
+            body: new URLSearchParams({
+                'form-name': 'contact',  // CRITIQUE : doit matcher le name du form
+                'name': name.value,
+                'email': email.value,
+                'message': message.value,
+            }).toString()
         })
 
         if (!response.ok) {
-            throw new Error('Form submission failed')
+            throw new Error(`HTTP ${response.status}`)
         }
 
-        // Succès
-        isSuccess.value = true
-        email.value = ''
-        message.value = ''
+        // ✅ Redirection vers la page de succès
+        window.location.href = '/contact.html'
 
-        // Reset du message de succès après 3s
-        setTimeout(() => {
-            isSuccess.value = false
-        }, 3000)
     } catch (error) {
         console.error('Error sending message:', error)
         isError.value = true
+
+        // Affichage du message d'erreur dans la console pour debug
+        if (error instanceof Error) {
+            console.error('Error details:', error.message)
+        }
 
         // Reset de l'erreur après 5s
         setTimeout(() => {
@@ -179,25 +173,66 @@ const handleSubmit = async (e: Event) => {
 
                 <!-- Right Column - Form -->
                 <div ref="formRef" class="contact-form-wrapper">
-                    <form class="contact-form" name="contact" method="POST" data-netlify="true" @submit="handleSubmit">
+                    <!-- Message d'erreur -->
+                    <div v-if="isError" class="error-message">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                            <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>
+                            {{ store.isFrench 
+                                ? "Erreur lors de l'envoi. Veuillez réessayer." 
+                                : "Error sending message. Please try again."
+                            }}
+                        </span>
+                    </div>
+
+                    <form class="contact-form" name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" @submit="handleSubmit">
+                        <!-- Hidden fields requis par Netlify -->
                         <input type="hidden" name="form-name" value="contact" />
+                        
+                        <!-- Honeypot anti-spam (caché) -->
+                        <div style="display: none;">
+                            <label>Don't fill this out: <input name="bot-field" /></label>
+                        </div>
+
+                        <!-- Champ Name (ajouté pour correspondre à contact.html) -->
+                        <div class="form-group">
+                            <label for="name" class="form-label">
+                                {{ store.isFrench ? 'Nom' : 'Name' }}
+                            </label>
+                            <input
+                                id="name"
+                                v-model="name"
+                                type="text"
+                                name="name"
+                                class="form-input"
+                                :placeholder="store.isFrench ? 'Votre nom' : 'Your name'"
+                                required
+                            />
+                        </div>
+
+                        <!-- Champ Email -->
                         <div class="form-group">
                             <label for="email" class="form-label">Email</label>
                             <input
                                 id="email"
                                 v-model="email"
                                 type="email"
+                                name="email"
                                 class="form-input"
                                 :placeholder="store.isFrench ? 'votre@email.com' : 'your@email.com'"
                                 required
                             />
                         </div>
 
+                        <!-- Champ Message -->
                         <div class="form-group">
                             <label for="message" class="form-label">Message</label>
                             <textarea
                                 id="message"
                                 v-model="message"
+                                name="message"
                                 class="form-textarea"
                                 :placeholder="store.isFrench ? 'Votre message...' : 'Your message...'"
                                 rows="6"
@@ -351,6 +386,36 @@ const handleSubmit = async (e: Event) => {
     border-radius: 24px;
     padding: var(--space-lg);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+}
+
+/* Message d'erreur */
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: #fee;
+    border: 1px solid #fcc;
+    border-radius: 12px;
+    color: #c33;
+    font-size: 0.875rem;
+    margin-bottom: var(--space-md);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.error-message svg {
+    flex-shrink: 0;
 }
 
 .contact-form {

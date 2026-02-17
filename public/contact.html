@@ -3,8 +3,26 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Formulaire de Contact - Envoyé</title>
+    <title>Message envoyé — Grégoire Raturat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
+      :root {
+        /* Palette de couleurs du portfolio */
+        --bg-primary: #fefcf8;
+        --bg-secondary: #f5f0e8;
+        --bg-accent: #e8dfd0;
+        --text-primary: #2a2826;
+        --text-secondary: #6b6560;
+        --text-muted: #9d9691;
+        --accent-primary: #8b6f5c;
+        --accent-secondary: #c9b299;
+        --accent-tertiary: #e5dbc8;
+        --font-display: 'Playfair Display', serif;
+        --font-body: 'DM Sans', sans-serif;
+      }
+
       * {
         margin: 0;
         padding: 0;
@@ -12,53 +30,116 @@
       }
 
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: linear-gradient(135deg, #fefcf8 0%, #f5f3ef 100%);
+        font-family: var(--font-body);
+        background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
         display: flex;
         align-items: center;
         justify-content: center;
         min-height: 100vh;
         padding: 2rem;
+        overflow: hidden;
+      }
+
+      /* Grille de fond subtile */
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background-image: 
+          linear-gradient(var(--accent-tertiary) 1px, transparent 1px),
+          linear-gradient(90deg, var(--accent-tertiary) 1px, transparent 1px);
+        background-size: 50px 50px;
+        opacity: 0.3;
+        z-index: 0;
+        pointer-events: none;
       }
 
       .container {
+        position: relative;
+        z-index: 1;
         background: white;
-        border-radius: 24px;
-        padding: 3rem;
-        max-width: 500px;
+        border-radius: 32px;
+        padding: 4rem 3rem;
+        max-width: 600px;
         width: 100%;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        box-shadow: 
+          0 20px 60px rgba(139, 111, 92, 0.08),
+          0 4px 12px rgba(139, 111, 92, 0.04);
+        border: 1px solid var(--accent-tertiary);
         text-align: center;
-        animation: slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        animation: slideUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
       }
 
       @keyframes slideUp {
         from {
           opacity: 0;
-          transform: translateY(30px);
+          transform: translateY(50px) scale(0.95);
         }
         to {
           opacity: 1;
-          transform: translateY(0);
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      /* Badge label */
+      .label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: 'Space Mono', monospace;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        color: var(--accent-primary);
+        margin-bottom: 1.5rem;
+        animation: fadeIn 0.6s ease-out 0.3s both;
+      }
+
+      .label-line {
+        width: 30px;
+        height: 2px;
+        background: var(--accent-primary);
+      }
+
+      /* Icône de succès */
+      .icon-wrapper {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 2rem;
+        animation: scaleIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+      }
+
+      .icon-circle {
+        position: absolute;
+        inset: 0;
+        border: 3px solid var(--accent-tertiary);
+        border-radius: 50%;
+        animation: rotate 20s linear infinite;
+      }
+
+      @keyframes rotate {
+        to {
+          transform: rotate(360deg);
         }
       }
 
       .icon {
-        width: 80px;
-        height: 80px;
-        margin: 0 auto 1.5rem;
-        background: linear-gradient(135deg, #8b6f5c 0%, #a08775 100%);
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        animation: scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
+        box-shadow: 0 8px 32px rgba(139, 111, 92, 0.2);
       }
 
       @keyframes scaleIn {
         from {
           opacity: 0;
-          transform: scale(0.5);
+          transform: scale(0.3);
         }
         to {
           opacity: 1;
@@ -67,14 +148,14 @@
       }
 
       .checkmark {
-        width: 40px;
-        height: 40px;
+        width: 60px;
+        height: 60px;
         stroke: white;
         stroke-width: 3;
         stroke-linecap: round;
         stroke-linejoin: round;
         fill: none;
-        animation: drawCheck 0.6s ease-out 0.5s both;
+        animation: drawCheck 0.8s ease-out 0.6s both;
         stroke-dasharray: 100;
         stroke-dashoffset: 100;
       }
@@ -86,47 +167,70 @@
       }
 
       h1 {
-        font-size: 2rem;
+        font-family: var(--font-display);
+        font-size: 2.5rem;
         font-weight: 700;
-        color: #1a1a1a;
+        color: var(--text-primary);
         margin-bottom: 1rem;
-        animation: fadeIn 0.6s ease-out 0.4s both;
+        line-height: 1.2;
+        animation: fadeIn 0.6s ease-out 0.5s both;
       }
 
-      p {
-        font-size: 1.125rem;
-        color: #666;
+      .subtitle {
+        font-size: 1.25rem;
+        color: var(--text-secondary);
         line-height: 1.6;
-        margin-bottom: 2rem;
-        animation: fadeIn 0.6s ease-out 0.5s both;
+        margin-bottom: 2.5rem;
+        animation: fadeIn 0.6s ease-out 0.6s both;
       }
 
       @keyframes fadeIn {
         from {
           opacity: 0;
+          transform: translateY(10px);
         }
         to {
           opacity: 1;
+          transform: translateY(0);
         }
       }
 
-      .redirect-info {
+      /* Info box */
+      .info-box {
+        background: var(--bg-secondary);
+        border: 1px solid var(--accent-tertiary);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+        animation: fadeIn 0.6s ease-out 0.7s both;
+      }
+
+      .info-box p {
         font-size: 0.875rem;
-        color: #999;
+        color: var(--text-muted);
+        margin: 0;
+      }
+
+      .redirect-info {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--accent-primary);
         margin-top: 1rem;
-        animation: fadeIn 0.6s ease-out 0.6s both;
+        font-weight: 500;
+        animation: fadeIn 0.6s ease-out 0.8s both;
       }
 
       .loader {
         display: inline-flex;
         gap: 4px;
-        margin-left: 8px;
       }
 
       .loader span {
         width: 6px;
         height: 6px;
-        background: #8b6f5c;
+        background: var(--accent-primary);
         border-radius: 50%;
         animation: bounce 1.4s infinite ease-in-out both;
       }
@@ -152,61 +256,153 @@
         }
       }
 
+      /* Bouton retour manuel (au cas où) */
+      .back-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding: 0.75rem 1.5rem;
+        background: transparent;
+        border: 2px solid var(--accent-tertiary);
+        border-radius: 12px;
+        color: var(--accent-primary);
+        font-family: var(--font-body);
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .back-button:hover {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(139, 111, 92, 0.2);
+      }
+
+      .back-button svg {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.3s ease;
+      }
+
+      .back-button:hover svg {
+        transform: translateX(-4px);
+      }
+
       /* Hidden Netlify form */
       form {
         display: none;
       }
 
       @media (max-width: 640px) {
+        body {
+          padding: 1rem;
+        }
+
         .container {
-          padding: 2rem;
+          padding: 3rem 2rem;
+          border-radius: 24px;
+        }
+
+        .icon-wrapper {
+          width: 100px;
+          height: 100px;
+        }
+
+        .checkmark {
+          width: 50px;
+          height: 50px;
         }
 
         h1 {
-          font-size: 1.5rem;
+          font-size: 2rem;
         }
 
-        p {
+        .subtitle {
           font-size: 1rem;
+        }
+
+        .info-box {
+          padding: 1rem;
+        }
+      }
+
+      /* Animations pour prefers-reduced-motion */
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
         }
       }
     </style>
   </head>
   <body>
-    <!-- Hidden form for Netlify detection -->
+    <!-- Hidden form for Netlify detection (CRITICAL: doit être identique au formulaire Vue) -->
     <form name="contact" netlify netlify-honeypot="bot-field" hidden>
       <input type="text" name="name" />
+      <input type="email" name="email" />
       <textarea name="message"></textarea>
     </form>
 
     <!-- Success message -->
     <div class="container">
-      <div class="icon">
-        <svg class="checkmark" viewBox="0 0 52 52">
-          <path d="M14 27l7 7 16-16" />
-        </svg>
+      <span class="label">
+        <span class="label-line"></span>
+        Succès
+      </span>
+
+      <div class="icon-wrapper">
+        <div class="icon-circle"></div>
+        <div class="icon">
+          <svg class="checkmark" viewBox="0 0 52 52">
+            <path d="M14 27l7 7 16-16" />
+          </svg>
+        </div>
       </div>
 
       <h1>Message envoyé !</h1>
-      <p>
-        Merci pour votre message. Je vous répondrai dans les plus brefs délais.
+      <p class="subtitle">
+        Merci pour votre message.<br />
+        Je vous répondrai dans les plus brefs délais.
       </p>
 
+      <div class="info-box">
+        <p>
+          <strong>Temps de réponse moyen :</strong> 24-48 heures<br />
+          Vous recevrez une confirmation par email si vous avez fourni votre adresse.
+        </p>
+      </div>
+
       <div class="redirect-info">
-        Redirection vers l'accueil
+        Redirection automatique vers l'accueil
         <span class="loader">
           <span></span>
           <span></span>
           <span></span>
         </span>
       </div>
+
+      <a href="/" class="back-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Retour à l'accueil
+      </a>
     </div>
 
     <script>
-      // Redirect after 3 seconds
-      setTimeout(() => {
-        window.location.href = '/'
-      }, 3000)
+      addEventListener("DOMContentLoaded", () => {
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 10000)
+      })
     </script>
   </body>
 </html>
