@@ -1,21 +1,13 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
+import { usePortfolioStore, type SectionName } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 const prefersReducedMotion = usePreferredReducedMotion()
 const { gtag } = useGtag()
 
-const menuSections = computed(() => [
-    { id: 'hero' as const, number: '01', label: store.isFrench ? 'Accueil' : 'Home' },
-    { id: 'about' as const, number: '02', label: store.isFrench ? 'À propos' : 'About' },
-    { id: 'skills' as const, number: '03', label: store.isFrench ? 'Compétences' : 'Skills' },
-    { id: 'portfolio' as const, number: '04', label: 'Portfolio' },
-    { id: 'contact' as const, number: '05', label: 'Contact' },
-])
-
-const handleNavigate = (section: (typeof menuSections.value)[number]['id']) => {
+const handleNavigate = (section: SectionName) => {
     if (typeof gtag !== 'undefined') {
         gtag('event', 'navigation', {
             event_category: 'engagement',
@@ -55,7 +47,7 @@ const openPrivacyPolicy = () => {
                 <!-- Menu Navigation avec animations stagger -->
                 <nav class="menu-nav">
                     <button
-                        v-for="(section, index) in menuSections"
+                        v-for="(section, index) in store.sections"
                         :key="section.id"
                         v-motion
                         :initial="prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: -30 }"
@@ -104,7 +96,7 @@ const openPrivacyPolicy = () => {
                                           type: 'spring',
                                           stiffness: 100,
                                           damping: 20,
-                                          delay: 0.1 + menuSections.length * 0.08,
+                                          delay: 0.1 + store.sections.length * 0.08,
                                       },
                                   }
                         "
@@ -220,7 +212,6 @@ const openPrivacyPolicy = () => {
     border: none;
     border-radius: 50%;
     color: var(--text-primary);
-    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -256,7 +247,6 @@ const openPrivacyPolicy = () => {
     background: transparent;
     border: none;
     border-radius: 16px;
-    cursor: pointer;
     transition:
         all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
         background 0.3s ease;
@@ -353,7 +343,6 @@ const openPrivacyPolicy = () => {
     font-size: 0.75rem;
     font-weight: 700;
     color: var(--text-primary);
-    cursor: pointer;
     transition:
         all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
         background 0.3s ease,

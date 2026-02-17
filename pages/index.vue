@@ -10,13 +10,7 @@ useSEO({
 
 const store = usePortfolioStore()
 
-// Refs pour les sections
-const heroSection = ref<HTMLElement>()
-const aboutSection = ref<HTMLElement>()
-const skillsSection = ref<HTMLElement>()
-const portfolioSection = ref<HTMLElement>()
-const contactSection = ref<HTMLElement>()
-const cvSection = ref<HTMLElement>()
+useActiveSection()
 
 // Gestion du scroll
 const scrollY = ref(0)
@@ -24,22 +18,6 @@ const viewportHeight = ref(0)
 
 const handleScroll = () => {
     scrollY.value = window.scrollY
-
-    const sections = [
-        { id: 'hero', el: heroSection.value },
-        { id: 'about', el: aboutSection.value },
-        { id: 'cv', el: cvSection.value },
-        { id: 'skills', el: skillsSection.value },
-        { id: 'portfolio', el: portfolioSection.value },
-        { id: 'contact', el: contactSection.value },
-    ].filter((s) => s.el)
-
-    const current = sections.reverse().find((s) => scrollY.value >= s.el!.offsetTop - 120)
-
-    if (current) {
-        store.setSection(current.id as any)
-    }
-
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight
     store.setScrollProgress((scrollY.value / maxScroll) * 100)
 }
@@ -62,15 +40,10 @@ onUnmounted(() => {
 
 // Parallax effects
 const heroParallax = computed(() => {
-    const offset = Math.min(scrollY.value * 0.5, 200)
+    const offset = Math.min(scrollY.value * 0.6, 250)
     return `translateY(${offset}px)`
 })
 
-// const aboutParallax = computed(() => {
-//     const start = viewportHeight.value * 0.5
-//     const offset = Math.max(0, (scrollY.value - start) * 0.3)
-//     return `translateY(${offset}px)`
-// })
 </script>
 
 <template>
@@ -100,7 +73,7 @@ const heroParallax = computed(() => {
             </div>
             <PortfolioAbout />
         </section>
-        <section id="cv" ref="cvSection" class="section cv-section">
+        <section id="about" ref="cvSection" class="section cv-section">
             <PortfolioCv />
         </section>
         <!-- Skills Section -->

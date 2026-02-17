@@ -27,7 +27,6 @@ const projects = computed<Project[]>(() => [
             {
                 src: '/projects/webquest/webquest.mp4',
                 type: 'video',
-                title: store.isFrench ? 'Exercice interactif' : 'Interactive exercise',
             },
         ],
     },
@@ -223,7 +222,7 @@ const openProject = (project: Project) => {
 
                     <div class="card-footer">
                         <span class="view-more">
-                            {{ store.isFrench ? 'Voir le projet' : 'View project' }}
+                            {{ store.isFrench ? `Voir le ${project.imgs?.length?'projet':'site'}` : `View ${project.imgs?.length?'project':'site'}` }}
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                 <path
                                     d="M7 17L17 7M17 7H7M17 7V17"

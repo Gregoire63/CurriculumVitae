@@ -593,11 +593,12 @@ const goToImage = (index: number) => {
 /* Responsive */
 @media (max-width: 768px) {
     .modal-overlay {
-        padding: var(--space-md);
+        padding:0;
     }
 
     .modal-panel {
-        padding: var(--space-lg);
+        padding: var(--space-sm);
+        margin:0;
     }
 
     .project-title {
@@ -605,7 +606,9 @@ const goToImage = (index: number) => {
     }
 
     .modal-header {
-        flex-direction: column;
+        flex-direction: column-reverse;
+        margin-bottom: var(--space-sm);
+        gap: unset;
     }
 
     .modal-actions {

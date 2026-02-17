@@ -60,7 +60,6 @@ img {
 /* Remove default button styles */
 button {
   font-family: inherit;
-  cursor: pointer;
 }
 
 /* Utility classes */

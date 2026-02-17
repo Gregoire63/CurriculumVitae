@@ -1,18 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
+import { usePortfolioStore, type SectionName } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 
-const sections = computed(() => [
-    { id: 'hero' as const, label: store.isFrench ? 'Accueil' : 'Home' },
-    { id: 'about' as const, label: store.isFrench ? 'À propos' : 'About' },
-    { id: 'skills' as const, label: store.isFrench ? 'Compétences' : 'Skills' },
-    { id: 'portfolio' as const, label: 'Portfolio' },
-    { id: 'contact' as const, label: 'Contact' },
-])
-
-const handleNavClick = (section: (typeof sections.value)[number]['id']) => {
+const handleNavClick = (section: SectionName) => {
     store.navigateToSection(section)
 }
 </script>
@@ -37,7 +29,7 @@ const handleNavClick = (section: (typeof sections.value)[number]['id']) => {
             <!-- Desktop Navigation -->
             <div class="nav-links desktop-only">
                 <button
-                    v-for="section in sections"
+                    v-for="section in store.sections"
                     :key="section.id"
                     class="nav-link"
                     :class="{ active: store.currentSection === section.id }"
@@ -108,7 +100,6 @@ const handleNavClick = (section: (typeof sections.value)[number]['id']) => {
     gap: var(--space-sm);
     background: none;
     border: none;
-    cursor: pointer;
     padding: var(--space-xs);
     transition: transform 0.3s var(--ease-bounce);
 }

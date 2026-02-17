@@ -15,10 +15,15 @@ export interface Project {
     visible?: boolean
 }
 
-export type Section = 'hero' | 'about' | 'cv' | 'skills' | 'portfolio' | 'contact' | 'privacy'
+export type SectionName = 'hero' | 'about' | 'skills' | 'portfolio' | 'contact'
+export type Section = {
+    id: SectionName
+    number?: string
+    label: string
+}
 
 interface PortfolioState {
-    currentSection: Section
+    currentSection: SectionName
     isMenuOpen: boolean
     language: 'fr' | 'en'
     scrollProgress: number
@@ -40,10 +45,20 @@ export const usePortfolioStore = defineStore('portfolio', {
 
     getters: {
         isFrench: (state) => state.language === 'fr',
+        sections(state):Section[]{
+            return [
+                { id: 'hero', number: '01', label: state.language === 'fr' ? 'Accueil' : 'Home' },
+                { id: 'about', number: '02', label: state.language === 'fr' ? 'À propos' : 'About' },
+                { id: 'skills', number: '03', label: state.language === 'fr' ? 'Compétences' : 'Skills' },
+                { id: 'portfolio', number: '04', label: 'Portfolio' },
+                { id: 'contact', number: '05', label: 'Contact' },
+            ]
+        },
     },
 
     actions: {
-        setSection(section: Section) {
+
+        setSection(section: SectionName) {
             this.currentSection = section
         },
 
@@ -144,13 +159,16 @@ export const usePortfolioStore = defineStore('portfolio', {
             }
         },
 
-        navigateToSection(section: Section) {
+        navigateToSection(section: SectionName){
+            // 1. Fermer le menu
             this.setMenuOpen(false)
-            const el = document.getElementById(section)
-            el?.scrollIntoView({
-                behavior: 'smooth',
-                block: 'start',
-            })
+            
+            setTimeout(() => {
+                document.getElementById(section)?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start',
+                })
+            }, 300)
         },
         setPrivacyPolicyOpen(isOpen: boolean) {
             this.isPrivacyPolicyOpen = isOpen

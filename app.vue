@@ -56,6 +56,7 @@ onUnmounted(() => {
 
 <template>
     <div class="app-container">
+        <CustomCursor />
         <NuxtPage />
     </div>
 </template>
@@ -99,6 +100,7 @@ onUnmounted(() => {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    cursor: none !important;
 }
 
 html {
