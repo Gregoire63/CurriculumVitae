@@ -467,10 +467,12 @@ const openProject = (project: Project) => {
     .projects-wrapper {
         padding: var(--space-lg) var(--space-md);
     }
-
+    .section-header {
+        margin-bottom: var(--space-md);
+    }
     .projects-grid {
         grid-template-columns: 1fr;
-        gap: var(--space-md);
+        gap: var(--space-sm);
     }
 
     .project-card {

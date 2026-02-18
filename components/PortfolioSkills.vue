@@ -87,15 +87,18 @@ onMounted(() => {
             entries.forEach((entry) => {
                 if (entry.isIntersecting) {
                     isVisible.value = true
+                    observer.unobserve(entry.target)
                 }
             })
         },
-        { threshold: 0.2 },
+        { threshold: 0.15 },
     )
 
     const section = document.querySelector('.skills-wrapper')
     if (section) {
         observer.observe(section)
+    } else {
+        isVisible.value = true
     }
 
     // Animation 3D au hover (comme les diplômes)
@@ -400,18 +403,23 @@ onMounted(() => {
     .skills-wrapper {
         padding: var(--space-lg) var(--space-md);
     }
-
+    .section-header {
+        margin-bottom: var(--space-md);
+    }
     .skills-grid {
         grid-template-columns: 1fr;
         gap: var(--space-md);
     }
 
     .skill-category {
-        padding: var(--space-md);
-        /* display: block !important; */
-        /* opacity: 1 !important; */
+        padding: var(--space-sm);
+        opacity: 1 !important; 
+        transform: none !important;
     }
-
+    .category-header {
+        margin-bottom: var(--space-sm);
+        padding-bottom: var(--space-sm);
+    }
     .category-title {
         font-size: 1.25rem;
     }

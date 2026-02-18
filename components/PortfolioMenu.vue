@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
-import { computed } from 'vue'
 import { usePortfolioStore, type SectionName } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
@@ -168,7 +167,7 @@ const openPrivacyPolicy = () => {
     position: relative;
     max-width: 600px;
     width: 100%;
-    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
     background: var(--bg-primary);
     border-radius: 32px;
     padding: clamp(1rem, 4vw, 3rem);
@@ -413,7 +412,7 @@ const openPrivacyPolicy = () => {
     .menu-panel {
         padding: clamp(1rem, 3vw, 1.5rem);
         border-radius: 24px;
-        max-height: calc(100vh - 1rem);
+        max-height: calc(100dvh - 1rem);
     }
 }
 

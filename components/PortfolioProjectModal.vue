@@ -242,7 +242,7 @@ const goToImage = (index: number) => {
     background: var(--bg-primary);
     border-radius: 32px;
     padding: var(--space-xl);
-    max-height: calc(100vh - 4rem);
+    max-height: calc(100dvh - 4rem);
     overflow-y: auto;
     box-shadow: 0 20px 60px rgba(var(--color), 0.2);
     margin: 2rem;

@@ -761,6 +761,7 @@ if (import.meta.client) {
     }
     .timeline-item {
         gap: var(--space-md);
+        margin-bottom: var(--space-sm);
     }
     .timeline-marker {
         display: none;
@@ -768,7 +769,10 @@ if (import.meta.client) {
     .timeline-content {
         padding: var(--space-md);
     }
-
+    .cv-stats {
+        margin-top: var(--space-md);
+        gap: var(--space-xs);
+    }
     .experience-title {
         font-size: 1.25rem;
     }

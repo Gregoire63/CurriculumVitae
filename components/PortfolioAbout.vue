@@ -371,10 +371,12 @@ const clickCard = (url: string) => () => window.open(url, '_blank')
     .about-wrapper {
         padding: var(--space-lg) var(--space-md);
     }
-
+    .section-header {
+        margin-bottom: var(--space-sm);
+    }
     .degrees-grid {
         grid-template-columns: 1fr;
-        gap: var(--space-md);
+        gap: var(--space-sm);
     }
 
     .degree-card {

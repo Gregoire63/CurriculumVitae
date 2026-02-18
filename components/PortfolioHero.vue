@@ -5,6 +5,7 @@ import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 const prefersReducedMotion = usePreferredReducedMotion()
+const { gtag } = useGtag()
 
 const headerRef = ref<HTMLElement | null>(null)
 const photoRef = ref<HTMLElement | null>(null)
@@ -62,9 +63,14 @@ if (import.meta.client) {
         visibleOnce: { ...fadeUp.visibleOnce, transition: { ...fadeUp.visibleOnce.transition, delay: 0.6 } },
     })
 }
-
-const scrollToAbout = () => {
-    store.navigateToSection('about')
+const handleNavigate = (section: SectionName) => {
+    if (typeof gtag !== 'undefined') {
+        gtag('event', 'navigation', {
+            event_category: 'engagement',
+            event_label: section,
+        })
+    }
+    store.navigateToSection(section)
 }
 </script>
 
@@ -104,7 +110,7 @@ const scrollToAbout = () => {
                 </div>
 
                 <div ref="actionsRef" class="hero-actions">
-                    <button class="cta-primary" @click="store.setMenuOpen(true)">
+                    <button class="cta-primary" @click="handleNavigate('contact')">
                         {{ store.isFrench ? 'Me contacter' : 'Get in touch' }}
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                             <path
@@ -117,7 +123,7 @@ const scrollToAbout = () => {
                         </svg>
                     </button>
 
-                    <button class="cta-secondary" @click="scrollToAbout">
+                    <button class="cta-secondary" @click="handleNavigate('about')">
                         {{ store.isFrench ? 'En savoir plus' : 'Learn more' }}
                     </button>
                 </div>
@@ -286,7 +292,7 @@ const scrollToAbout = () => {
     border: 2px solid var(--accent-primary);
 }
 
-@media (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference)  and (pointer: fine) {
     .cta-primary:hover {
         background: var(--text-primary);
         border-color: var(--text-primary);
@@ -309,7 +315,7 @@ const scrollToAbout = () => {
     border: 2px solid var(--accent-secondary);
 }
 
-@media (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference) and (pointer: fine) {
     .cta-secondary:hover {
         background: var(--accent-tertiary);
         border-color: var(--accent-primary);
@@ -458,13 +464,17 @@ const scrollToAbout = () => {
     .hero-title {
         font-size: clamp(2.5rem, 10vw, 4rem);
     }
-
+    .hero-grid {
+        gap: var(--space-md)
+    }
     .hero-actions {
         flex-direction: column;
         width: 100%;
         max-width: 300px;
     }
-
+    .hero-photo {
+        max-width: 200px;
+    }
     .cta-primary,
     .cta-secondary {
         width: 100%;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 
+const { isMobile } = useDevice()
 const cursorDot = ref<HTMLElement | null>(null)
 const cursorOutline = ref<HTMLElement | null>(null)
 
@@ -51,6 +52,7 @@ const handleMouseUp = () => {
 }
 
 onMounted(() => {
+    if(isMobile) return
     // Initialiser au centre de l'écran
     const centerX = window.innerWidth / 2
     const centerY = window.innerHeight / 2
@@ -120,6 +122,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+    if(isMobile) return
     window.removeEventListener('mousemove', handleMouseMove)
     window.removeEventListener('mouseover', handleMouseOver)
     window.removeEventListener('mousedown', handleMouseDown)

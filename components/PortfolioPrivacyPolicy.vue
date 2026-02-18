@@ -807,7 +807,7 @@ const lastUpdate = '17/02/2026'
     width: 100%;
     position: relative;
     max-width: 1000px;
-    max-height: 90vh;
+    max-height: 90dvh;
     background: var(--bg-primary);
     border-radius: 32px 32px 0 0;
     display: flex;
@@ -1062,7 +1062,7 @@ const lastUpdate = '17/02/2026'
 /* Responsive */
 @media (max-width: 768px) {
     .privacy-card {
-        max-height: 95vh;
+        max-height: 95dvh;
         border-radius: 24px 24px 0 0;
     }
 

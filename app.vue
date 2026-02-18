@@ -42,9 +42,6 @@ onMounted(() => {
     darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
     handleDarkMode(darkModeQuery)
     darkModeQuery.addEventListener('change', handleDarkMode)
-
-    // Scroll en haut au chargement
-    window.scrollTo({ top: 0, behavior: 'instant' })
 })
 
 onUnmounted(() => {
@@ -119,94 +116,7 @@ body {
 
 .app-container {
     position: relative;
-    min-height: 100vh;
-}
-
-/* Scrollbar personnalisée */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--accent-secondary);
-    border-radius: 4px;
-    transition: background 0.3s var(--ease-smooth);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-primary);
-}
-
-/* Utility classes */
-.no-scroll {
-    overflow: hidden !important;
-    height: 100dvh;
-}
-</style>
-
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
-
-:root {
-    /* Palette de couleurs */
-    --bg-primary: #fefcf8;
-    --bg-secondary: #f5f0e8;
-    --bg-accent: #e8dfd0;
-
-    --text-primary: #2a2826;
-    --text-secondary: #6b6560;
-    --text-muted: #9d9691;
-
-    --accent-primary: #8b6f5c;
-    --accent-secondary: #c9b299;
-    --accent-tertiary: #e5dbc8;
-
-    /* Spacing system */
-    --space-xs: 0.5rem;
-    --space-sm: 1rem;
-    --space-md: 2rem;
-    --space-lg: 4rem;
-    --space-xl: 6rem;
-
-    /* Typography */
-    --font-display: 'Playfair Display', serif;
-    --font-mono: 'Space Mono', monospace;
-    --font-body: 'DM Sans', sans-serif;
-
-    /* Animations */
-    --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-    --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-html {
-    scroll-behavior: smooth;
-    overflow-x: hidden;
-}
-
-body {
-    font-family: var(--font-body);
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-.app-container {
-    position: relative;
-    min-height: 100vh;
+    min-height: 100dvh;
 }
 
 /* Scrollbar personnalisée */

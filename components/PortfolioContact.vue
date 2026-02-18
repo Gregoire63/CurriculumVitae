@@ -481,7 +481,7 @@ const handleSubmit = async (e: Event) => {
     gap: var(--space-xs);
 }
 
-@media (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference) and (pointer: fine) {
     .submit-button:hover:not(:disabled) {
         background: var(--text-primary);
         border-color: var(--text-primary);
@@ -566,10 +566,15 @@ const handleSubmit = async (e: Event) => {
 }
 
 @media (max-width: 768px) {
+    .contact-grid {
+        gap: var(--space-sm);
+    }
     .contact-wrapper {
         padding: var(--space-lg) var(--space-md);
     }
-
+    .section-description {
+        margin-bottom: var(--space-md);
+    }
     .contact-form-wrapper {
         padding: var(--space-md);
     }
@@ -577,6 +582,11 @@ const handleSubmit = async (e: Event) => {
     .social-links {
         flex-direction: row;
         flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .social-link {
+        padding: var(--space-sm);
     }
 }
 
