@@ -9,7 +9,6 @@ export default defineNuxtConfig({
       '@pinia/nuxt',
       '@nuxt/fonts',
       '@nuxt/content',
-      '@nuxt/hints',
       '@nuxt/image',
       '@nuxt/scripts',
       '@nuxt/test-utils/module',
@@ -131,6 +130,7 @@ export default defineNuxtConfig({
             link: [
                 { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
                 { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
+                { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/favicon-48x48.png' },
                 { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' },
                 { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
                 { rel: 'manifest', href: '/site.webmanifest' },
@@ -157,6 +157,7 @@ export default defineNuxtConfig({
                                 jobTitle: 'Développeur Full Stack',
                                 url: 'https://gregoire-raturat.fr',
                                 image: 'https://gregoire-raturat.fr/og-image.webp',
+                                logo: 'https://gregoire-raturat.fr/favicon-96x96.png',
                                 sameAs: [
                                     'https://github.com/Gregoire63',
                                     'https://www.linkedin.com/in/gregoire-raturat',

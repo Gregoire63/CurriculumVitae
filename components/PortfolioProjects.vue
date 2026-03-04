@@ -9,11 +9,34 @@ const { gtag } = useGtag()
 
 const projects = computed<Project[]>(() => [
     {
+        name: 'ETF PEA',
+        description: store.isFrench
+            ? "Application web pour suivre et analyser les ETF éligibles au PEA. Visualisez les performances, comparez les fonds et optimisez votre portefeuille d'investissement."
+            : 'Web application to track and analyze ETFs eligible for PEA. Visualize performance, compare funds and optimize your investment portfolio.',
+        year: '2026',
+        type: store.isFrench ? 'Auto-Entrepreneur' : 'Self-employed',
+        url: 'https://etf.gregoire-raturat.fr',
+        techno: [
+            { name: 'React', url: 'https://react.dev/' },
+            { name: 'Next.js', url: 'https://nextjs.org/' },
+            { name: 'Tailwind CSS', url: 'https://tailwindcss.com/' },
+        ],
+        path: '/projects/etf-pea',
+        color: '15, 52, 96',
+        imgs: [
+            { src: '/projects/etf-pea/dashboard_1.webp' },
+            { src: '/projects/etf-pea/dashboard_2.webp' },
+            { src: '/projects/etf-pea/compare.webp' },
+            { src: '/projects/etf-pea/portfolio_1.webp' },
+            { src: '/projects/etf-pea/portfolio_2.webp' },
+        ],
+    },
+    {
         name: 'WebQuest',
         description: store.isFrench
             ? "WebQuest est une plateforme interactive pour apprendre le développement web frontend : HTML, CSS, JavaScript, les APIs et l'authentification JWT — directement dans le navigateur."
             : 'WebQuest is an interactive platform for learning frontend web development: HTML, CSS, JavaScript, APIs and JWT authentication — directly in the browser.',
-        year: '2026',
+        year: '2025',
         type: store.isFrench ? 'Auto-Entrepreneur' : 'Self-employed',
         url: 'https://web-quests.onrender.com/',
         techno: [
