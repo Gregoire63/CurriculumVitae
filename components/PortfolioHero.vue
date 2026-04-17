@@ -80,7 +80,7 @@ const handleNavigate = (section: SectionName) => {
             <!-- Photo Profile -->
             <div ref="photoRef" class="hero-photo">
                 <div class="photo-frame">
-                    <img src="/public/photoCV.webp" alt="Grégoire Raturat" class="profile-image" loading="eager" />
+                    <img src="/public/photoCV.webp" alt="Grégoire Raturat" class="profile-image" loading="eager" fetchpriority="high" />
                     <div class="photo-overlay"></div>
                 </div>
             </div>
@@ -255,7 +255,7 @@ const handleNavigate = (section: SectionName) => {
 
 .title-line {
     display: block;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .hero-description {

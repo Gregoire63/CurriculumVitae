@@ -12,7 +12,6 @@ export default defineNuxtConfig({
       '@nuxt/image',
       '@nuxt/scripts',
       '@nuxt/test-utils/module',
-      '@nuxtjs/google-fonts',
       '@nuxt/ui',
       'nuxt-gtag',
       '@nuxtjs/sitemap',
@@ -134,15 +133,7 @@ export default defineNuxtConfig({
                 { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' },
                 { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
                 { rel: 'manifest', href: '/site.webmanifest' },
-                // Preconnect
-                { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-                { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
                 { rel: 'dns-prefetch', href: 'https://www.googletagmanager.com' },
-                {
-                    rel: 'preload',
-                    as: 'style',
-                    href: 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap',
-                },
             ],
             script: [
                 {
@@ -200,19 +191,17 @@ export default defineNuxtConfig({
     // Configuration des fonts
     fonts: {
         families: [
-            { name: 'Inter', provider: 'google', weights: [300, 400, 500, 600, 700] },
-            { name: 'JetBrains Mono', provider: 'google', weights: [400, 500, 600] },
+            { name: 'Playfair Display', provider: 'google', weights: [400, 600, 700] },
+            { name: 'Space Mono', provider: 'google', weights: [400, 700] },
+            { name: 'DM Sans', provider: 'google', weights: [400, 500, 700] },
         ],
-    },
-    googleFonts: {
-        families: {
-            'Playfair+Display': [400, 600, 700],
-            'Space+Mono': [400, 700],
-            'DM+Sans': [400, 500, 700],
+        defaults: {
+            fallbacks: {
+                serif: ['Georgia', 'Times New Roman'],
+                'sans-serif': ['system-ui', 'Arial'],
+                monospace: ['Courier New'],
+            },
         },
-        display: 'swap',
-        preload: true,
-        download: true,
     },
     // Optimisations de performance
     experimental: {
@@ -266,19 +255,6 @@ export default defineNuxtConfig({
                 compilerOptions: {
                     isCustomElement: (tag) => tag.includes('-'),
                 },
-            },
-        },
-    },
-    // Route rules pour le caching
-    routeRules: {
-        '/': { prerender: true },
-        '/**': {
-            headers: {
-                'X-Content-Type-Options': 'nosniff',
-                'X-Frame-Options': 'DENY',
-                'X-XSS-Protection': '1; mode=block',
-                'Referrer-Policy': 'strict-origin-when-cross-origin',
-                'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
             },
         },
     },

@@ -47,7 +47,9 @@ const handleNavClick = (section: SectionName) => {
                     :aria-label="store.isFrench ? 'Switch to English' : 'Passer en Français'"
                     @click="store.toggleLanguage"
                 >
-                    <span class="lang-code">{{ store.language.toUpperCase() }}</span>
+                    <Transition name="lang-flip" mode="out-in">
+                        <span :key="store.language" class="lang-code">{{ store.language.toUpperCase() }}</span>
+                    </Transition>
                 </button>
 
                 <button
@@ -189,6 +191,8 @@ const handleNavClick = (section: SectionName) => {
     padding: var(--space-xs) var(--space-sm);
     cursor: pointer;
     transition: all 0.3s var(--ease-smooth);
+    perspective: 400px;
+    overflow: hidden;
 }
 
 .lang-toggle:hover {
@@ -197,8 +201,47 @@ const handleNavClick = (section: SectionName) => {
     transform: scale(1.05);
 }
 
+.lang-toggle:active {
+    transform: scale(0.92);
+    transition-duration: 0.1s;
+}
+
 .lang-code {
     display: block;
+    transform-origin: center;
+    will-change: transform, opacity;
+}
+
+/* Flip animation on language change */
+.lang-flip-enter-active,
+.lang-flip-leave-active {
+    transition:
+        transform 0.4s var(--ease-bounce),
+        opacity 0.25s var(--ease-smooth);
+}
+
+.lang-flip-enter-from {
+    opacity: 0;
+    transform: rotateX(-90deg) translateY(-6px);
+}
+
+.lang-flip-leave-to {
+    opacity: 0;
+    transform: rotateX(90deg) translateY(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lang-flip-enter-active,
+    .lang-flip-leave-active {
+        transition: opacity 0.15s linear;
+    }
+    .lang-flip-enter-from,
+    .lang-flip-leave-to {
+        transform: none;
+    }
+    .lang-toggle:active {
+        transform: none;
+    }
 }
 
 /* Menu Toggle */

@@ -442,7 +442,7 @@ if (import.meta.client) {
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.15em;
-    color: var(--accent-primary);
+    color: #6d5745;
     margin-bottom: var(--space-sm);
 }
 

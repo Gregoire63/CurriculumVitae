@@ -51,6 +51,8 @@ const heroParallax = computed(() => {
         <!-- Navigation -->
         <PortfolioNavigation />
 
+        <main>
+
         <!-- Hero Section -->
         <section id="hero" ref="heroSection" class="section hero-section">
             <div class="hero-content" :style="{ transform: heroParallax }">
@@ -73,7 +75,7 @@ const heroParallax = computed(() => {
             </div>
             <PortfolioAbout />
         </section>
-        <section id="about" ref="cvSection" class="section cv-section">
+        <section id="cv" ref="cvSection" class="section cv-section">
             <PortfolioCv />
         </section>
         <!-- Skills Section -->
@@ -99,6 +101,8 @@ const heroParallax = computed(() => {
             </div>
             <PortfolioContact />
         </section>
+
+        </main>
 
         <PortfolioPrivacyPolicy />
 

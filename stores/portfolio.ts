@@ -9,10 +9,12 @@ export interface Project {
     techno: Array<{ name: string; url: string }>
     path: string
     color?: string
-    imgs?: Array<{ src: string; title?: string; type?: string }>
+    imgs?: Array<{ src: string; title?: string; type?: string; poster?: string }>
     pdf?: string
     action?: string
     visible?: boolean
+    mobile?: boolean
+    logo?: string
 }
 
 export type SectionName = 'hero' | 'about' | 'skills' | 'portfolio' | 'contact'

@@ -8,6 +8,9 @@ const modalPanel = ref<HTMLElement>()
 
 const project = computed(() => store.activeProject)
 
+const currentImage = computed(() => project.value?.imgs?.[currentImageIndex.value])
+const currentCaption = computed(() => currentImage.value?.title)
+
 watch(
     () => project.value,
     async (newProject) => {
@@ -59,7 +62,12 @@ const goToImage = (index: number) => {
                 <!-- Modal Header -->
                 <div class="modal-header">
                     <div class="project-meta">
-                        <h2 class="project-title">{{ project.name }}</h2>
+                        <div class="title-row">
+                            <div class="modal-logo">
+                                <img :src="`${project.path}/logo.webp`" :alt="`${project.name} logo`" />
+                            </div>
+                            <h2 class="project-title">{{ project.name }}</h2>
+                        </div>
                         <div class="project-info">
                             <span>{{ project.year }}</span>
                             <span class="dot">•</span>
@@ -100,15 +108,19 @@ const goToImage = (index: number) => {
                 </div>
 
                 <!-- Modal Content -->
-                <div class="modal-content">
+                <div class="modal-content" :class="{ 'mobile-project': project.mobile }">
                     <!-- PDF Viewer -->
                     <div v-if="project.pdf" class="pdf-viewer">
                         <iframe :src="project.pdf" class="pdf-frame"></iframe>
                     </div>
 
                     <!-- Image Gallery -->
-                    <div v-else-if="project.imgs && project.imgs.length > 0" class="image-gallery">
-                        <div class="gallery-main">
+                    <div
+                        v-else-if="project.imgs && project.imgs.length > 0"
+                        class="image-gallery"
+                        :class="{ mobile: project.mobile }"
+                    >
+                        <div class="gallery-main" :class="{ mobile: project.mobile }">
                             <template v-for="(img, index) in project.imgs" :key="index">
                                 <Transition name="gallery-fade" mode="out-in">
                                     <div v-if="index === currentImageIndex" class="gallery-item">
@@ -126,7 +138,6 @@ const goToImage = (index: number) => {
                                             :alt="img.title || project.name"
                                             class="gallery-media"
                                         />
-                                        <p v-if="img.title" class="media-caption">{{ img.title }}</p>
                                     </div>
                                 </Transition>
                             </template>
@@ -165,9 +176,23 @@ const goToImage = (index: number) => {
                                 </svg>
                             </button>
                         </div>
+                    </div>
+
+                    <!-- Info panel: caption, thumbnails, description, tech -->
+                    <div class="project-info-panel">
+                        <!-- Caption -->
+                        <Transition name="gallery-fade" mode="out-in">
+                            <p v-if="currentCaption" :key="currentImageIndex" class="media-caption">
+                                {{ currentCaption }}
+                            </p>
+                        </Transition>
 
                         <!-- Thumbnails -->
-                        <div v-if="project.imgs.length > 1" class="gallery-thumbnails">
+                        <div
+                            v-if="project.imgs && project.imgs.length > 1"
+                            class="gallery-thumbnails"
+                            :class="{ mobile: project.mobile }"
+                        >
                             <button
                                 v-for="(img, index) in project.imgs"
                                 :key="index"
@@ -177,16 +202,17 @@ const goToImage = (index: number) => {
                             >
                                 <img v-if="img.type !== 'video'" :src="img.src" :alt="`Thumbnail ${index + 1}`" />
                                 <div v-else class="video-thumbnail">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M8 5v14l11-7z" />
-                                    </svg>
+                                    <img v-if="img.poster" :src="img.poster" :alt="`Thumbnail ${index + 1}`" />
+                                    <span class="play-badge">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M8 5v14l11-7z" />
+                                        </svg>
+                                    </span>
                                 </div>
                             </button>
                         </div>
-                    </div>
 
-                    <!-- Project Description -->
-                    <div class="project-details">
+                        <!-- Description -->
                         <p class="project-description" v-html="project.description"></p>
 
                         <!-- Technologies -->
@@ -281,6 +307,34 @@ const goToImage = (index: number) => {
 
 .project-meta {
     flex: 1;
+    min-width: 0;
+}
+
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.modal-logo {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(var(--color), 0.08);
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.modal-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
 }
 
 .project-title {
@@ -288,7 +342,7 @@ const goToImage = (index: number) => {
     font-size: 2rem;
     font-weight: 700;
     color: var(--text-primary);
-    margin: 0 0 var(--space-xs) 0;
+    margin: 0;
 }
 
 .project-info {
@@ -347,6 +401,37 @@ const goToImage = (index: number) => {
     gap: var(--space-lg);
 }
 
+/* Info panel (caption + thumbnails + description + tech) */
+.project-info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+}
+
+/* Mobile app projects: side-by-side layout on desktop */
+@media (min-width: 769px) {
+    .modal-content.mobile-project {
+        flex-direction: row;
+        align-items: flex-start;
+    }
+
+    .modal-content.mobile-project .image-gallery {
+        flex-shrink: 0;
+        width: 340px;
+        position: sticky;
+        top: 0;
+    }
+
+    .modal-content.mobile-project .gallery-main.mobile {
+        max-height: 55dvh;
+    }
+
+    .modal-content.mobile-project .project-info-panel {
+        flex: 1;
+        min-width: 0;
+    }
+}
+
 /* PDF Viewer */
 .pdf-viewer {
     width: 100%;
@@ -378,6 +463,25 @@ const goToImage = (index: number) => {
     background: var(--bg-secondary);
 }
 
+/* Mobile app (portrait) gallery — shows phone-format screenshots */
+.gallery-main.mobile {
+    aspect-ratio: 9 / 16;
+    max-width: 360px;
+    max-height: 65dvh;
+    margin: 0 auto;
+    background: linear-gradient(
+        135deg,
+        rgba(var(--color), 0.08) 0%,
+        rgba(var(--color), 0.02) 100%
+    );
+    border: 1px solid rgba(var(--color), 0.15);
+}
+
+.gallery-main.mobile .gallery-media {
+    object-fit: contain;
+    padding: var(--space-sm);
+}
+
 .gallery-item {
     width: 100%;
     height: 100%;
@@ -393,13 +497,15 @@ const goToImage = (index: number) => {
 }
 
 .media-caption {
-    padding: var(--space-sm);
+    align-self: center;
+    padding: var(--space-xs) var(--space-md);
     background: rgba(var(--color), 0.9);
     color: var(--bg-primary);
     font-family: var(--font-mono);
     font-size: 0.875rem;
     text-align: center;
     margin: 0;
+    border-radius: 20px;
 }
 
 .gallery-nav {
@@ -444,6 +550,27 @@ const goToImage = (index: number) => {
     padding: var(--space-xs);
 }
 
+.gallery-thumbnails.mobile {
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.gallery-thumbnails.mobile .thumbnail {
+    width: 44px;
+    height: 80px;
+}
+
+@media (min-width: 769px) {
+    .gallery-thumbnails.mobile {
+        justify-content: flex-start;
+    }
+
+    .gallery-thumbnails.mobile .thumbnail {
+        width: 60px;
+        height: 106px;
+    }
+}
+
 .thumbnail {
     width: 80px;
     height: 60px;
@@ -459,15 +586,41 @@ const goToImage = (index: number) => {
     padding: 0;
 }
 
-.thumbnail img,
-.video-thumbnail {
+.thumbnail img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.video-thumbnail {
+    position: relative;
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--text-muted);
+    background: var(--bg-secondary);
+}
+
+.video-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.play-badge {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+    color: white;
+    transition: background 0.2s ease;
+}
+
+.thumbnail:hover .play-badge {
+    background: rgba(0, 0, 0, 0.2);
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -479,13 +632,6 @@ const goToImage = (index: number) => {
     .thumbnail.active {
         transform: scale(1.08);
     }
-}
-
-/* Project Details */
-.project-details {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
 }
 
 .project-description {
@@ -605,6 +751,11 @@ const goToImage = (index: number) => {
         font-size: 1.5rem;
     }
 
+    .modal-logo {
+        width: 40px;
+        height: 40px;
+    }
+
     .modal-header {
         flex-direction: column-reverse;
         margin-bottom: var(--space-sm);
@@ -615,8 +766,12 @@ const goToImage = (index: number) => {
         align-self: flex-end;
     }
 
-    .gallery-main {
+    .gallery-main:not(.mobile) {
         aspect-ratio: 4 / 3;
+    }
+
+    .gallery-main.mobile {
+        max-height: 55dvh;
     }
 
     .pdf-viewer {

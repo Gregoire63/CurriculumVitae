@@ -9,6 +9,31 @@ const { gtag } = useGtag()
 
 const projects = computed<Project[]>(() => [
     {
+        name: 'DishRank',
+        description: store.isFrench
+            ? 'Réseau social pour noter les plats, pas les restaurants. Découvrez les meilleures assiettes autour de vous grâce à une carte interactive et plus de 200 catégories. Applications iOS, Android et web.'
+            : 'Social network to rate dishes, not restaurants. Discover the best plates around you via an interactive map and 200+ categories. iOS, Android and web apps.',
+        year: '2026',
+        type: store.isFrench ? 'Auto-Entrepreneur' : 'Self-employed',
+        url: 'https://dishrank.fr',
+        techno: [
+            { name: 'Next.js', url: 'https://nextjs.org/' },
+            { name: 'React Native', url: 'https://reactnative.dev/' },
+            { name: 'Supabase', url: 'https://supabase.com/' },
+            { name: 'TypeScript', url: 'https://www.typescriptlang.org/' },
+        ],
+        path: '/projects/dishrank',
+        color: '111, 92, 232',
+        mobile: true,
+        logo: '/projects/dishrank/logo-intro.mp4',
+        imgs: [
+            { src: '/projects/dishrank/app-video-2.mp4', type: 'video', poster: '/projects/dishrank/home.jpg', title: store.isFrench ? 'Démo' : 'Demo' },
+            { src: '/projects/dishrank/home.jpg', title: store.isFrench ? 'Accueil' : 'Home' },
+            { src: '/projects/dishrank/map.jpg', title: store.isFrench ? 'Carte' : 'Map' },
+            { src: '/projects/dishrank/profil.jpg', title: store.isFrench ? 'Profil' : 'Profile' },
+        ],
+    },
+    {
         name: 'ETF PEA',
         description: store.isFrench
             ? "Application web pour suivre et analyser les ETF éligibles au PEA. Visualisez les performances, comparez les fonds et optimisez votre portefeuille d'investissement."
@@ -50,6 +75,7 @@ const projects = computed<Project[]>(() => [
             {
                 src: '/projects/webquest/webquest.mp4',
                 type: 'video',
+                poster: '/projects/webquest/og_image.webp',
             },
         ],
     },
@@ -68,24 +94,9 @@ const projects = computed<Project[]>(() => [
         path: '/projects/cityzen',
         color: '148, 139, 115',
         imgs: [
-            { src: '/projects/cityzen/cityzen_2.mp4', type: 'video', title: store.isFrench ? 'Accueil' : 'Home' },
+            { src: '/projects/cityzen/cityzen_2.mp4', type: 'video', poster: '/projects/cityzen/contact.webp', title: store.isFrench ? 'Accueil' : 'Home' },
             { src: '/projects/cityzen/contact.webp', title: 'Contact' },
         ],
-    },
-    {
-        name: 'HapartEnVille',
-        description: store.isFrench
-            ? 'Site vitrine pour l’association HapartEnVille, mettant en valeur les événements culturels locaux via une interface moderne. Développé en collaboration avec l’association pour un accès inclusif à la culture.'
-            : 'Showcase website for the HapartEnVille association, highlighting local cultural events through a modern interface. Developed in collaboration with the association for inclusive access to culture.',
-        year: '2023',
-        type: store.isFrench ? 'Auto-Entrepreneur' : 'Self-employed',
-        techno: [
-            { name: 'Vue.js', url: 'https://vuejs.org/' },
-            { name: 'GSAP', url: 'https://gsap.com/' },
-        ],
-        path: '/projects/happartenville',
-        color: '7, 26, 24',
-        url: 'https://hapartenville.fr/',
     },
     {
         name: 'Model Viewer',
