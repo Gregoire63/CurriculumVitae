@@ -230,6 +230,9 @@ export default defineNuxtConfig({
 
     // Vite configuration
     vite: {
+        optimizeDeps: {
+            include: ['@vue/devtools-core', '@vue/devtools-kit'],
+        },
         build: {
             sourcemap: false,
         },

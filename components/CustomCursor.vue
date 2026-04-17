@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const { isMobile } = useDevice()
+const isMobile = import.meta.client && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
 const cursorDot = ref<HTMLElement | null>(null)
 const cursorOutline = ref<HTMLElement | null>(null)
 
