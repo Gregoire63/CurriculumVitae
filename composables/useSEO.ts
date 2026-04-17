@@ -118,9 +118,6 @@ export const useSEO = (options: SEOOptions = {}) => {
         { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
         { rel: 'manifest', href: '/site.webmanifest' },
 
-        // Preconnect pour les fonts et Analytics
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         { rel: 'dns-prefetch', href: 'https://www.googletagmanager.com' },
     ]
 

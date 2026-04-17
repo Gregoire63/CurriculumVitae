@@ -74,8 +74,6 @@ onUnmounted(() => {
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Space+Mono:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap');
-
 :root {
     /* Palette de couleurs modernisée */
     --bg-primary: #fefcf8;
