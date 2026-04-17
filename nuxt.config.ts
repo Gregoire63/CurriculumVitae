@@ -8,18 +8,13 @@ export default defineNuxtConfig({
       '@nuxt/icon',
       '@pinia/nuxt',
       '@nuxt/fonts',
-      '@nuxt/content',
       '@nuxt/image',
-      '@nuxt/scripts',
-      '@nuxt/test-utils/module',
       '@nuxt/ui',
       'nuxt-gtag',
       '@nuxtjs/sitemap',
       '@nuxtjs/robots',
-      '@nuxtjs/device',
     ],
     css: ['~/assets/css/main.css'],
-    spaLoadingTemplate: 'spa-loading-template.html',
     gtag: {
         id: 'G-ZEHQTGC6EE',
         initMode: 'manual',
@@ -28,8 +23,6 @@ export default defineNuxtConfig({
             cookie_flags: 'SameSite=None;Secure',
         },
     },
-    content: {},
-    scripts: {},
     imports: { dirs: ['./composables/*/*.{ts,js}'] },
     devtools: { enabled: true },
     pinia: {
@@ -188,12 +181,11 @@ export default defineNuxtConfig({
     // Configuration des fonts
     fonts: {
         families: [
-            { name: 'Playfair Display', provider: 'google', weights: [600, 700] },
-            { name: 'Space Mono', provider: 'google', weights: [400, 700] },
-            { name: 'DM Sans', provider: 'google', weights: [400, 700] },
+            { name: 'Playfair Display', provider: 'google', weights: [600, 700], display: 'optional' },
+            { name: 'Space Mono', provider: 'google', weights: [400, 700], display: 'optional' },
+            { name: 'DM Sans', provider: 'google', weights: [400, 700], display: 'optional' },
         ],
         defaults: {
-            display: 'optional',
             fallbacks: {
                 serif: ['Georgia', 'Times New Roman'],
                 'sans-serif': ['system-ui', 'Arial'],
@@ -246,6 +238,18 @@ export default defineNuxtConfig({
                 scss: {
                     additionalData: '@use "~/assets/scss/variables.scss" as *;',
                 },
+            },
+            postcss: {
+                plugins: [
+                    {
+                        postcssPlugin: 'font-display-optional',
+                        Declaration(decl: any) {
+                            if (decl.prop === 'font-display' && decl.value === 'swap') {
+                                decl.value = 'optional'
+                            }
+                        },
+                    },
+                ],
             },
         },
         vue: {
