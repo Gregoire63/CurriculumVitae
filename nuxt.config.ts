@@ -22,17 +22,14 @@ export default defineNuxtConfig({
     spaLoadingTemplate: 'spa-loading-template.html',
     gtag: {
         id: 'G-ZEHQTGC6EE',
+        initMode: 'manual',
         config: {
             anonymize_ip: true,
             cookie_flags: 'SameSite=None;Secure',
         },
     },
     content: {},
-    scripts: {
-        registry: {
-            googleAnalytics: true,
-        },
-    },
+    scripts: {},
     imports: { dirs: ['./composables/*/*.{ts,js}'] },
     devtools: { enabled: true },
     pinia: {
@@ -191,11 +188,12 @@ export default defineNuxtConfig({
     // Configuration des fonts
     fonts: {
         families: [
-            { name: 'Playfair Display', provider: 'google', weights: [400, 600, 700] },
+            { name: 'Playfair Display', provider: 'google', weights: [600, 700] },
             { name: 'Space Mono', provider: 'google', weights: [400, 700] },
-            { name: 'DM Sans', provider: 'google', weights: [400, 500, 700] },
+            { name: 'DM Sans', provider: 'google', weights: [400, 700] },
         ],
         defaults: {
+            display: 'optional',
             fallbacks: {
                 serif: ['Georgia', 'Times New Roman'],
                 'sans-serif': ['system-ui', 'Arial'],

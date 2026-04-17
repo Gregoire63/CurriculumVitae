@@ -276,7 +276,7 @@ const handleNavigate = (section: SectionName) => {
 .cta-secondary {
     font-family: var(--font-body);
     font-size: 1rem;
-    font-weight: 500;
+    font-weight: 400;
     padding: var(--space-sm) var(--space-md);
     border-radius: 50px;
     cursor: pointer;

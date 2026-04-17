@@ -43,6 +43,12 @@ onMounted(() => {
     handleDarkMode(darkModeQuery)
     darkModeQuery.addEventListener('change', handleDarkMode)
 
+    // Charger gtag après que la page est interactive
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => useGtag().initialize())
+    } else {
+        setTimeout(() => useGtag().initialize(), 2000)
+    }
 })
 
 onUnmounted(() => {

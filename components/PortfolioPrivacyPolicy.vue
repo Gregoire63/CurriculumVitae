@@ -969,7 +969,7 @@ const lastUpdate = '17/02/2026'
 .privacy-section a {
     color: var(--accent-primary);
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 400;
     transition: color 0.3s ease;
     display: inline-flex;
     align-items: center;
