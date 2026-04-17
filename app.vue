@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { usePortfolioStore } from './stores/portfolio'
 
 const store = usePortfolioStore()
-const isReady = ref(false)
 
 // ────────────────────────────────────────────────────────────
 // Favicon selon le thème système
@@ -44,7 +43,6 @@ onMounted(() => {
     handleDarkMode(darkModeQuery)
     darkModeQuery.addEventListener('change', handleDarkMode)
 
-    isReady.value = true
 })
 
 onUnmounted(() => {
@@ -56,18 +54,6 @@ onUnmounted(() => {
 
 <template>
     <div class="app-container">
-        <!-- Loading screen — pré-rendu par SSG, disparaît après hydratation -->
-        <Transition name="loader-fade">
-            <div v-if="!isReady" class="app-loader">
-                <svg viewBox="0 0 240 219" xmlns="http://www.w3.org/2000/svg" class="loader-logo" aria-label="GR">
-                    <g transform="translate(0, 219) scale(0.1, -0.1)">
-                        <path d="M5 2178 c-3 -7 -4 -497 -3 -1088 l3 -1075 79 -3 79 -3 625 623 c344 343 668 667 721 721 l95 98 -54 54 -54 55 -438 0 -439 0 3 -147 3 -148 173 -3 c129 -2 172 -6 172 -15 0 -12 -632 -638 -651 -645 -5 -2 -8 261 -7 635 l3 638 418 1 c230 1 421 4 424 8 4 4 -60 74 -142 156 l-150 150 -428 0 c-333 0 -429 -3 -432 -12z"/>
-                        <path d="M1330 2183 c0 -5 162 -170 361 -369 316 -316 360 -364 351 -380 -6 -11 -324 -331 -706 -713 -383 -381 -693 -697 -690 -702 3 -5 93 -9 200 -9 188 1 195 2 221 24 16 13 138 135 273 271 135 135 253 251 264 257 16 9 56 -27 300 -271 l282 -282 99 3 100 3 3 110 2 110 -275 275 c-151 151 -275 280 -275 285 0 6 124 134 275 285 l275 274 0 96 0 95 -323 323 -322 322 -208 0 c-114 0 -207 -3 -207 -7z"/>
-                    </g>
-                </svg>
-            </div>
-        </Transition>
-
         <CustomCursor />
         <NuxtPage />
     </div>
@@ -158,62 +144,4 @@ body {
     height: 100dvh;
 }
 
-/* ── Loading screen ── */
-.app-loader {
-    position: fixed;
-    inset: 0;
-    z-index: 99999;
-    background:
-        linear-gradient(var(--bg-accent) 1px, transparent 1px),
-        linear-gradient(90deg, var(--bg-accent) 1px, transparent 1px),
-        linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-    background-size: 50px 50px, 50px 50px, 100% 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.loader-logo {
-    width: 100px;
-    height: 90px;
-    fill: var(--accent-primary);
-    animation: loader-appear 0.6s var(--ease-out) both,
-               loader-pulse 1.8s ease-in-out 0.6s infinite;
-}
-
-@keyframes loader-appear {
-    0% {
-        opacity: 0;
-        transform: scale(0.4);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-@keyframes loader-pulse {
-    0%, 100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-    50% {
-        transform: scale(1.08);
-        opacity: 0.8;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .loader-logo {
-        animation: none;
-        opacity: 1;
-    }
-}
-
-.loader-fade-leave-active {
-    transition: opacity 0.4s ease-out;
-}
-.loader-fade-leave-to {
-    opacity: 0;
-}
 </style>
