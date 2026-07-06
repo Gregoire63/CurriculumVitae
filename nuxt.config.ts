@@ -37,19 +37,16 @@ export default defineNuxtConfig({
     // ============================================================
     site: {
         url: 'https://gregoire-raturat.fr',
-        autoLastmod: true,
+        name: 'Grégoire Raturat — Product Engineer Full-Stack',
+    },
+    // Les options sitemap vont sous la clé `sitemap` (elles étaient ignorées sous `site`)
+    sitemap: {
         xsl: false,
-        urls: [
-            {
-                loc: '/',
-                priority: 1.0,
-                changefreq: 'monthly',
-            },
-        ],
-        // Hreflang pour FR + EN (même URL, langue client-side)
-        i18n: {
-            locales: ['fr', 'en'],
-            defaultLocale: 'fr',
+        autoLastmod: true,
+        discoverImages: false,
+        defaults: {
+            changefreq: 'monthly',
+            priority: 1.0,
         },
     },
 
@@ -77,7 +74,7 @@ export default defineNuxtConfig({
     },
     app: {
         head: {
-            title: 'Grégoire Raturat — Full Stack Developer',
+            title: 'Grégoire Raturat — Product Engineer Full-Stack',
             titleTemplate: '%s | Grégoire Raturat',
             charset: 'utf-8',
             viewport: 'width=device-width, initial-scale=1',
@@ -85,33 +82,33 @@ export default defineNuxtConfig({
                 {
                     name: 'description',
                     content:
-                        'Portfolio de Grégoire Raturat, développeur Full Stack spécialisé en Vue.js, Nuxt, React et Node.js, basé à Lyon.',
+                        'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.',
                 },
                 { name: 'format-detection', content: 'telephone=no' },
                 { name: 'author', content: 'Grégoire Raturat' },
                 { name: 'robots', content: 'index, follow' },
                 // Open Graph
-                { property: 'og:title', content: 'Grégoire Raturat — Full Stack Developer' },
+                { property: 'og:title', content: 'Grégoire Raturat — Product Engineer Full-Stack' },
                 {
                     property: 'og:description',
                     content:
-                        'Portfolio de Grégoire Raturat, développeur Full Stack spécialisé en Vue.js, Nuxt, React et Node.js, basé à Lyon.',
+                        'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.',
                 },
                 { property: 'og:type', content: 'website' },
                 { property: 'og:url', content: 'https://gregoire-raturat.fr' },
-                { property: 'og:image', content: 'https://gregoire-raturat.fr/og-image.webp' },
+                { property: 'og:image', content: 'https://gregoire-raturat.fr/og-image.jpg' },
                 { property: 'og:image:width', content: '1200' },
                 { property: 'og:image:height', content: '630' },
                 { property: 'og:locale', content: 'fr_FR' },
                 // Twitter Card
                 { name: 'twitter:card', content: 'summary_large_image' },
-                { name: 'twitter:title', content: 'Grégoire Raturat — Full Stack Developer' },
+                { name: 'twitter:title', content: 'Grégoire Raturat — Product Engineer Full-Stack' },
                 {
                     name: 'twitter:description',
                     content:
-                        'Portfolio de Grégoire Raturat, développeur Full Stack spécialisé en Vue.js, Nuxt, React et Node.js, basé à Lyon.',
+                        'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.',
                 },
-                { name: 'twitter:image', content: 'https://gregoire-raturat.fr/og-image.webp' },
+                { name: 'twitter:image', content: 'https://gregoire-raturat.fr/og-image.jpg' },
                 // Thème
                 { name: 'theme-color', content: '#8b6f5c' },
                 { name: 'msapplication-TileColor', content: '#8b6f5c' },
@@ -135,13 +132,13 @@ export default defineNuxtConfig({
                                 '@type': 'Person',
                                 '@id': 'https://gregoire-raturat.fr/#person',
                                 name: 'Grégoire Raturat',
-                                jobTitle: 'Développeur Full Stack',
+                                jobTitle: 'Product Engineer Full-Stack',
                                 url: 'https://gregoire-raturat.fr',
-                                image: 'https://gregoire-raturat.fr/og-image.webp',
-                                logo: 'https://gregoire-raturat.fr/favicon-96x96.png',
+                                image: 'https://gregoire-raturat.fr/og-image.jpg',
                                 sameAs: [
                                     'https://github.com/Gregoire63',
-                                    'https://www.linkedin.com/in/gregoire-raturat',
+                                    'https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/',
+                                    'https://www.malt.fr/profile/gregoireraturat',
                                 ],
                                 address: {
                                     '@type': 'PostalAddress',
@@ -149,17 +146,14 @@ export default defineNuxtConfig({
                                     addressCountry: 'FR',
                                 },
                                 knowsAbout: [
-                                    'Vue.js', 'Nuxt.js', 'React', 'Node.js',
-                                    'TypeScript', 'JavaScript', 'Python',
+                                    'Vue.js', 'Nuxt.js', 'React', 'React Native', 'Next.js', 'Node.js',
+                                    'TypeScript', 'JavaScript', 'Python', 'Supabase', 'PostgreSQL',
+                                    'RAG', 'Claude API', 'AI-assisted development',
                                     'Full Stack Development', 'Web Development',
                                 ],
                                 alumniOf: {
                                     '@type': 'EducationalOrganization',
                                     name: 'ISITECH',
-                                },
-                                worksFor: {
-                                    '@type': 'Organization',
-                                    name: 'Sogedo',
                                 },
                             },
                             {
@@ -167,7 +161,8 @@ export default defineNuxtConfig({
                                 '@id': 'https://gregoire-raturat.fr/#website',
                                 url: 'https://gregoire-raturat.fr',
                                 name: 'Grégoire Raturat — Portfolio',
-                                description: 'Portfolio de Grégoire Raturat, développeur Full Stack basé à Lyon.',
+                                description:
+                                    'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA et développement assisté par IA.',
                                 author: { '@id': 'https://gregoire-raturat.fr/#person' },
                                 inLanguage: ['fr-FR', 'en-US'],
                             },

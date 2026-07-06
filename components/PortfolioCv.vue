@@ -5,7 +5,9 @@ import { computed, ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
-const prefersReducedMotion = usePreferredReducedMotion()
+const preferredMotion = usePreferredReducedMotion()
+// usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
+const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 const { gtag } = useGtag()
 
 interface Experience {

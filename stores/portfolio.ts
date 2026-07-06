@@ -17,7 +17,7 @@ export interface Project {
     logo?: string
 }
 
-export type SectionName = 'hero' | 'about' | 'skills' | 'portfolio' | 'contact'
+export type SectionName = 'hero' | 'cases' | 'services' | 'projects' | 'about' | 'skills' | 'contact'
 export type Section = {
     id: SectionName
     number?: string
@@ -48,13 +48,21 @@ export const usePortfolioStore = defineStore('portfolio', {
     getters: {
         isFrench: (state) => state.language === 'fr',
         sections(state):Section[]{
+            const fr = state.language === 'fr'
             return [
-                { id: 'hero', number: '01', label: state.language === 'fr' ? 'Accueil' : 'Home' },
-                { id: 'about', number: '02', label: state.language === 'fr' ? 'À propos' : 'About' },
-                { id: 'skills', number: '03', label: state.language === 'fr' ? 'Compétences' : 'Skills' },
-                { id: 'portfolio', number: '04', label: 'Portfolio' },
-                { id: 'contact', number: '05', label: 'Contact' },
+                { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
+                { id: 'cases', number: '02', label: fr ? 'Études de cas' : 'Case studies' },
+                { id: 'services', number: '03', label: 'Services' },
+                { id: 'projects', number: '04', label: fr ? 'Projets' : 'Projects' },
+                { id: 'about', number: '05', label: fr ? 'À propos' : 'About' },
+                { id: 'skills', number: '06', label: fr ? 'Compétences' : 'Skills' },
+                { id: 'contact', number: '07', label: 'Contact' },
             ]
+        },
+        // Sous-ensemble affiché dans la barre de navigation desktop (le menu plein écran liste tout)
+        navSections(): Section[] {
+            const navIds: SectionName[] = ['hero', 'cases', 'services', 'projects', 'contact']
+            return this.sections.filter((s) => navIds.includes(s.id))
         },
     },
 

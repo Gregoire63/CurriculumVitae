@@ -29,7 +29,7 @@ const handleNavClick = (section: SectionName) => {
             <!-- Desktop Navigation -->
             <div class="nav-links desktop-only">
                 <button
-                    v-for="section in store.sections"
+                    v-for="section in store.navSections"
                     :key="section.id"
                     class="nav-link"
                     :class="{ active: store.currentSection === section.id }"
