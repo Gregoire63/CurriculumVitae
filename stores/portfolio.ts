@@ -68,11 +68,26 @@ export const usePortfolioStore = defineStore('portfolio', {
                 { id: 'contact', number: '08', label: 'Contact' },
             ]
         },
-        // Sous-ensemble affiché dans la barre de navigation desktop (le menu plein écran liste tout)
+        // Barre de navigation desktop (le menu plein écran liste tout).
+        // « Projets » pointe vers les études de cas et chapeaute toute la zone projets.
         navSections(): Section[] {
-            // Services en premier, et « Parcours » (cv) remplace « Projets » dans la barre
-            const navIds: SectionName[] = ['hero', 'services', 'cases', 'cv', 'contact']
-            return this.sections.filter((s) => navIds.includes(s.id))
+            const fr = this.isFrench
+            return [
+                { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
+                { id: 'services', number: '02', label: 'Services' },
+                { id: 'cases', number: '03', label: fr ? 'Projets' : 'Projects' },
+                { id: 'cv', number: '05', label: fr ? 'Parcours' : 'Career' },
+                { id: 'contact', number: '08', label: 'Contact' },
+            ]
+        },
+        // Un item de nav peut rester actif sur plusieurs sections de la page :
+        // « Projets » couvre les études de cas + les autres projets, « Parcours » couvre l'expérience + la formation.
+        navActiveGroups(): Partial<Record<SectionName, SectionName>> {
+            return {
+                projects: 'cases',
+                about: 'cv',
+                skills: 'cv',
+            }
         },
     },
 

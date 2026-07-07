@@ -85,6 +85,7 @@ const experiences = computed<Experience[]>(() => [
         period: 'Oct. 2023 - Nov. 2025',
         title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SYSTRA',
+        companyUrl: 'https://www.systra.com/',
         location: 'Lyon',
         description: store.isFrench
             ? [
@@ -127,6 +128,7 @@ const experiences = computed<Experience[]>(() => [
         period: store.isFrench ? 'Janv. 2025 - Présent' : 'Jan. 2025 - Present',
         title: store.isFrench ? 'Enseignant Vacataire Web Moderne' : 'Modern Web Development Lecturer',
         company: store.isFrench ? 'Université Lyon 1' : 'Lyon 1 University',
+        companyUrl: 'https://www.univ-lyon1.fr/',
         location: 'Lyon',
         description: store.isFrench
             ? [
@@ -143,17 +145,23 @@ const experiences = computed<Experience[]>(() => [
     },
     {
         period: store.isFrench ? 'Depuis 2021' : 'Since 2021',
-        title: store.isFrench ? 'Développeur Web Freelance' : 'Freelance Web Developer',
+        title: store.isFrench ? 'Product Engineer Freelance' : 'Freelance Product Engineer',
         company: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         location: store.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
         description: store.isFrench
             ? [
-                  'Développement de sites web sur mesure',
-                  'Accompagnement technique complet',
-                  'Maintenance évolutive et hébergement',
+                  'DishRank — app de notation de plats publiée sur iOS, Android et web (React Native + Next.js + Supabase)',
+                  'Messagerie omnicanale IA en production pour indépendants (Chatwoot + RAG + API Claude)',
+                  'ETF PEA — application web de suivi et d’analyse d’ETF éligibles au PEA',
+                  'Produits livrés de bout en bout : conception, développement, déploiement et maintenance',
               ]
-            : ['Custom website development', 'Complete technical support', 'Evolutionary maintenance and hosting'],
-        stack: ['Vue.js', 'ReactJs', 'Node.js', 'Python', 'Firebase'],
+            : [
+                  'DishRank — dish-rating app published on iOS, Android and web (React Native + Next.js + Supabase)',
+                  'Omnichannel AI messaging in production for independents (Chatwoot + RAG + Claude API)',
+                  'ETF PEA — web app to track and analyze PEA-eligible ETFs',
+                  'Products shipped end to end: design, development, deployment and maintenance',
+              ],
+        stack: ['React Native', 'Next.js', 'Supabase', 'API Claude', 'Node.js'],
     },
 ])
 
@@ -260,8 +268,8 @@ if (import.meta.client) {
                 <p class="section-description">
                     {{
                         store.isFrench
-                            ? "5 ans d'expérience en développement fullstack (JavaScript, Python, etc.) avec des compétences pratiques en SIG et DevOps acquises sur des projets concrets."
-                            : '5 years of fullstack development experience (JavaScript, Python, etc.) with hands-on GIS and DevOps skills acquired through real-world projects.'
+                            ? "Plus de 5 ans à concevoir et livrer des produits web & mobile de bout en bout — de la migration d'architecture à la mise en production — avec une spécialité en développement assisté par IA."
+                            : '5+ years designing and shipping web & mobile products end to end — from architecture migration to production — with a focus on AI-assisted development.'
                     }}
                 </p>
 

@@ -7,6 +7,12 @@ const store = usePortfolioStore()
 const handleNavClick = (section: SectionName) => {
     store.navigateToSection(section)
 }
+
+// Un item reste actif même quand on est sur une section « enfant » (ex. Projets = études de cas + autres projets)
+const isActive = (id: SectionName) => {
+    const current = store.currentSection
+    return current === id || store.navActiveGroups[current] === id
+}
 </script>
 
 <template>
@@ -32,7 +38,7 @@ const handleNavClick = (section: SectionName) => {
                     v-for="section in store.navSections"
                     :key="section.id"
                     class="nav-link"
-                    :class="{ active: store.currentSection === section.id }"
+                    :class="{ active: isActive(section.id) }"
                     @click="handleNavClick(section.id)"
                 >
                     {{ section.label }}

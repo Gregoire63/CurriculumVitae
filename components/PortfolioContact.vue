@@ -349,10 +349,10 @@ const handleSubmit = async (e: Event) => {
     margin-bottom: var(--space-lg);
 }
 
-/* Social Links */
+/* Social Links — deux par ligne */
 .social-links {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-sm);
 }
 
@@ -369,7 +369,13 @@ const handleSubmit = async (e: Event) => {
     transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     font-family: var(--font-mono);
     font-size: 0.875rem;
-    width: fit-content;
+    min-width: 0;
+    max-width: 250px;
+}
+
+/* Si le nombre de liens est impair, le dernier occupe toute la largeur */
+.social-link:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
 }
 
 .social-link svg {
@@ -383,7 +389,8 @@ const handleSubmit = async (e: Event) => {
         background: var(--accent-primary);
         border-color: var(--accent-primary);
         color: var(--bg-primary);
-        transform: translateX(8px);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(139, 111, 92, 0.22);
     }
 
     .social-link:hover svg {
@@ -592,9 +599,7 @@ const handleSubmit = async (e: Event) => {
     }
 
     .social-links {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: center;
+        gap: var(--space-xs);
     }
 
     .social-link {

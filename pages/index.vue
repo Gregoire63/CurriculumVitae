@@ -265,9 +265,10 @@ const heroParallax = computed(() => {
     min-height: auto;
 }
 
-/* About Section */
+/* About / Formation Section (bande compacte, pas de pleine hauteur) */
 .about-section {
     background: var(--bg-primary);
+    min-height: auto;
 }
 
 .geometric-shape {
