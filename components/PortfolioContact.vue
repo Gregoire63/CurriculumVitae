@@ -203,9 +203,9 @@ const handleSubmit = async (e: Event) => {
                         <!-- Hidden fields requis par Netlify -->
                         <input type="hidden" name="form-name" value="contact" />
                         
-                        <!-- Honeypot anti-spam (caché) -->
-                        <div style="display: none;">
-                            <label>Don't fill this out: <input name="bot-field" /></label>
+                        <!-- Honeypot anti-spam : masqué visuellement, présent dans le DOM pour piéger les bots -->
+                        <div style="display: none;" aria-hidden="true">
+                            <label>Don't fill this out: <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
                         </div>
 
                         <!-- Champ Name (ajouté pour correspondre à contact.html) -->
@@ -370,7 +370,6 @@ const handleSubmit = async (e: Event) => {
     font-family: var(--font-mono);
     font-size: 0.875rem;
     min-width: 0;
-    max-width: 250px;
 }
 
 /* Si le nombre de liens est impair, le dernier occupe toute la largeur */

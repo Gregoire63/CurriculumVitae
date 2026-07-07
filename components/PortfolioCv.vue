@@ -23,7 +23,7 @@ interface Experience {
 
 const experiences = computed<Experience[]>(() => [
     {
-        period: store.isFrench ? '2026 - Présent' : '2026 - Present',
+        period: store.isFrench ? 'Juin 2026 - Présent' : 'Jun. 2026 - Present',
         title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SOCOTEC',
         companyUrl: 'https://www.socotec.com/',
@@ -45,7 +45,7 @@ const experiences = computed<Experience[]>(() => [
         stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'PostgreSQL', 'Docker', 'CI/CD'],
     },
     {
-        period: store.isFrench ? 'Nov. 2025 - 2026' : 'Nov. 2025 - 2026',
+        period: store.isFrench ? 'Nov. 2025 - Juin 2026' : 'Nov. 2025 - Jun. 2026',
         title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SOGEDO',
         location: 'Lyon',
