@@ -78,15 +78,7 @@ const heroParallax = computed(() => {
             </div>
         </section>
 
-        <!-- Case Studies Section -->
-        <section id="cases" ref="casesSection" class="section cases-section">
-            <div class="section-background light">
-                <div class="grid-pattern"></div>
-            </div>
-            <PortfolioCaseStudies />
-        </section>
-
-        <!-- Services Section -->
+        <!-- Services Section (en premier) -->
         <section id="services" ref="servicesSection" class="section services-section">
             <div class="section-background">
                 <div class="geometric-shape shape-1"></div>
@@ -95,17 +87,27 @@ const heroParallax = computed(() => {
             <PortfolioServices />
         </section>
 
+        <!-- Case Studies Section -->
+        <section id="cases" ref="casesSection" class="section cases-section">
+            <div class="section-background light">
+                <div class="grid-pattern"></div>
+            </div>
+            <PortfolioCaseStudies />
+        </section>
+
         <!-- Other Projects Section (compact) -->
         <section id="projects" ref="projectsSection" class="section projects-compact-section">
             <PortfolioOtherProjects />
         </section>
 
-        <!-- About Section -->
-        <section id="about" ref="aboutSection" class="section about-section">
-            <PortfolioAbout />
-        </section>
+        <!-- Parcours / Expérience professionnelle -->
         <section id="cv" ref="cvSection" class="section cv-section">
             <PortfolioCv />
+        </section>
+
+        <!-- Formation (secondaire) -->
+        <section id="about" ref="aboutSection" class="section about-section">
+            <PortfolioAbout />
         </section>
         <!-- Skills Section -->
         <section id="skills" ref="skillsSection" class="section skills-section">
@@ -130,6 +132,9 @@ const heroParallax = computed(() => {
 
         <!-- Menu Modal -->
         <PortfolioMenu />
+
+        <!-- Project Modal (popup au clic sur un projet) -->
+        <PortfolioProjectModal />
 
         <!-- Scroll Progress -->
         <div class="scroll-progress">
@@ -256,7 +261,7 @@ const heroParallax = computed(() => {
 
 /* Other Projects Section (compact, pas de pleine hauteur) */
 .projects-compact-section {
-    background: var(--bg-secondary);
+    background: var(--bg-primary);
     min-height: auto;
 }
 

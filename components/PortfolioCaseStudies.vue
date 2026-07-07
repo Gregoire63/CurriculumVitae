@@ -103,53 +103,51 @@ const content = computed<{ label: string; title: string; description: string; ca
                   },
                   {
                       id: 'inbox-ia',
-                      status: "Étude d'architecture",
-                      statusKind: 'study',
-                      meta: '2026 · R&D',
+                      status: 'En production',
+                      statusKind: 'live',
+                      meta: '2026 · Produit SaaS',
                       title: 'Messagerie omnicanale IA',
                       tagline: 'Une inbox unifiée avec IA pour les tatoueurs',
-                      disclaimer:
-                          "Étude technique approfondie, pas un produit lancé : l'objectif est de démontrer l'architecture complète d'un produit IA, chiffrage compris.",
                       problemTitle: 'Problème',
                       problem:
                           'Les tatoueurs jonglent entre WhatsApp, Instagram, Messenger et email. Résultat : des conversations éparpillées, des devis oubliés et des clients perdus faute de réponse rapide.',
-                      solutionTitle: 'Solution étudiée & architecture',
+                      solutionTitle: 'Solution & architecture',
                       solution:
-                          "Une inbox unifiée qui centralise tous les canaux, propose des réponses assistées par IA dans le ton de l'artiste, et repasse la main à l'humain dès que la conversation le demande (handover bot → humain).",
+                          "Une inbox unifiée, bâtie sur Chatwoot, qui centralise tous les canaux et propose des réponses assistées par IA dans le ton de l'artiste — avec retour à l'humain dès que la conversation le demande (handover bot → humain).",
                       archItems: [
+                          {
+                              k: 'Chatwoot — hub omnicanal',
+                              v: 'connecte WhatsApp, Instagram, Messenger et email dans une seule inbox open-source',
+                          },
                           {
                               k: 'Pipeline RAG — pgvector + API Claude',
                               v: "réponses ancrées dans le contexte de l'artiste : tarifs, styles, disponibilités",
                           },
                           {
+                              k: 'Bot agent branché sur Chatwoot',
+                              v: "brouillons de réponse dans le ton de l'artiste, validés puis envoyés en un clic",
+                          },
+                          {
                               k: 'Files de traitement BullMQ',
-                              v: 'ingestion asynchrone des webhooks multi-canaux, retries et priorités',
+                              v: 'traitement asynchrone des messages entrants, retries et priorités',
                           },
                           {
-                              k: 'Schéma Postgres multi-canaux',
-                              v: 'une conversation unique par client, quelles que soient ses identités par canal',
-                          },
-                          {
-                              k: 'Plan de développement en 5 phases',
-                              v: 'du MVP mono-canal au produit multi-tenant complet',
-                          },
-                          {
-                              k: "Coût d'infrastructure estimé : ~85–145 €/mois",
+                              k: "Coût d'infrastructure maîtrisé : ~85–145 €/mois",
                               v: 'pour 50 à 200 professionnels, coûts IA compris',
                           },
                       ],
                       diagramLabel:
-                          'Schéma d’architecture : canaux WhatsApp, Instagram, Messenger et email vers les files BullMQ, puis l’inbox unifiée avec pipeline RAG (pgvector + Claude), et handover vers l’artiste',
+                          'Schéma d’architecture : canaux WhatsApp, Instagram, Messenger et email centralisés par Chatwoot, enrichis par le pipeline IA (RAG pgvector + Claude via BullMQ), avec handover vers l’artiste',
                       diagram: [
                           [{ title: 'Canaux', sub: 'WhatsApp · Instagram · Messenger · Email' }],
-                          [{ title: 'Files', sub: 'Webhooks · BullMQ' }],
-                          [{ title: 'Inbox + RAG', sub: 'pgvector · API Claude' }],
-                          [{ title: 'Artiste', sub: 'Handover humain' }],
+                          [{ title: 'Chatwoot', sub: 'Inbox omnicanale' }],
+                          [{ title: 'IA', sub: 'RAG pgvector · API Claude · BullMQ' }],
+                          [{ title: 'Artiste', sub: 'Validation & handover' }],
                       ],
-                      resultsTitle: 'Ce que ça démontre',
+                      resultsTitle: 'Résultats',
                       results:
-                          "La capacité à architecturer un produit IA de bout en bout — données, files, coûts, handover — et à chiffrer sa viabilité avant d'écrire la première ligne de code.",
-                      tech: ['API Claude', 'pgvector', 'BullMQ', 'Postgres', 'Next.js'],
+                          "En production pour des tatoueurs : messages centralisés, réponses assistées par IA validées par l'artiste et handover humain fluide. Toute la stack — Chatwoot, RAG, files, IA — tient sous 150 €/mois.",
+                      tech: ['Chatwoot', 'API Claude', 'pgvector', 'BullMQ', 'Postgres'],
                   },
               ],
           }
@@ -212,53 +210,51 @@ const content = computed<{ label: string; title: string; description: string; ca
                   },
                   {
                       id: 'inbox-ia',
-                      status: 'Architecture study',
-                      statusKind: 'study',
-                      meta: '2026 · R&D',
+                      status: 'Live in production',
+                      statusKind: 'live',
+                      meta: '2026 · SaaS product',
                       title: 'Omnichannel AI messaging',
                       tagline: 'A unified AI-assisted inbox for tattoo artists',
-                      disclaimer:
-                          'An in-depth technical study, not a launched product: the goal is to demonstrate a complete AI product architecture, cost estimate included.',
                       problemTitle: 'Problem',
                       problem:
                           'Tattoo artists juggle WhatsApp, Instagram, Messenger and email. The result: scattered conversations, forgotten quotes and clients lost for lack of a quick reply.',
-                      solutionTitle: 'Studied solution & architecture',
+                      solutionTitle: 'Solution & architecture',
                       solution:
-                          "A unified inbox that centralizes every channel, suggests AI-assisted replies in the artist's tone, and hands the conversation back to a human whenever it matters (bot → human handover).",
+                          "A unified inbox, built on Chatwoot, that centralizes every channel and suggests AI-assisted replies in the artist's tone — handing the conversation back to a human whenever it matters (bot → human handover).",
                       archItems: [
+                          {
+                              k: 'Chatwoot — omnichannel hub',
+                              v: 'connects WhatsApp, Instagram, Messenger and email into a single open-source inbox',
+                          },
                           {
                               k: 'RAG pipeline — pgvector + Claude API',
                               v: "replies grounded in the artist's context: pricing, styles, availability",
                           },
                           {
+                              k: 'Agent bot wired into Chatwoot',
+                              v: "draft replies in the artist's tone, reviewed and sent in one click",
+                          },
+                          {
                               k: 'BullMQ processing queues',
-                              v: 'asynchronous ingestion of multi-channel webhooks, retries and priorities',
+                              v: 'asynchronous processing of incoming messages, retries and priorities',
                           },
                           {
-                              k: 'Multi-channel Postgres schema',
-                              v: 'one conversation per client, whatever their identity on each channel',
-                          },
-                          {
-                              k: '5-phase development plan',
-                              v: 'from single-channel MVP to full multi-tenant product',
-                          },
-                          {
-                              k: 'Estimated infrastructure: ~€85–145/month',
+                              k: 'Infrastructure under control: ~€85–145/month',
                               v: 'for 50 to 200 professionals, AI costs included',
                           },
                       ],
                       diagramLabel:
-                          'Architecture diagram: WhatsApp, Instagram, Messenger and email channels to BullMQ queues, then the unified inbox with RAG pipeline (pgvector + Claude), and handover to the artist',
+                          'Architecture diagram: WhatsApp, Instagram, Messenger and email channels centralized by Chatwoot, enriched by the AI pipeline (RAG pgvector + Claude via BullMQ), with handover to the artist',
                       diagram: [
                           [{ title: 'Channels', sub: 'WhatsApp · Instagram · Messenger · Email' }],
-                          [{ title: 'Queues', sub: 'Webhooks · BullMQ' }],
-                          [{ title: 'Inbox + RAG', sub: 'pgvector · Claude API' }],
-                          [{ title: 'Artist', sub: 'Human handover' }],
+                          [{ title: 'Chatwoot', sub: 'Omnichannel inbox' }],
+                          [{ title: 'AI', sub: 'RAG pgvector · Claude API · BullMQ' }],
+                          [{ title: 'Artist', sub: 'Review & handover' }],
                       ],
-                      resultsTitle: 'What it demonstrates',
+                      resultsTitle: 'Results',
                       results:
-                          'The ability to architect an AI product end to end — data, queues, costs, handover — and to price its viability before writing the first line of code.',
-                      tech: ['Claude API', 'pgvector', 'BullMQ', 'Postgres', 'Next.js'],
+                          'Live for tattoo artists: centralized messages, AI-assisted replies reviewed by the artist and smooth human handover. The whole stack — Chatwoot, RAG, queues, AI — stays under €150/month.',
+                      tech: ['Chatwoot', 'Claude API', 'pgvector', 'BullMQ', 'Postgres'],
                   },
               ],
           },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, ref } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
+import { type Project, usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 const preferredMotion = usePreferredReducedMotion()
@@ -9,59 +9,107 @@ const preferredMotion = usePreferredReducedMotion()
 const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 const { gtag } = useGtag()
 
-interface CompactProject {
-    name: string
-    description: string
-    url: string
-    logo: string
-    tech: string
-}
-
-const projects = computed<CompactProject[]>(() => [
+// Projets secondaires : liste compacte, chaque ligne ouvre la popup (modale) de détail.
+// On ne référence que des images .webp déjà présentes pour garder le site léger.
+const projects = computed<Project[]>(() => [
     {
         name: 'ETF PEA',
         description: store.isFrench
-            ? 'Suivi et analyse des ETF éligibles au PEA : dashboards, comparaison, portefeuille.'
-            : 'Track and compare PEA-eligible ETFs: dashboards, comparison, portfolio.',
+            ? "Application web pour suivre et analyser les ETF éligibles au PEA : dashboards, comparaison de fonds et suivi de portefeuille d'investissement."
+            : 'Web application to track and analyze PEA-eligible ETFs: dashboards, fund comparison and investment portfolio tracking.',
+        year: '2026',
+        type: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://etf.gregoire-raturat.fr',
-        logo: '/projects/etf-pea/logo.webp',
-        tech: 'Next.js',
+        techno: [
+            { name: 'Next.js', url: 'https://nextjs.org/' },
+            { name: 'React', url: 'https://react.dev/' },
+            { name: 'Tailwind CSS', url: 'https://tailwindcss.com/' },
+        ],
+        path: '/projects/etf-pea',
+        color: '15, 52, 96',
+        imgs: [
+            { src: '/projects/etf-pea/dashboard_1.webp', title: 'Dashboard' },
+            { src: '/projects/etf-pea/dashboard_2.webp', title: 'Dashboard' },
+            { src: '/projects/etf-pea/compare.webp', title: store.isFrench ? 'Comparaison' : 'Comparison' },
+            { src: '/projects/etf-pea/portfolio_1.webp', title: store.isFrench ? 'Portefeuille' : 'Portfolio' },
+            { src: '/projects/etf-pea/portfolio_2.webp', title: store.isFrench ? 'Portefeuille' : 'Portfolio' },
+        ],
     },
     {
         name: 'WebQuest',
         description: store.isFrench
-            ? 'Apprendre le développement web front directement dans le navigateur : HTML, CSS, JS, APIs, JWT.'
-            : 'Learn frontend web development directly in the browser: HTML, CSS, JS, APIs, JWT.',
+            ? "Plateforme interactive pour apprendre le développement web frontend directement dans le navigateur : HTML, CSS, JavaScript, APIs et authentification JWT."
+            : 'Interactive platform to learn frontend web development directly in the browser: HTML, CSS, JavaScript, APIs and JWT authentication.',
+        year: '2025',
+        type: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://web-quests.onrender.com/',
-        logo: '/projects/webquest/logo.webp',
-        tech: 'Go',
+        techno: [
+            { name: 'Golang', url: 'https://go.dev/' },
+            { name: 'HTML/CSS/JS', url: 'https://developer.mozilla.org/fr/docs/Web' },
+        ],
+        path: '/projects/webquest',
+        color: '18, 18, 18',
+        imgs: [{ src: '/projects/webquest/og_image.webp', title: 'WebQuest' }],
     },
     {
         name: 'CityZen',
         description: store.isFrench
-            ? 'Site vitrine pour salon de coiffure, gestion de contenu via Firebase.'
-            : 'Showcase website for a hair salon, content managed with Firebase.',
+            ? 'Site vitrine élégant pour un salon de coiffure, inspiré de designs primés Awwwards. Interface moderne avec gestion de contenu via Firebase.'
+            : 'Elegant showcase website for a hair salon, inspired by award-winning Awwwards designs. Modern interface with content management via Firebase.',
+        year: '2023',
+        type: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://cityzen-coiffure.fr/',
-        logo: '/projects/cityzen/logo.webp',
-        tech: 'Vue.js',
+        techno: [
+            { name: 'Vue.js', url: 'https://vuejs.org/' },
+            { name: 'Firebase', url: 'https://firebase.google.com/' },
+        ],
+        path: '/projects/cityzen',
+        color: '148, 139, 115',
+        imgs: [
+            { src: '/projects/cityzen/menu.webp', title: 'Menu' },
+            { src: '/projects/cityzen/avis.webp', title: store.isFrench ? 'Avis' : 'Reviews' },
+            { src: '/projects/cityzen/contact.webp', title: 'Contact' },
+            { src: '/projects/cityzen/admin_1.webp', title: store.isFrench ? 'Administration' : 'Admin' },
+        ],
     },
     {
         name: 'Model Viewer',
         description: store.isFrench
-            ? "Documentation sur l'intégration 3D dans Vue.js avec ModelViewer et Three.js."
-            : 'Documentation on 3D integration in Vue.js with ModelViewer and Three.js.',
+            ? "Documentation complète sur l'intégration de composants 3D interactifs dans Vue.js avec ModelViewer et Three.js."
+            : 'Complete documentation on integrating interactive 3D components in Vue.js with ModelViewer and Three.js.',
+        year: '2023',
+        type: 'Documentation',
         url: 'https://vue-and-modelviewer.netlify.app/',
-        logo: '/projects/modelviewer/logo.webp',
-        tech: 'Three.js',
+        techno: [
+            { name: 'Three.js', url: 'https://threejs.org/' },
+            { name: 'Vue.js', url: 'https://vuejs.org/' },
+            { name: 'ModelViewer', url: 'https://modelviewer.dev/' },
+        ],
+        path: '/projects/modelviewer',
     },
     {
         name: 'NextMusic',
         description: store.isFrench
-            ? 'Application de bibliothèque musicale, interface inspirée de Dribbble.'
-            : 'Music library application with a Dribbble-inspired interface.',
+            ? "Application de bibliothèque musicale développée avec Next.js et Tailwind CSS, à l'interface élégante inspirée de designs Dribbble."
+            : 'Music library application built with Next.js and Tailwind CSS, with an elegant Dribbble-inspired interface.',
+        year: '2022',
+        type: store.isFrench ? 'Projet scolaire' : 'School project',
         url: 'https://next-music.netlify.app/bibliotheque',
-        logo: '/projects/nextmusic/logo.webp',
-        tech: 'Next.js',
+        techno: [
+            { name: 'Next.js', url: 'https://nextjs.org/' },
+            { name: 'Tailwind CSS', url: 'https://tailwindcss.com/' },
+        ],
+        path: '/projects/nextmusic',
+        color: '18, 18, 18',
+        imgs: [
+            { src: '/projects/nextmusic/next-music-homescreen.webp', title: store.isFrench ? 'Accueil' : 'Home' },
+            {
+                src: '/projects/nextmusic/next-music-biblioscreen.webp',
+                title: store.isFrench ? 'Bibliothèque' : 'Library',
+            },
+            { src: '/projects/nextmusic/next-music-favoritescreen.webp', title: store.isFrench ? 'Favoris' : 'Favorites' },
+            { src: '/projects/nextmusic/next-music-search.webp', title: store.isFrench ? 'Recherche' : 'Search' },
+        ],
     },
 ])
 
@@ -88,13 +136,20 @@ if (import.meta.client) {
     useMotion(headerRef, fadeUp)
 }
 
-const trackClick = (name: string) => {
+// Ouvre la popup de détail du projet (même mécanisme que la section Portfolio d'origine)
+const openProject = (project: Project) => {
     if (typeof gtag !== 'undefined') {
         gtag('event', 'view_item', {
             event_category: 'other_projects',
-            event_label: name,
+            event_label: project.name,
         })
     }
+    store.setActiveProject({ ...project, visible: false })
+    setTimeout(() => {
+        if (store.activeProject) {
+            store.activeProject.visible = true
+        }
+    }, 50)
 }
 </script>
 
@@ -129,27 +184,28 @@ const trackClick = (name: string) => {
                               }
                     "
                 >
-                    <a
-                        :href="project.url"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="project-row"
-                        @click="trackClick(project.name)"
-                    >
-                        <img :src="project.logo" :alt="`${project.name} logo`" class="project-logo" loading="lazy" width="32" height="32" />
+                    <button type="button" class="project-row" @click="openProject(project)">
+                        <img
+                            :src="`${project.path}/logo.webp`"
+                            :alt="`${project.name} logo`"
+                            class="project-logo"
+                            loading="lazy"
+                            width="32"
+                            height="32"
+                        />
                         <span class="project-name">{{ project.name }}</span>
                         <span class="project-description">{{ project.description }}</span>
-                        <span class="project-tech">{{ project.tech }}</span>
+                        <span class="project-tech">{{ project.techno[0].name }}</span>
                         <svg class="project-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path
-                                d="M7 17L17 7M17 7H7M17 7V17"
+                                d="M9 6l6 6-6 6"
                                 stroke="currentColor"
                                 stroke-width="2"
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
                             />
                         </svg>
-                    </a>
+                    </button>
                 </li>
             </ul>
         </div>
@@ -213,10 +269,15 @@ const trackClick = (name: string) => {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
+    width: 100%;
     padding: var(--space-sm) var(--space-sm);
+    border: none;
     border-bottom: 1px solid var(--bg-accent);
-    text-decoration: none;
+    background: none;
+    text-align: left;
+    font-family: inherit;
     color: var(--text-primary);
+    cursor: pointer;
     transition:
         background 0.3s ease,
         transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -229,12 +290,12 @@ const trackClick = (name: string) => {
 
 @media (prefers-reduced-motion: no-preference) and (pointer: fine) {
     .project-row:hover {
-        background: var(--bg-primary);
+        background: var(--bg-secondary);
         transform: translateX(4px);
     }
 
     .project-row:hover .project-arrow {
-        transform: translate(2px, -2px);
+        transform: translateX(3px);
         color: var(--text-primary);
     }
 }

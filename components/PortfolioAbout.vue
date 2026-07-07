@@ -80,7 +80,7 @@ const clickCard = (url: string) => () => window.open(url, '_blank')
             <div ref="headerRef" class="section-header">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ store.isFrench ? 'Parcours' : 'Education' }}
+                    {{ store.isFrench ? 'Formation' : 'Education' }}
                 </span>
                 <h2 class="section-title">
                     {{ store.isFrench ? 'Formation' : 'Academic Background' }}

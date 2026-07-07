@@ -17,7 +17,15 @@ export interface Project {
     logo?: string
 }
 
-export type SectionName = 'hero' | 'cases' | 'services' | 'projects' | 'about' | 'skills' | 'contact'
+export type SectionName =
+    | 'hero'
+    | 'services'
+    | 'cases'
+    | 'projects'
+    | 'cv'
+    | 'about'
+    | 'skills'
+    | 'contact'
 export type Section = {
     id: SectionName
     number?: string
@@ -51,17 +59,19 @@ export const usePortfolioStore = defineStore('portfolio', {
             const fr = state.language === 'fr'
             return [
                 { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
-                { id: 'cases', number: '02', label: fr ? 'Études de cas' : 'Case studies' },
-                { id: 'services', number: '03', label: 'Services' },
+                { id: 'services', number: '02', label: 'Services' },
+                { id: 'cases', number: '03', label: fr ? 'Études de cas' : 'Case studies' },
                 { id: 'projects', number: '04', label: fr ? 'Projets' : 'Projects' },
-                { id: 'about', number: '05', label: fr ? 'À propos' : 'About' },
-                { id: 'skills', number: '06', label: fr ? 'Compétences' : 'Skills' },
-                { id: 'contact', number: '07', label: 'Contact' },
+                { id: 'cv', number: '05', label: fr ? 'Parcours' : 'Career' },
+                { id: 'about', number: '06', label: fr ? 'Formation' : 'Education' },
+                { id: 'skills', number: '07', label: fr ? 'Compétences' : 'Skills' },
+                { id: 'contact', number: '08', label: 'Contact' },
             ]
         },
         // Sous-ensemble affiché dans la barre de navigation desktop (le menu plein écran liste tout)
         navSections(): Section[] {
-            const navIds: SectionName[] = ['hero', 'cases', 'services', 'projects', 'contact']
+            // Services en premier, et « Parcours » (cv) remplace « Projets » dans la barre
+            const navIds: SectionName[] = ['hero', 'services', 'cases', 'cv', 'contact']
             return this.sections.filter((s) => navIds.includes(s.id))
         },
     },
