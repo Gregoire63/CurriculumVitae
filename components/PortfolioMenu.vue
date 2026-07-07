@@ -3,7 +3,9 @@ import { usePreferredReducedMotion } from '@vueuse/core'
 import { usePortfolioStore, type SectionName } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
-const prefersReducedMotion = usePreferredReducedMotion()
+const preferredMotion = usePreferredReducedMotion()
+// usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
+const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 const { gtag } = useGtag()
 
 const handleNavigate = (section: SectionName) => {
@@ -102,7 +104,7 @@ const openPrivacyPolicy = () => {
                         class="menu-link"
                         @click="openPrivacyPolicy"
                     >
-                        <span class="menu-number">06</span>
+                        <span class="menu-number">{{ String(store.sections.length + 1).padStart(2, '0') }}</span>
                         <span class="menu-label">{{ store.isFrench ? 'Confidentialité' : 'Privacy' }}</span>
                         <svg class="menu-arrow" width="24" height="24" viewBox="0 0 24 24" fill="none">
                             <path

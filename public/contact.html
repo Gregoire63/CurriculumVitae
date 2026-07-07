@@ -355,7 +355,7 @@
     <div class="container">
       <span class="label">
         <span class="label-line"></span>
-        Succès
+        <span id="t-label">Succès</span>
       </span>
 
       <div class="icon-wrapper">
@@ -367,21 +367,21 @@
         </div>
       </div>
 
-      <h1>Message envoyé !</h1>
-      <p class="subtitle">
+      <h1 id="t-title">Message envoyé !</h1>
+      <p class="subtitle" id="t-subtitle">
         Merci pour votre message.<br />
         Je vous répondrai dans les plus brefs délais.
       </p>
 
       <div class="info-box">
-        <p>
+        <p id="t-info">
           <strong>Temps de réponse moyen :</strong> 24-48 heures<br />
           Vous recevrez une confirmation par email si vous avez fourni votre adresse.
         </p>
       </div>
 
       <div class="redirect-info">
-        Redirection automatique vers l'accueil
+        <span id="t-redirect">Redirection automatique vers l'accueil</span>
         <span class="loader">
           <span></span>
           <span></span>
@@ -393,11 +393,25 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M19 12H5M12 19l-7-7 7-7" />
         </svg>
-        Retour à l'accueil
+        <span id="t-back">Retour à l'accueil</span>
       </a>
     </div>
 
     <script>
+      // Localisation : reprend la langue choisie sur le site (même clé que le store Pinia)
+      if (localStorage.getItem('portfolio-lang') === 'en') {
+        document.documentElement.lang = 'en'
+        document.title = 'Message sent — Grégoire Raturat'
+        document.getElementById('t-label').textContent = 'Success'
+        document.getElementById('t-title').textContent = 'Message sent!'
+        document.getElementById('t-subtitle').innerHTML =
+          'Thank you for your message.<br />I will get back to you as soon as possible.'
+        document.getElementById('t-info').innerHTML =
+          '<strong>Average response time:</strong> 24-48 hours<br />You will receive an email confirmation if you provided your address.'
+        document.getElementById('t-redirect').textContent = 'Redirecting to the homepage'
+        document.getElementById('t-back').textContent = 'Back to home'
+      }
+
       addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
           window.location.href = '/'

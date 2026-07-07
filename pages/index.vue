@@ -3,9 +3,20 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 useSEO({
-    title: 'Accueil',
-    description: 'Portfolio de Grégoire Raturat, développeur Full Stack à Lyon',
-    keywords: ['développeur', 'full stack', 'vue.js', 'nuxt', 'lyon'],
+    title: 'Product Engineer Full-Stack — Freelance à Lyon',
+    description:
+        'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.',
+    keywords: [
+        'développeur freelance lyon',
+        'full-stack',
+        'product engineer',
+        'IA',
+        'RAG',
+        'API Claude',
+        'react native',
+        'next.js',
+        'supabase',
+    ],
 })
 
 const store = usePortfolioStore()
@@ -67,16 +78,36 @@ const heroParallax = computed(() => {
             </div>
         </section>
 
-        <!-- About Section -->
-        <section id="about" ref="aboutSection" class="section about-section">
+        <!-- Services Section (en premier) -->
+        <section id="services" ref="servicesSection" class="section services-section">
             <div class="section-background">
                 <div class="geometric-shape shape-1"></div>
                 <div class="geometric-shape shape-2"></div>
             </div>
-            <PortfolioAbout />
+            <PortfolioServices />
         </section>
+
+        <!-- Case Studies Section -->
+        <section id="cases" ref="casesSection" class="section cases-section">
+            <div class="section-background light">
+                <div class="grid-pattern"></div>
+            </div>
+            <PortfolioCaseStudies />
+        </section>
+
+        <!-- Other Projects Section (compact) -->
+        <section id="projects" ref="projectsSection" class="section projects-compact-section">
+            <PortfolioOtherProjects />
+        </section>
+
+        <!-- Parcours / Expérience professionnelle -->
         <section id="cv" ref="cvSection" class="section cv-section">
             <PortfolioCv />
+        </section>
+
+        <!-- Formation (secondaire) -->
+        <section id="about" ref="aboutSection" class="section about-section">
+            <PortfolioAbout />
         </section>
         <!-- Skills Section -->
         <section id="skills" ref="skillsSection" class="section skills-section">
@@ -84,13 +115,6 @@ const heroParallax = computed(() => {
                 <div class="noise-overlay"></div>
             </div>
             <PortfolioSkills />
-        </section>
-        <!-- Portfolio Section -->
-        <section id="portfolio" ref="portfolioSection" class="section portfolio-section">
-            <div class="section-background light">
-                <div class="grid-pattern"></div>
-            </div>
-            <PortfolioProjects />
         </section>
 
         <!-- Contact Section -->
@@ -109,7 +133,7 @@ const heroParallax = computed(() => {
         <!-- Menu Modal -->
         <PortfolioMenu />
 
-        <!-- Project Modal -->
+        <!-- Project Modal (popup au clic sur un projet) -->
         <PortfolioProjectModal />
 
         <!-- Scroll Progress -->
@@ -225,6 +249,22 @@ const heroParallax = computed(() => {
     }
 }
 
+/* Case Studies Section */
+.cases-section {
+    background: var(--bg-secondary);
+}
+
+/* Services Section */
+.services-section {
+    background: var(--bg-primary);
+}
+
+/* Other Projects Section (compact, pas de pleine hauteur) */
+.projects-compact-section {
+    background: var(--bg-primary);
+    min-height: auto;
+}
+
 /* About Section */
 .about-section {
     background: var(--bg-primary);
@@ -282,11 +322,6 @@ const heroParallax = computed(() => {
     height: 100%;
     opacity: 0.05;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-}
-
-/* Portfolio Section */
-.portfolio-section {
-    background: var(--bg-secondary);
 }
 
 .grid-pattern {

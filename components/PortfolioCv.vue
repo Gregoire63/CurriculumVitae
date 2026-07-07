@@ -5,13 +5,16 @@ import { computed, ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
-const prefersReducedMotion = usePreferredReducedMotion()
+const preferredMotion = usePreferredReducedMotion()
+// usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
+const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 const { gtag } = useGtag()
 
 interface Experience {
     period: string
     title: string
     company: string
+    companyUrl?: string
     location: string
     description: string[]
     stack?: string[]
@@ -20,11 +23,32 @@ interface Experience {
 
 const experiences = computed<Experience[]>(() => [
     {
-        period: store.isFrench ? 'Nov. 2025 - Présent' : 'Nov. 2025 - Present',
+        period: store.isFrench ? '2026 - Présent' : '2026 - Present',
+        title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
+        company: 'SOCOTEC',
+        companyUrl: 'https://www.socotec.com/',
+        location: store.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
+        current: true,
+        description: store.isFrench
+            ? [
+                  'Développement full-stack au sein de l’équipe logicielle du groupe SOCOTEC (testing, inspection & certification)',
+                  'Applications métier dans l’écosystème Vue 3 / TypeScript et APIs',
+                  'Contribution à l’outillage interne et aux composants partagés (socotec.io)',
+                  'Qualité de code, tests et intégration continue',
+              ]
+            : [
+                  'Full-stack development within SOCOTEC’s software team (testing, inspection & certification group)',
+                  'Business applications in the Vue 3 / TypeScript ecosystem and APIs',
+                  'Contribution to internal tooling and shared components (socotec.io)',
+                  'Code quality, testing and continuous integration',
+              ],
+        stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'PostgreSQL', 'Docker', 'CI/CD'],
+    },
+    {
+        period: store.isFrench ? 'Nov. 2025 - 2026' : 'Nov. 2025 - 2026',
         title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SOGEDO',
         location: 'Lyon',
-        current: true,
         description: store.isFrench
             ? [
                   'Refonte des plugins internes (auth, core, component) de Vue 2 vers Vue 3 (Composition API)',
@@ -324,7 +348,15 @@ if (import.meta.client) {
                                     stroke-linejoin="round"
                                 />
                             </svg>
-                            {{ exp.company }} • {{ exp.location }}
+                            <a
+                                v-if="exp.companyUrl"
+                                :href="exp.companyUrl"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="company-link"
+                            >{{ exp.company }}</a>
+                            <span v-else>{{ exp.company }}</span>
+                            <span class="company-sep">•</span> {{ exp.location }}
                         </p>
 
                         <ul class="experience-description">
@@ -645,6 +677,25 @@ if (import.meta.client) {
     font-size: 1rem;
     color: var(--text-secondary);
     margin-bottom: var(--space-md);
+}
+
+.company-link {
+    color: var(--accent-primary);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition:
+        color 0.25s ease,
+        border-color 0.25s ease;
+}
+
+.company-link:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.company-sep {
+    opacity: 0.5;
 }
 
 .experience-description {

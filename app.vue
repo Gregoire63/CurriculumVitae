@@ -77,6 +77,8 @@ onUnmounted(() => {
     --text-muted: #9d9691;
 
     --accent-primary: #8b6f5c;
+    /* Variante foncée pour petit texte sur fonds beige (contraste WCAG AA) */
+    --accent-strong: #6e5747;
     --accent-secondary: #c9b299;
     --accent-tertiary: #e5dbc8;
 

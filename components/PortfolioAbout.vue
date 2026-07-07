@@ -4,7 +4,9 @@ import { ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
-const prefersReducedMotion = usePreferredReducedMotion()
+const preferredMotion = usePreferredReducedMotion()
+// usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
+const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 
 interface Degree {
     year: string
@@ -78,7 +80,7 @@ const clickCard = (url: string) => () => window.open(url, '_blank')
             <div ref="headerRef" class="section-header">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ store.isFrench ? 'Parcours' : 'Education' }}
+                    {{ store.isFrench ? 'Formation' : 'Education' }}
                 </span>
                 <h2 class="section-title">
                     {{ store.isFrench ? 'Formation' : 'Academic Background' }}

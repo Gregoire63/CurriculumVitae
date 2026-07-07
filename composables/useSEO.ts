@@ -21,9 +21,10 @@ export interface SEOOptions {
 }
 
 const SITE_URL = 'https://gregoire-raturat.fr'
-const SITE_NAME = 'Grégoire Raturat — Full Stack Developer'
+const SITE_NAME = 'Grégoire Raturat — Product Engineer Full-Stack'
+// 157 caractères : sous la limite d'affichage (~160) des snippets Google
 const DEFAULT_DESCRIPTION =
-    'Portfolio de Grégoire Raturat, développeur Full Stack spécialisé en Vue.js, Nuxt, Python et Node.js, basé à Lyon.'
+    'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.'
 
 export const useSEO = (options: SEOOptions = {}) => {
     const route = useRoute()
@@ -34,16 +35,19 @@ export const useSEO = (options: SEOOptions = {}) => {
         author: 'Grégoire Raturat',
         defaultTitle: SITE_NAME,
         defaultDescription: DEFAULT_DESCRIPTION,
-        defaultImage: '/og-image.webp',
+        defaultImage: '/og-image.jpg',
         email: 'gregoireraturatpro@gmail.com',
         city: 'Lyon',
         country: 'FR',
         github: 'https://github.com/Gregoire63',
-        linkedin: 'https://www.linkedin.com/in/grégoire-raturat-b671091aa/',
+        // Percent-encodé pour le JSON-LD (les crawlers n'aiment pas les URL non-ASCII)
+        linkedin: 'https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/',
+        malt: 'https://www.malt.fr/profile/gregoireraturat',
     }
 
     // Construction des valeurs
-    const title = options.title ? `${options.title} | ${config.author}` : config.defaultTitle
+    // NB : le suffixe "| Grégoire Raturat" est ajouté par titleTemplate (nuxt.config), ne pas le doubler ici
+    const title = options.title || config.defaultTitle
     const description = options.description || config.defaultDescription
     const ogImage = options.ogImage
         ? `${config.baseUrl}${options.ogImage}`
@@ -128,7 +132,7 @@ export const useSEO = (options: SEOOptions = {}) => {
     if (options.jsonLd) {
         script.push({
             type: 'application/ld+json',
-            children: JSON.stringify(options.jsonLd),
+            innerHTML: JSON.stringify(options.jsonLd),
         })
     }
 
@@ -139,10 +143,10 @@ export const useSEO = (options: SEOOptions = {}) => {
             '@type': 'Person',
             '@id': `${SITE_URL}/#person`,
             name: config.author,
-            jobTitle: 'Ingénieur Informatique Full Stack',
+            jobTitle: 'Product Engineer Full-Stack',
             url: config.baseUrl,
             image: ogImage,
-            sameAs: [config.github, config.linkedin],
+            sameAs: [config.github, config.linkedin, config.malt],
             description: config.defaultDescription,
             email: config.email,
             address: {
@@ -157,14 +161,15 @@ export const useSEO = (options: SEOOptions = {}) => {
                 'Vue.js',
                 'Nuxt.js',
                 'React',
+                'React Native',
                 'Next.js',
                 'Node.js',
-                'Express.js',
                 'Python',
                 'PostgreSQL',
-                'MongoDB',
-                'Docker',
-                'Git',
+                'Supabase',
+                'RAG',
+                'Claude API',
+                'AI-assisted development',
                 'Full Stack Development',
             ],
             alumniOf: [
@@ -174,15 +179,11 @@ export const useSEO = (options: SEOOptions = {}) => {
                     url: 'https://www.ecole-isitech.com/',
                 },
             ],
-            worksFor: {
-                '@type': 'Organization',
-                name: 'Systra',
-            },
         }
 
         script.push({
             type: 'application/ld+json',
-            children: JSON.stringify(personSchema),
+            innerHTML: JSON.stringify(personSchema),
         })
 
         // Website Schema
@@ -201,7 +202,7 @@ export const useSEO = (options: SEOOptions = {}) => {
 
         script.push({
             type: 'application/ld+json',
-            children: JSON.stringify(websiteSchema),
+            innerHTML: JSON.stringify(websiteSchema),
         })
 
         // Breadcrumb pour la navigation
@@ -220,7 +221,7 @@ export const useSEO = (options: SEOOptions = {}) => {
 
         script.push({
             type: 'application/ld+json',
-            children: JSON.stringify(breadcrumbSchema),
+            innerHTML: JSON.stringify(breadcrumbSchema),
         })
     }
 

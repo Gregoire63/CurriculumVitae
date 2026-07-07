@@ -4,7 +4,9 @@ import { ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
-const prefersReducedMotion = usePreferredReducedMotion()
+const preferredMotion = usePreferredReducedMotion()
+// usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
+const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 const { gtag } = useGtag()
 
 const headerRef = ref<HTMLElement | null>(null)
@@ -90,9 +92,7 @@ const handleNavigate = (section: SectionName) => {
                 <div ref="headerRef">
                     <div class="hero-label">
                         <span class="label-line"></span>
-                        <span class="label-text">{{
-                            store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer'
-                        }}</span>
+                        <span class="label-text">Product Engineer Full-Stack</span>
                     </div>
 
                     <h1 class="hero-title">
@@ -103,28 +103,38 @@ const handleNavigate = (section: SectionName) => {
                     <p class="hero-description">
                         {{
                             store.isFrench
-                                ? "Développeur informatique chez Sogedo, passionné par l'innovation et les défis techniques. Je transforme des idées en expériences numériques élégantes et performantes."
-                                : 'IT developer at Sogedo, passionate about innovation and technical challenges. I transform ideas into elegant and performant digital experiences.'
+                                ? "Je livre des produits complets, de l'idée à la prod — et j'intègre l'IA dans les équipes dev."
+                                : 'I ship complete products, from idea to production — and I bring AI into dev teams.'
                         }}
                     </p>
-                </div>
 
-                <div ref="actionsRef" class="hero-actions">
-                    <button class="cta-primary" @click="handleNavigate('contact')">
-                        {{ store.isFrench ? 'Me contacter' : 'Get in touch' }}
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <p class="hero-location">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path
-                                d="M7 17L17 7M17 7H7M17 7V17"
+                                d="M12 21s-7-5.686-7-11a7 7 0 1 1 14 0c0 5.314-7 11-7 11z"
                                 stroke="currentColor"
                                 stroke-width="2"
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
                             />
+                            <circle cx="12" cy="10" r="2.5" stroke="currentColor" stroke-width="2" />
                         </svg>
+                        {{ store.isFrench ? 'Basé à Lyon · Remote OK' : 'Based in Lyon, France · Remote OK' }}
+                    </p>
+                </div>
+
+                <div ref="actionsRef" class="hero-actions">
+                    <button class="cta-primary" @click="handleNavigate('contact')">
+                        <span class="availability-dot" aria-hidden="true"></span>
+                        {{
+                            store.isFrench
+                                ? 'Disponible pour missions courtes → Me contacter'
+                                : 'Available for short-term engagements → Contact me'
+                        }}
                     </button>
 
-                    <button class="cta-secondary" @click="handleNavigate('about')">
-                        {{ store.isFrench ? 'En savoir plus' : 'Learn more' }}
+                    <button class="cta-secondary" @click="handleNavigate('cases')">
+                        {{ store.isFrench ? 'Voir les études de cas' : 'View case studies' }}
                     </button>
                 </div>
 
@@ -263,6 +273,59 @@ const handleNavigate = (section: SectionName) => {
     line-height: 1.8;
     color: var(--text-secondary);
     max-width: 600px;
+}
+
+.hero-location {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+}
+
+.hero-location svg {
+    flex-shrink: 0;
+    color: var(--accent-primary);
+}
+
+.availability-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    /* Vert clair + liseré clair : reste lisible sur le bouton brun (contraste >= 3:1) */
+    background: #86efac;
+    box-shadow:
+        0 0 0 2px rgba(254, 252, 248, 0.7),
+        0 0 0 2px rgba(134, 239, 172, 0);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .availability-dot {
+        animation: availability-pulse 2s infinite;
+    }
+
+    @keyframes availability-pulse {
+        0% {
+            box-shadow:
+                0 0 0 2px rgba(254, 252, 248, 0.7),
+                0 0 0 2px rgba(134, 239, 172, 0.6);
+        }
+        70% {
+            box-shadow:
+                0 0 0 2px rgba(254, 252, 248, 0.7),
+                0 0 0 9px rgba(134, 239, 172, 0);
+        }
+        100% {
+            box-shadow:
+                0 0 0 2px rgba(254, 252, 248, 0.7),
+                0 0 0 2px rgba(134, 239, 172, 0);
+        }
+    }
 }
 
 /* Actions */
@@ -447,6 +510,10 @@ const handleNavigate = (section: SectionName) => {
         max-width: 500px;
     }
 
+    .hero-location {
+        justify-content: center;
+    }
+
     .hero-actions {
         justify-content: center;
     }
@@ -465,20 +532,28 @@ const handleNavigate = (section: SectionName) => {
         font-size: clamp(2.5rem, 10vw, 4rem);
     }
     .hero-grid {
-        gap: var(--space-md)
+        gap: var(--space-sm)
+    }
+    .hero-description {
+        font-size: 1rem;
+        line-height: 1.6;
     }
     .hero-actions {
         flex-direction: column;
         width: 100%;
-        max-width: 300px;
+        max-width: 340px;
+        gap: var(--space-sm);
+        margin-top: 0;
     }
+    /* Photo réduite pour garder le CTA au-dessus de la ligne de flottaison */
     .hero-photo {
-        max-width: 200px;
+        max-width: 150px;
     }
     .cta-primary,
     .cta-secondary {
         width: 100%;
         justify-content: center;
+        text-align: center;
     }
 
     .hero-stats {
@@ -494,6 +569,11 @@ const handleNavigate = (section: SectionName) => {
 @media (max-width: 480px) {
     .photo-frame {
         max-width: 280px;
+    }
+
+    /* Garde le label sur une seule ligne */
+    .label-text {
+        font-size: 0.75rem;
     }
 
     .stat-number {

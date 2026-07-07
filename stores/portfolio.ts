@@ -17,7 +17,15 @@ export interface Project {
     logo?: string
 }
 
-export type SectionName = 'hero' | 'about' | 'skills' | 'portfolio' | 'contact'
+export type SectionName =
+    | 'hero'
+    | 'services'
+    | 'cases'
+    | 'projects'
+    | 'cv'
+    | 'about'
+    | 'skills'
+    | 'contact'
 export type Section = {
     id: SectionName
     number?: string
@@ -48,13 +56,23 @@ export const usePortfolioStore = defineStore('portfolio', {
     getters: {
         isFrench: (state) => state.language === 'fr',
         sections(state):Section[]{
+            const fr = state.language === 'fr'
             return [
-                { id: 'hero', number: '01', label: state.language === 'fr' ? 'Accueil' : 'Home' },
-                { id: 'about', number: '02', label: state.language === 'fr' ? 'À propos' : 'About' },
-                { id: 'skills', number: '03', label: state.language === 'fr' ? 'Compétences' : 'Skills' },
-                { id: 'portfolio', number: '04', label: 'Portfolio' },
-                { id: 'contact', number: '05', label: 'Contact' },
+                { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
+                { id: 'services', number: '02', label: 'Services' },
+                { id: 'cases', number: '03', label: fr ? 'Études de cas' : 'Case studies' },
+                { id: 'projects', number: '04', label: fr ? 'Projets' : 'Projects' },
+                { id: 'cv', number: '05', label: fr ? 'Parcours' : 'Career' },
+                { id: 'about', number: '06', label: fr ? 'Formation' : 'Education' },
+                { id: 'skills', number: '07', label: fr ? 'Compétences' : 'Skills' },
+                { id: 'contact', number: '08', label: 'Contact' },
             ]
+        },
+        // Sous-ensemble affiché dans la barre de navigation desktop (le menu plein écran liste tout)
+        navSections(): Section[] {
+            // Services en premier, et « Parcours » (cv) remplace « Projets » dans la barre
+            const navIds: SectionName[] = ['hero', 'services', 'cases', 'cv', 'contact']
+            return this.sections.filter((s) => navIds.includes(s.id))
         },
     },
 
