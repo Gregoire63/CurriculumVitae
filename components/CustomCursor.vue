@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const isMobile = import.meta.client && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+// On désactive le curseur custom uniquement sur les vrais appareils tactiles
+// (pointeur grossier / pas de survol). `maxTouchPoints > 0` était trop large :
+// un portable à écran tactile a un pointeur fin, la souris custom doit y marcher.
+// On aligne ainsi le JS sur la media query CSS qui affiche le curseur.
+const isMobile = import.meta.client && window.matchMedia('(hover: none), (pointer: coarse)').matches
 const cursorDot = ref<HTMLElement | null>(null)
 const cursorOutline = ref<HTMLElement | null>(null)
 

@@ -71,11 +71,10 @@ type View = 'home' | 'session' | 'progress' | 'history' | 'rapport' | 'profil'
 const view = ref<View>('home')
 const activeSession = ref<Session | null>(null)
 const openEx = ref<string | null>(null)
-const progressEx = ref(ALL_EXERCISES[0].id)
+const progressSession = ref<string | null>(null)
 const flash = ref('')
 const draft = reactive<Record<string, { w: string; r: string; done: boolean }[]>>({})
 const sessionStart = ref(0)
-const bwInput = ref('')
 const plateOpen = ref(false)
 const ormOpen = ref(false)
 const showSwitch = ref(false)
@@ -155,9 +154,14 @@ function finishSession() {
 }
 function lastLabel(exId: string) { const last = lastPerf(exId); return last ? `Dernière (${last.date}) : ${last.sets.map(s => `${s.w}×${s.r}`).join(' · ')}` : null }
 
-// ─────────── Progression ───────────
-const progressData = computed(() => chartData(progressEx.value))
-const progressGain = computed(() => { const d = progressData.value; return d.length ? d[d.length - 1].charge - d[0].charge : 0 })
+// ─────────── Progression (par séance) ───────────
+const progressSessionObj = computed(() => (progressSession.value ? PROGRAM.find(p => p.id === progressSession.value) ?? null : null))
+function exStats(exId: string) {
+  const d = chartData(exId)
+  if (!d.length) return null
+  return { max: d[d.length - 1].charge, gain: d[d.length - 1].charge - d[0].charge, e1rm: d[d.length - 1].e1rm, data: d }
+}
+const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).map(e => ({ e, stats: exStats(e.id) })))
 const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? id
 
 // ─────────── Poids & IMC ───────────
@@ -226,10 +230,10 @@ const fmtVol = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} t` : `${Mat
 const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !== null)
 
 // ─────────── Handlers ───────────
-function saveBW() {
-  const kg = parseFloat(bwInput.value)
+function onWeight(ev: Event) {
+  const kg = parseFloat((ev.target as HTMLInputElement).value)
   if (!kg || kg < 30 || kg > 250) return
-  addBodyWeight(kg); bwInput.value = ''; showFlash('Poids enregistré ✓')
+  addBodyWeight(kg); showFlash('Poids enregistré ✓')
 }
 async function onImport(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
@@ -434,25 +438,43 @@ onMounted(() => {
       </template>
     </div>
 
-    <!-- ═══════════ PROGRESSION ═══════════ -->
+    <!-- ═══════════ PROGRESSION (cartes par séance) ═══════════ -->
     <div v-if="view === 'progress'" class="stack">
-      <select v-model="progressEx">
-        <optgroup v-for="s in PROGRAM" :key="s.id" :label="s.name">
-          <option v-for="e in s.exercises" :key="e.id" :value="e.id">{{ e.name }}</option>
-        </optgroup>
-      </select>
-      <div v-if="!progressData.length" class="card empty">Aucune donnée pour cet exercice.<br>Enregistre une séance pour voir ta courbe.</div>
-      <template v-else>
-        <div class="kpi-row">
-          <div class="card kpi-card"><div class="kpi mono">{{ progressData[progressData.length - 1].charge }} kg</div><div class="section-label">Charge max</div></div>
-          <div class="card kpi-card"><div class="kpi mono" :class="{ positive: progressGain > 0 }">{{ progressGain > 0 ? '+' : '' }}{{ progressGain }} kg</div><div class="section-label">Depuis le début</div></div>
-          <div class="card kpi-card"><div class="kpi mono">{{ progressData[progressData.length - 1].e1rm }} kg</div><div class="section-label">1RM estimé</div></div>
-        </div>
-        <div class="charts-grid">
-          <div class="card"><div class="muted mb-8">Charge max par séance (kg)</div><SportSvgChart :data="progressData" y-key="charge" color="#8b6f5c" :height="180" /></div>
-          <div class="card"><div class="muted mb-8">Volume total par séance (kg × reps)</div><SportSvgChart :data="progressData" y-key="volume" color="#5f7a6b" :height="180" /></div>
+      <div class="section-label">Touche une séance pour voir la progression de tous ses exercices</div>
+      <div class="prog-grid">
+        <button
+          v-for="s in PROGRAM" :key="s.id"
+          class="session-card prog-card" :class="{ active: progressSession === s.id }"
+          :style="{ '--c': s.color }"
+          @click="progressSession = progressSession === s.id ? null : s.id"
+        >
+          <div class="sc-top"><span class="sc-day">{{ s.tag }}</span><span v-if="s.sprint" class="sc-sprint">⚡</span></div>
+          <div class="sc-name">{{ s.name }}</div>
+          <div class="sc-muscles"><span v-for="m in sessionMuscles(s)" :key="m" class="sc-chip">{{ m }}</span></div>
+          <div class="sc-foot">
+            <span class="sc-count mono">{{ s.exercises.length }} exos</span>
+            <span class="sc-go">{{ progressSession === s.id ? 'Masquer ▲' : 'Courbes →' }}</span>
+          </div>
+        </button>
+      </div>
+
+      <template v-if="progressSessionObj">
+        <div class="prog-ex-list">
+          <div v-for="{ e, stats } in progExStats" :key="e.id" class="card prog-ex">
+            <div class="prog-ex-head">
+              <div class="prog-ex-name">{{ e.name }}</div>
+              <div v-if="stats" class="prog-ex-kpis">
+                <span class="pk"><b class="mono">{{ stats.max }}</b> kg max</span>
+                <span class="pk" :class="{ pos: stats.gain > 0 }"><b class="mono">{{ stats.gain > 0 ? '+' : '' }}{{ stats.gain }}</b> kg évol.</span>
+                <span class="pk"><b class="mono">{{ stats.e1rm }}</b> kg 1RM</span>
+              </div>
+            </div>
+            <SportSvgChart v-if="stats" :data="stats.data" y-key="charge" :color="progressSessionObj.color" :height="150" />
+            <div v-else class="muted prog-empty">Pas encore de données — enregistre une séance avec cet exercice.</div>
+          </div>
         </div>
       </template>
+      <div v-else class="card empty">Choisis une séance ci-dessus pour afficher toutes ses courbes d'un coup.</div>
     </div>
 
     <!-- ═══════════ JOURNAL DES SÉANCES ═══════════ -->
@@ -478,6 +500,7 @@ onMounted(() => {
         <div class="section-label mb-8">Mon profil</div>
         <div class="form-grid">
           <label class="field"><span>Taille (cm)</span><input type="number" inputmode="numeric" :value="profile.heightCm ?? ''" placeholder="180" @change="onHeight"></label>
+          <label class="field"><span>Poids (kg)</span><input type="number" inputmode="decimal" step="0.1" :value="latestWeight ?? ''" placeholder="75" @change="onWeight"></label>
           <label class="field"><span>Année de naissance</span><input type="number" inputmode="numeric" :value="profile.birthYear ?? ''" placeholder="1998" @change="onYear"></label>
           <div class="field">
             <span>Sexe</span>
@@ -493,24 +516,16 @@ onMounted(() => {
           <span v-if="bmr" class="ps-item">Métabolisme de base <b>{{ bmr }} kcal</b></span>
           <span v-if="maintenance" class="ps-item">Maintien ≈ <b>{{ maintenance }} kcal</b></span>
         </div>
-        <div v-else class="muted">Renseigne taille + poids (ci-dessous) pour l'IMC, + sexe et année pour les calories.</div>
+        <div v-else class="muted">Renseigne taille + poids pour l'IMC, + sexe et année de naissance pour les calories. Tout est calculé à partir de ces données.</div>
       </div>
 
-      <!-- Poids de corps -->
-      <div class="card">
+      <!-- Suivi du poids (lecture seule : la saisie se fait dans « Mon profil ») -->
+      <div v-if="bwData.length" class="card">
         <div class="row-between mb-8">
-          <div class="section-label">Poids de corps</div>
-          <div v-if="bmi" class="bmi-inline" :style="{ color: bmiCat!.color }">IMC {{ bmi }} · {{ bmiCat!.label }}</div>
+          <div class="section-label">Suivi du poids</div>
+          <div v-if="bwTrend !== 0" class="mono bmi-inline" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg depuis le début</div>
         </div>
-        <div v-if="latestWeight" class="weight-now">
-          <span class="mono weight-val">{{ latestWeight }} kg</span>
-          <span v-if="bwTrend !== 0" class="mono" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg</span>
-        </div>
-        <div class="setrow bw">
-          <input v-model="bwInput" type="number" inputmode="decimal" placeholder="kg" step="0.1" class="bw-input">
-          <button class="btn-primary" @click="saveBW">Enregistrer</button>
-        </div>
-        <div v-if="bwData.length" class="chart-wrap"><SportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
+        <div class="chart-wrap"><SportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
       </div>
 
       <!-- Données -->
@@ -653,7 +668,8 @@ onMounted(() => {
 .sc-name { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
 .sc-muscles { display: flex; flex-wrap: wrap; gap: 5px; }
 .sc-chip { font-family: var(--font-mono); font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--bg-secondary); color: var(--accent-strong); border: 1px solid var(--bg-accent); }
-.sc-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 2px; }
+.sc-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 2px; }
+.prog-card .sc-count, .prog-card .sc-go { white-space: nowrap; }
 .sc-count { font-size: 12px; color: var(--text-muted); }
 .sc-go { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--c); }
 
@@ -711,22 +727,28 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .sprint-detail { font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.6; }
 .finish { padding: 14px; font-size: 15px; }
 
-/* Progression / journal */
-.kpi-row { display: flex; gap: 10px; }
-.kpi-card { flex: 1; text-align: center; padding: 14px 8px; }
-.kpi { font-family: var(--font-display); font-size: 22px; font-weight: 800; }
-.kpi.positive { color: #3f7a4f; }
-.charts-grid, .history-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+/* Progression — cartes par séance */
+.prog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.prog-card { padding: 13px 14px; gap: 8px; }
+.prog-card.active { border-color: var(--c); box-shadow: 0 10px 24px rgba(139, 111, 92, 0.16); }
+.prog-card .sc-name { font-size: 17px; }
+.prog-ex-list { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.prog-ex { display: flex; flex-direction: column; gap: 10px; }
+.prog-ex-head { display: flex; flex-direction: column; gap: 6px; }
+.prog-ex-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+.prog-ex-kpis { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-muted); }
+.pk b { color: var(--text-primary); font-size: 14px; font-family: var(--font-mono); }
+.pk.pos b { color: #3f7a4f; }
+.prog-empty { padding: 6px 0 2px; }
+
+/* Journal */
+.history-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .hist-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
 .hist-when { font-size: 12px; color: var(--text-muted); }
 .history-entry { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; }
 .history-ex { color: var(--text-secondary); }
 .trend-down { color: #3f7a4f; font-weight: 700; }
 .trend-up { color: #a97b1e; font-weight: 700; }
-select { background: var(--bg-primary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 10px; padding: 12px; width: 100%; font-size: 15px; font-family: var(--font-body); }
-select:focus { outline: none; border-color: var(--accent-primary); }
-.bw-input { width: 110px !important; }
-.bw { gap: 10px; }
 
 /* Rapport */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -757,8 +779,6 @@ select:focus { outline: none; border-color: var(--accent-primary); }
 .ps-item { font-size: 13px; color: var(--text-secondary); }
 .ps-item b { color: var(--text-primary); }
 .bmi-inline { font-size: 12px; font-weight: 700; }
-.weight-now { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
-.weight-val { font-family: var(--font-display); font-size: 28px; font-weight: 800; }
 .chart-wrap { margin-top: 12px; }
 
 /* Tablette */
@@ -769,6 +789,8 @@ select:focus { outline: none; border-color: var(--accent-primary); }
   .today-name { font-size: 34px; }
   .session-grid { grid-template-columns: repeat(2, 1fr); }
   .stat-grid { grid-template-columns: repeat(4, 1fr); }
+  .prog-grid { grid-template-columns: repeat(4, 1fr); }
+  .prog-ex-list { grid-template-columns: 1fr 1fr; }
 }
 
 /* Desktop : navigation en haut, on masque la barre du bas */
@@ -779,7 +801,7 @@ select:focus { outline: none; border-color: var(--accent-primary); }
   .topnav { display: flex; gap: 6px; max-width: 620px; }
   .topnav-tab { flex-direction: row; gap: 6px; padding: 8px 14px; }
   .session-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-  .charts-grid, .history-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+  .history-grid { grid-template-columns: 1fr 1fr; align-items: start; }
   .session-layout { display: grid; grid-template-columns: 1fr 320px; align-items: start; gap: 20px; }
   .session-tools { order: 2; }
   .session-main { order: 1; }

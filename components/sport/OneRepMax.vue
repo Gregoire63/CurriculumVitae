@@ -61,7 +61,7 @@ const table = computed(() => {
 .orm-inputs { display: flex; gap: 8px; align-items: center; }
 .orm-inputs input {
   background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-primary);
-  border-radius: 8px; padding: 10px 8px; font-size: 16px; text-align: center; flex: 1;
+  border-radius: 8px; padding: 10px 8px; font-size: 16px; text-align: center; flex: 1; min-width: 0;
   -moz-appearance: textfield; appearance: textfield;
 }
 .orm-inputs input:focus { outline: none; border-color: var(--accent-primary); }
