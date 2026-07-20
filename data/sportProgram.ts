@@ -26,7 +26,7 @@ export const PROGRAM: Session[] = [
     id: 's1',
     name: 'Pec · Bras A',
     tag: 'Lundi',
-    color: '#3D6BFF',
+    color: '#8b6f5c',
     sprint: null,
     exercises: [
       { id: 'dc-barre', name: 'Développé couché barre', sets: 4, reps: '6-8', muscles: ['pecs', 'epaules-av', 'triceps'], cues: ['Omoplates serrées, pieds ancrés au sol', 'Barre au niveau des mamelons, coudes ~45°', 'Pousse en explosif, descends en 2 sec'], machine: 'Alternative On Air : machine convergente si les barres sont prises' },
@@ -42,7 +42,7 @@ export const PROGRAM: Session[] = [
     id: 's2',
     name: 'Dos · Épaules',
     tag: 'Mardi + Sprint',
-    color: '#00C9A7',
+    color: '#5f7a6b',
     sprint: { title: 'Sprint fin de séance', detail: 'Échauffement : 3 accélérations progressives 60-70-80 %. Puis 5-6 × 60-80 m à 85-90 %, récup 2 min marchée.' },
     exercises: [
       { id: 'tirage-v', name: 'Tirage vertical', sets: 4, reps: '8-10', muscles: ['dos', 'biceps'], cues: ['Prise légèrement plus large que les épaules', 'Tire vers le haut des pecs, coudes vers le bas', 'Ne te balance pas en arrière'], machine: 'Ou tractions lestées si tu les maîtrises' },
@@ -56,7 +56,7 @@ export const PROGRAM: Session[] = [
     id: 's3',
     name: 'Jambes',
     tag: 'Jeudi · maintien',
-    color: '#FFB020',
+    color: '#b07d2e',
     sprint: null,
     exercises: [
       { id: 'squat', name: 'Squat', sets: 3, reps: '6-8', muscles: ['quadris', 'fessiers'], cues: ['Descends sous la parallèle si mobilité OK', "Genoux dans l'axe des pieds", 'Gainage avant de descendre'], machine: 'Ton point fort — 3 séries lourdes suffisent' },
@@ -70,7 +70,7 @@ export const PROGRAM: Session[] = [
     id: 's4',
     name: 'Pec · Bras B',
     tag: 'Vendredi + Sprint',
-    color: '#3D6BFF',
+    color: '#9a6a4f',
     sprint: { title: 'Sprint fin de séance', detail: 'Échauffement : 3 accélérations progressives 60-70-80 %. Puis 5-6 × 60-80 m à 85-90 %, récup 2 min marchée. Week-end de récup derrière.' },
     exercises: [
       { id: 'dev-halteres', name: 'Développé couché haltères', sets: 4, reps: '8-10', muscles: ['pecs', 'epaules-av', 'triceps'], cues: ["Amplitude plus grande qu'à la barre", "Descends jusqu'à l'étirement", 'Trajectoire en léger arc de cercle'], machine: 'Variante du lundi — angle différent' },

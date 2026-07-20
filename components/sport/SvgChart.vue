@@ -35,8 +35,8 @@ const geometry = computed(() => {
       <polyline :points="geometry.points" fill="none" :stroke="color" stroke-width="2.5" />
       <template v-for="(d, i) in geometry.dots" :key="i">
         <circle :cx="d.cx" :cy="d.cy" r="3.5" :fill="color" />
-        <text :x="d.cx" :y="d.cy - 8" fill="#B9C0CC" font-size="10" text-anchor="middle">{{ d.v }}{{ unit }}</text>
-        <text :x="d.cx" :y="height - 8" fill="#6B7484" font-size="9" text-anchor="middle">{{ d.label }}</text>
+        <text :x="d.cx" :y="d.cy - 8" fill="#6b6560" font-size="10" font-weight="600" text-anchor="middle">{{ d.v }}{{ unit }}</text>
+        <text :x="d.cx" :y="height - 8" fill="#9d9691" font-size="9" text-anchor="middle">{{ d.label }}</text>
       </template>
     </svg>
     <div v-else class="chart-empty">Encore {{ 2 - data.length }} mesure(s) pour tracer la courbe.</div>
@@ -44,5 +44,5 @@ const geometry = computed(() => {
 </template>
 
 <style scoped>
-.chart-empty { color: #6B7484; font-size: 12px; padding: 12px 0; }
+.chart-empty { color: var(--text-muted); font-size: 12px; padding: 12px 0; font-family: var(--font-mono); }
 </style>

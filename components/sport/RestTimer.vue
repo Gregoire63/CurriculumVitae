@@ -1,42 +1,39 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { computed } from 'vue'
+import { useRestTimer } from '~/composables/useRestTimer'
 
-const left = ref(0)
-let interval: ReturnType<typeof setInterval> | null = null
+const { secondsLeft, totalSeconds, start, stop, addTime } = useRestTimer()
 
-function start(sec: number) {
-  stop()
-  left.value = sec
-  interval = setInterval(() => {
-    left.value--
-    if (left.value <= 0) {
-      stop()
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200])
-    }
-  }, 1000)
-}
-
-function stop() {
-  if (interval) clearInterval(interval)
-  interval = null
-  left.value = 0
-}
-
-function fmt(s: number) {
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
-onUnmounted(stop)
+const R = 32
+const CIRC = 2 * Math.PI * R
+const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+const urgent = computed(() => secondsLeft.value > 0 && secondsLeft.value <= 10)
+const dash = computed(() => {
+  const frac = totalSeconds.value ? secondsLeft.value / totalSeconds.value : 0
+  return `${frac * CIRC} ${CIRC}`
+})
 </script>
 
 <template>
-  <div class="rest-timer">
-    <template v-if="left > 0">
-      <span class="timer-value mono" :class="{ urgent: left <= 10 }">{{ fmt(left) }}</span>
-      <button class="btn" @click="stop">Stop</button>
+  <div class="rest-timer" :class="{ active: secondsLeft > 0 }">
+    <template v-if="secondsLeft > 0">
+      <div class="ring-wrap">
+        <svg viewBox="0 0 72 72" class="ring">
+          <circle cx="36" cy="36" :r="R" class="ring-bg" />
+          <circle cx="36" cy="36" :r="R" class="ring-fg" :class="{ urgent }" :stroke-dasharray="dash" />
+        </svg>
+        <span class="ring-time mono" :class="{ urgent }">{{ fmt(secondsLeft) }}</span>
+      </div>
+      <div class="ctrls">
+        <button class="btn tiny" @click="addTime(-15)">−15</button>
+        <button class="btn tiny" @click="addTime(15)">+15</button>
+        <button class="btn tiny danger" @click="stop">Stop</button>
+      </div>
     </template>
     <template v-else>
-      <button class="btn" @click="start(90)">Repos 1:30</button>
+      <span class="rest-label">Repos</span>
+      <button class="btn" @click="start(60)">1:00</button>
+      <button class="btn" @click="start(90)">1:30</button>
       <button class="btn" @click="start(120)">2:00</button>
       <button class="btn" @click="start(180)">3:00</button>
     </template>
@@ -44,13 +41,59 @@ onUnmounted(stop)
 </template>
 
 <style scoped>
-.rest-timer { display: flex; gap: 8px; align-items: center; }
-.timer-value { font-size: 22px; font-weight: 700; color: #EDEFF3; }
-.timer-value.urgent { color: #FF4D3D; }
-.mono { font-family: 'SF Mono', ui-monospace, Menlo, monospace; }
-.btn {
-  background: transparent; border: 1px solid #313A4C; color: #B9C0CC;
-  border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer;
+.rest-timer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
 }
+.rest-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-right: 2px;
+}
+.mono { font-family: var(--font-mono); }
+.ring-wrap { position: relative; width: 72px; height: 72px; }
+.ring { width: 72px; height: 72px; transform: rotate(-90deg); }
+.ring-bg { fill: none; stroke: var(--bg-accent); stroke-width: 6; }
+.ring-fg {
+  fill: none;
+  stroke: var(--accent-primary);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.95s linear, stroke 0.3s;
+}
+.ring-fg.urgent { stroke: #b5502f; }
+.ring-time {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.ring-time.urgent { color: #b5502f; }
+.ctrls { display: flex; gap: 6px; }
+.btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--bg-accent);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.btn:hover { border-color: var(--accent-secondary); }
+.btn.tiny { padding: 7px 10px; font-size: 12px; }
+.btn.danger { border-color: #e3c4b8; color: #b5502f; }
 .btn:active { transform: scale(0.97); }
 </style>
