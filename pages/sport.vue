@@ -509,12 +509,14 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
               <div class="sprint-block-title">Ce que tu as fait</div>
               <div v-for="(r, i) in sprintDraft" :key="i" class="sprint-row">
                 <button class="kind-chip" :class="r.kind" @click="r.kind = r.kind === 'echauffement' ? 'sprint' : 'echauffement'">{{ r.kind === 'echauffement' ? 'Échauff.' : 'Sprint' }}</button>
-                <input v-model="r.count" class="sr-count" type="number" inputmode="numeric" placeholder="1">
-                <span class="times">×</span>
-                <input v-model="r.duration" class="sr-dur" type="text" placeholder="20 s">
-                <span class="times">@</span>
-                <input v-model="r.intensity" class="sr-int" type="text" placeholder="16 km/h">
                 <button v-if="sprintDraft.length > 1" class="rm" aria-label="Retirer" @click="removeSprintRow(i)">×</button>
+                <div class="sr-fields">
+                  <input v-model="r.count" class="sr-count" type="number" inputmode="numeric" placeholder="nb">
+                  <span class="times">×</span>
+                  <input v-model="r.duration" class="sr-dur" type="text" placeholder="20 s">
+                  <span class="times">@</span>
+                  <input v-model="r.intensity" class="sr-int" type="text" placeholder="16 km/h">
+                </div>
               </div>
               <div class="sprint-add">
                 <button class="add-set" @click="addSprintRow('echauffement')">+ Échauffement</button>
@@ -890,16 +892,18 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .sprint-info-btn.open .i-mark { background: var(--accent-primary); color: var(--bg-primary); }
 .sprint-info { display: flex; flex-direction: column; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 12px; }
 /* Saisie des efforts de course */
-.sprint-log { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--bg-accent); padding-top: 12px; }
-.sprint-row { display: flex; align-items: center; gap: 6px; }
-.kind-chip { flex-shrink: 0; width: 74px; border: 1px solid var(--bg-accent); border-radius: 8px; padding: 8px 4px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; background: var(--bg-secondary); color: var(--text-secondary); }
+.sprint-log { display: flex; flex-direction: column; gap: 12px; border-top: 1px dashed var(--bg-accent); padding-top: 12px; }
+/* Ligne d'effort : puce + suppression sur la 1re ligne, champs sur la 2e (mobile-friendly) */
+.sprint-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 10px; }
+.kind-chip { flex-shrink: 0; min-width: 82px; border: 1px solid var(--bg-accent); border-radius: 8px; padding: 7px 12px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; background: var(--bg-primary); color: var(--text-secondary); }
 .kind-chip.echauffement { border-color: #e6d3a8; color: #a97b1e; background: #f6ecd6; }
 .kind-chip.sprint { border-color: #e3c4b8; color: #b5502f; background: #f6ece1; }
-.sprint-row input { background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 8px; padding: 9px 6px; font-size: 15px; text-align: center; min-width: 0; }
-.sr-count { width: 40px; flex-shrink: 0; }
+.sprint-row .rm { margin-left: auto; }
+.sr-fields { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.sprint-row input { background: var(--bg-primary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 8px; padding: 10px 8px; font-size: 15px; text-align: center; min-width: 0; }
+.sr-count { width: 56px; flex-shrink: 0; }
 .sr-dur { flex: 1; }
-.sr-int { flex: 1.3; }
-.sprint-row .at { color: var(--text-muted); flex-shrink: 0; }
+.sr-int { flex: 1.4; }
 .sprint-add { display: flex; gap: 8px; flex-wrap: wrap; }
 .sprint-hint { line-height: 1.5; }
 /* Chrono de repos flottant */

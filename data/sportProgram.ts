@@ -45,9 +45,9 @@ export const SPRINT: SprintPlan = {
   ],
   protocol: [
     { label: 'Séries', value: '5 à 6' },
-    { label: 'Effort', value: '60–80 m (≈ 10–15 s)' },
-    { label: 'Intensité', value: '85–90 % — pas 100 %' },
-    { label: 'Récup', value: '2 min de marche complète' },
+    { label: 'Effort', value: '60–80 m · 10–15 s' },
+    { label: 'Intensité', value: '85–90 %' },
+    { label: 'Récup', value: '2 min marche' },
   ],
   exterieur: [
     'Surface souple de préférence : piste synthétique, herbe sèche. Évite le bitume dur.',
