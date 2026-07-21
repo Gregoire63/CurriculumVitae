@@ -118,8 +118,8 @@ export default defineNuxtConfig({
                 { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
                 { rel: 'icon', type: 'image/png', sizes: '48x48', href: '/favicon-48x48.png' },
                 { rel: 'icon', type: 'image/png', sizes: '96x96', href: '/favicon-96x96.png' },
-                { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-                { rel: 'manifest', href: '/site.webmanifest' },
+                { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png', key: 'apple-touch-icon' },
+                { rel: 'manifest', href: '/site.webmanifest', key: 'manifest' },
                 { rel: 'dns-prefetch', href: 'https://www.googletagmanager.com' },
             ],
             script: [

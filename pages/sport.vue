@@ -16,8 +16,8 @@ useHead({
     { name: 'robots', content: 'noindex' },
   ],
   link: [
-    { rel: 'manifest', href: '/sport/manifest.webmanifest' },
-    { rel: 'apple-touch-icon', href: '/sport/icon-192.png' },
+    { rel: 'manifest', href: '/sport/manifest.webmanifest', key: 'manifest' },
+    { rel: 'apple-touch-icon', href: '/sport/icon-192.png', key: 'apple-touch-icon' },
   ],
 })
 
