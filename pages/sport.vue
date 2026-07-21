@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
-import type { Session } from '~/data/sportProgram'
+import type { Session, Exercise } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
@@ -16,16 +16,19 @@ useHead({
     { name: 'robots', content: 'noindex' },
   ],
   link: [
+    // Même `key` que le manifest global (nuxt.config) → sur /sport, ce manifest
+    // le remplace, donc l'app installée depuis /sport démarre sur /sport.
     { rel: 'manifest', href: '/sport/manifest.webmanifest', key: 'manifest' },
     { rel: 'apple-touch-icon', href: '/sport/icon-192.png', key: 'apple-touch-icon' },
   ],
 })
 
 const {
-  logs, bodyWeight, lastPerf, bestCharge, recordSession, progressionHint,
+  logs, bodyWeight, lastPerf, bestCharge, recordSession, progressionHint, suggestWeight,
   chartData, sessionLog, addBodyWeight, exportJSON, importJSON,
 } = useWorkout()
-const { start: startRest } = useRestTimer()
+const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
+const restFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 const { profile, weekPlan, hydrate: hydrateProfile, setHeight, setSex, setBirthYear, setDay, resetPlan, restore: restoreProfile } = useProfile()
 
 // ─────────── Muscles ───────────
@@ -74,13 +77,28 @@ const openEx = ref<string | null>(null)
 // Progrès : première séance sélectionnée par défaut
 const progressSession = ref<string | null>(PROGRAM[0]?.id ?? null)
 const flash = ref('')
-const draft = reactive<Record<string, { w: string; r: string; done: boolean }[]>>({})
+const draft = reactive<Record<string, { w: string; r: string; done: boolean; warm: boolean }[]>>({})
 const sessionStart = ref(0)
 const plateOpen = ref(false)
 const ormOpen = ref(false)
 const showSwitch = ref(false)
 const sprintMode = ref<'exterieur' | 'tapis'>('exterieur')
 const sprintOpen = ref(false)
+const sprintInfoOpen = ref(false)
+// Saisie des efforts de course : ex. « 3 × 20 s @ 16 km/h »
+interface SprintRow { kind: 'echauffement' | 'sprint'; count: string; duration: string; intensity: string }
+const sprintDraft = ref<SprintRow[]>([])
+function newSprintRows(): SprintRow[] {
+  return [
+    { kind: 'echauffement', count: '1', duration: '', intensity: '' },
+    { kind: 'sprint', count: '', duration: '', intensity: '' },
+  ]
+}
+function addSprintRow(kind: 'echauffement' | 'sprint') { sprintDraft.value.push({ kind, count: '', duration: '', intensity: '' }) }
+function removeSprintRow(i: number) { sprintDraft.value.splice(i, 1) }
+// Chrono flottant : visible quand on a scrollé vers le bas
+const pageScrolled = ref(false)
+function onScroll() { pageScrolled.value = window.scrollY > 150 }
 
 const titles: Record<View, string> = {
   home: 'Mes séances', session: '', progress: 'Progression',
@@ -118,15 +136,39 @@ function startSession(s: Session) {
   for (const k of Object.keys(draft)) delete draft[k]
   for (const e of s.exercises) {
     const last = lastPerf(e.id)
-    draft[e.id] = Array.from({ length: e.sets }, (_, i) => ({ w: last?.sets[i] ? String(last.sets[i].w) : '', r: '', done: false }))
+    const lastWork = last ? last.sets.filter(x => !x.warm) : [] // on ignore l'échauffement des dernières données
+    const sug = suggestWeight(e)
+    const bumped = sug.reason === 'progress' || sug.reason === 'stall'
+    // On reprend la charge de CHAQUE série de la dernière fois (garde un éventuel pyramidal),
+    // et si on force la montée on ajoute l'incrément à chaque série.
+    draft[e.id] = Array.from({ length: e.sets }, (_, i) => {
+      const prev = lastWork[i]?.w
+      let w = ''
+      if (prev != null) w = String(bumped ? prev + sug.inc : prev)
+      else if (bumped && sug.weight) w = String(sug.weight)
+      return { w, r: '', done: false, warm: false }
+    })
   }
   openEx.value = s.exercises[0].id
+  sprintOpen.value = false
+  sprintInfoOpen.value = false
+  sprintDraft.value = s.sprint ? newSprintRows() : []
   sessionStart.value = Date.now()
   view.value = 'session'
 }
-const doneCount = (exId: string) => (draft[exId] || []).filter(s => s.done).length
-function addSet(exId: string) { const rows = draft[exId]; rows.push({ w: rows[rows.length - 1]?.w ?? '', r: '', done: false }) }
+// On ne compte que les séries de travail (l'échauffement ne compte pas)
+const doneCount = (exId: string) => (draft[exId] || []).filter(s => s.done && !s.warm).length
+const workCount = (exId: string) => (draft[exId] || []).filter(s => !s.warm).length
+function addSet(exId: string) { const rows = draft[exId]; const lastW = [...rows].reverse().find(s => !s.warm); rows.push({ w: lastW?.w ?? '', r: '', done: false, warm: false }) }
+function addWarmup(exId: string) { const wu = warmup(exId); draft[exId].unshift({ w: wu ? String(wu[0]) : '', r: '', done: false, warm: true }) }
 function removeSet(exId: string, i: number) { if (draft[exId].length > 1) draft[exId].splice(i, 1) }
+// Libellé : « Éch » pour l'échauffement, sinon numéro de série de travail
+function setLabel(rows: { warm: boolean }[], i: number) {
+  if (rows[i].warm) return 'Éch'
+  let n = 0
+  for (let k = 0; k <= i; k++) if (!rows[k].warm) n++
+  return 'S' + n
+}
 function restForReps(reps: string): number {
   const nums = reps.match(/\d+/g)
   const top = nums ? parseInt(nums[nums.length - 1], 10) : 12
@@ -134,10 +176,11 @@ function restForReps(reps: string): number {
   if (top <= 12) return 120
   return 75
 }
-function toggleSet(s: { done: boolean }, reps: string) { s.done = !s.done; if (s.done) startRest(restForReps(reps)) }
+function toggleSet(s: { done: boolean; warm: boolean }, reps: string) { s.done = !s.done; if (s.done && !s.warm) startRest(restForReps(reps)) }
 function roundTo(v: number, step: number) { return Math.round(v / step) * step }
 function warmup(exId: string): number[] | null {
-  const w = parseFloat(draft[exId]?.[0]?.w || '')
+  const firstWork = (draft[exId] || []).find(s => !s.warm) // 1re série de travail
+  const w = parseFloat(firstWork?.w || '')
   if (!w || w <= 20) return null
   const steps = [0.5, 0.7, 0.85].map(p => roundTo(w * p, 2.5)).filter(x => x > 0 && x < w)
   return steps.length ? [...new Set(steps)] : null
@@ -147,15 +190,25 @@ function finishSession() {
   const durationMin = Math.round((Date.now() - sessionStart.value) / 60000)
   const entries = activeSession.value.exercises.map(e => ({
     exId: e.id,
-    sets: (draft[e.id] || []).filter(s => s.done && s.w !== '' && s.r !== '').map(s => ({ w: parseFloat(s.w), r: parseInt(s.r, 10) })),
+    sets: (draft[e.id] || []).filter(s => s.done && s.w !== '' && s.r !== '').map(s => ({ w: parseFloat(s.w), r: parseInt(s.r, 10), ...(s.warm ? { warm: true } : {}) })),
   }))
-  const prs = recordSession(entries, durationMin, { sessionId: activeSession.value.id, name: activeSession.value.name })
+  const sprintEfforts = sprintDraft.value
+    .filter(r => r.duration.trim() || r.intensity.trim())
+    .map(r => ({ kind: r.kind, count: parseInt(r.count, 10) || 1, duration: r.duration.trim(), intensity: r.intensity.trim() }))
+  const prs = recordSession(entries, durationMin, { sessionId: activeSession.value.id, name: activeSession.value.name }, sprintEfforts)
   // Le planning du jour s'adapte automatiquement à la séance réellement faite
   if (todayIndex.value !== null) setDay(todayIndex.value, activeSession.value.id)
   view.value = 'home'
   showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 PR : ${prs.join(', ')}` : `Séance enregistrée ✓ (${durationMin} min)`)
 }
-function lastLabel(exId: string) { const last = lastPerf(exId); return last ? `Dernière (${last.date}) : ${last.sets.map(s => `${s.w}×${s.r}`).join(' · ')}` : null }
+function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}`).join(' · ')}` : null }
+// Conseil de surcharge progressive (monte la charge quand on progresse ou qu'on stagne)
+function overloadHint(ex: Exercise): { cls: string; text: string } | null {
+  const s = suggestWeight(ex)
+  if (s.reason === 'progress') return { cls: 'progress', text: `🎯 Objectif de reps atteint → +${s.inc} kg par série (jusqu'à ${s.weight} kg)` }
+  if (s.reason === 'stall') return { cls: 'stall', text: `⏫ Bloqué ${s.streak} séances à ${s.base} kg — on force +${s.inc} kg par série` }
+  return null
+}
 
 // ─────────── Progression (par séance) ───────────
 const progressSessionObj = computed(() => (progressSession.value ? PROGRAM.find(p => p.id === progressSession.value) ?? null : null))
@@ -206,13 +259,13 @@ const avgDuration = computed(() => {
 })
 const totalVolume = computed(() => {
   let v = 0
-  for (const ss of Object.values(logs.value)) for (const s of ss) for (const set of s.sets) v += set.w * set.r
+  for (const ss of Object.values(logs.value)) for (const s of ss) for (const set of s.sets) if (!set.warm) v += set.w * set.r
   return v
 })
 const volumeThisWeek = computed(() => {
   if (!startOfWeekISO.value) return 0
   let v = 0
-  for (const ss of Object.values(logs.value)) for (const s of ss) if (s.date >= startOfWeekISO.value!) for (const set of s.sets) v += set.w * set.r
+  for (const ss of Object.values(logs.value)) for (const s of ss) if (s.date >= startOfWeekISO.value!) for (const set of s.sets) if (!set.warm) v += set.w * set.r
   return v
 })
 const muscleVolume = computed(() => {
@@ -221,7 +274,7 @@ const muscleVolume = computed(() => {
     const ex = ALL_EXERCISES.find(e => e.id === exId)
     if (!ex) continue
     let sets = 0
-    for (const s of ss) sets += s.sets.length
+    for (const s of ss) sets += s.sets.filter(x => !x.warm).length
     for (const mus of ex.muscles) { const l = MUSCLE_LABELS[mus] || mus; m[l] = (m[l] || 0) + sets }
   }
   return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 7)
@@ -258,7 +311,9 @@ onMounted(() => {
   const desktop = window.matchMedia('(min-width: 1080px)').matches
   plateOpen.value = desktop
   ormOpen.value = desktop
+  window.addEventListener('scroll', onScroll, { passive: true })
 })
+onUnmounted(() => window.removeEventListener('scroll', onScroll))
 </script>
 
 <template>
@@ -288,6 +343,16 @@ onMounted(() => {
         </button>
       </nav>
     </header>
+
+    <!-- Chrono de repos flottant : fixe en haut quand on a scrollé, revient à sa place en haut de page -->
+    <transition name="ft-drop">
+      <div v-if="view === 'session' && restLeft > 0 && pageScrolled" class="floating-timer">
+        <span class="ft-time mono">{{ restFmt(restLeft) }}</span>
+        <span class="ft-label">Repos</span>
+        <button class="ft-btn" @click="addRest(15)">+15</button>
+        <button class="ft-btn stop" @click="stopRest()">Stop</button>
+      </div>
+    </transition>
 
     <div v-if="flash" class="flash">{{ flash }}</div>
 
@@ -367,26 +432,29 @@ onMounted(() => {
               <div class="ex-name">{{ idx + 1 }}. {{ e.name }}</div>
               <div class="muted mt-2">{{ e.sets }} × {{ e.reps }}<template v-if="lastPerf(e.id)"> · dernière : {{ Math.max(...lastPerf(e.id)!.sets.map(s => s.w)) }} kg</template></div>
             </div>
-            <div class="set-counter mono" :class="{ complete: draft[e.id] && doneCount(e.id) === draft[e.id].length }">{{ doneCount(e.id) }}/{{ draft[e.id]?.length ?? e.sets }}</div>
+            <div class="set-counter mono" :class="{ complete: draft[e.id] && workCount(e.id) > 0 && doneCount(e.id) === workCount(e.id) }">{{ doneCount(e.id) }}/{{ workCount(e.id) || e.sets }}</div>
           </button>
           <div v-if="openEx === e.id" class="ex-body">
             <SportExerciseMove :ex-id="e.id"><SportMuscleMap :muscles="e.muscles" /></SportExerciseMove>
-            <div v-if="progressionHint(e)" class="hint-pill progress">📈 {{ progressionHint(e) }}</div>
+            <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
             <div v-if="warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
               <div class="muted italic mt-6">{{ e.machine }}</div>
             </div>
             <div class="sets">
-              <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done }">
-                <span class="mono set-label">S{{ i + 1 }}</span>
+              <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done, warm: s.warm }">
+                <button class="set-label mono" :class="{ warm: s.warm }" :title="s.warm ? 'Échauffement (non compté) — clic pour repasser en série' : 'Clic pour marquer en échauffement'" @click="s.warm = !s.warm">{{ setLabel(draft[e.id], i) }}</button>
                 <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
                 <span class="times">×</span>
                 <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
                 <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e.reps)">{{ s.done ? '✓' : '○' }}</button>
                 <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
               </div>
-              <button class="add-set" @click="addSet(e.id)">+ Ajouter une série</button>
+              <div class="set-adds">
+                <button class="add-set" @click="addSet(e.id)">+ Série</button>
+                <button class="add-set warm" @click="addWarmup(e.id)">+ Échauffement</button>
+              </div>
             </div>
             <div v-if="lastLabel(e.id)" class="muted last-perf">{{ lastLabel(e.id) }}</div>
           </div>
@@ -400,40 +468,60 @@ onMounted(() => {
             <div class="set-counter mono chevron">{{ sprintOpen ? '▲' : '▼' }}</div>
           </button>
           <div v-if="sprintOpen" class="ex-body sprint-body">
-          <div class="sprint-head">
-            <div class="sprint-goal">{{ activeSession.sprint.goal }}</div>
-          </div>
-
-          <div class="sprint-protocol">
-            <div v-for="p in activeSession.sprint.protocol" :key="p.label" class="sp-stat">
-              <div class="sp-val mono">{{ p.value }}</div>
-              <div class="sp-lab">{{ p.label }}</div>
+            <!-- Essentiel : le protocole, en un coup d'œil -->
+            <div class="sprint-protocol">
+              <div v-for="p in activeSession.sprint.protocol" :key="p.label" class="sp-stat">
+                <div class="sp-val mono">{{ p.value }}</div>
+                <div class="sp-lab">{{ p.label }}</div>
+              </div>
             </div>
-          </div>
+            <button class="sprint-info-btn" :class="{ open: sprintInfoOpen }" @click="sprintInfoOpen = !sprintInfoOpen">
+              <span class="i-mark">i</span>{{ sprintInfoOpen ? 'Masquer les détails' : 'Détails : échauffement, tapis, technique' }}
+            </button>
 
-          <div class="sprint-block">
-            <div class="sprint-block-title">🔥 Échauffement</div>
-            <ul class="sprint-list"><li v-for="(w, i) in activeSession.sprint.warmup" :key="i">{{ w }}</li></ul>
-          </div>
-
-          <div class="sprint-block">
-            <div class="sprint-block-title">Où cours-tu ?</div>
-            <div class="sprint-toggle">
-              <button :class="{ active: sprintMode === 'exterieur' }" @click="sprintMode = 'exterieur'">🏟️ Extérieur / piste</button>
-              <button :class="{ active: sprintMode === 'tapis' }" @click="sprintMode = 'tapis'">🏃 Tapis</button>
+            <!-- Bulle info : tout le détail, masqué par défaut -->
+            <div v-if="sprintInfoOpen" class="sprint-info">
+              <div class="sprint-goal">{{ activeSession.sprint.goal }}</div>
+              <div class="sprint-block">
+                <div class="sprint-block-title">🔥 Échauffement</div>
+                <ul class="sprint-list"><li v-for="(w, i) in activeSession.sprint.warmup" :key="i">{{ w }}</li></ul>
+              </div>
+              <div class="sprint-block">
+                <div class="sprint-block-title">Où cours-tu ?</div>
+                <div class="sprint-toggle">
+                  <button :class="{ active: sprintMode === 'exterieur' }" @click="sprintMode = 'exterieur'">🏟️ Extérieur</button>
+                  <button :class="{ active: sprintMode === 'tapis' }" @click="sprintMode = 'tapis'">🏃 Tapis</button>
+                </div>
+                <ul class="sprint-list">
+                  <li v-for="(s, i) in (sprintMode === 'exterieur' ? activeSession.sprint.exterieur : activeSession.sprint.tapis)" :key="i">{{ s }}</li>
+                </ul>
+                <div v-if="sprintMode === 'tapis'" class="sprint-note">⚠️ {{ activeSession.sprint.tapisNote }}</div>
+              </div>
+              <div class="sprint-block">
+                <div class="sprint-block-title">Technique</div>
+                <ul class="sprint-list"><li v-for="(c, i) in activeSession.sprint.cues" :key="i">{{ c }}</li></ul>
+              </div>
+              <div class="sprint-cooldown">🧊 Retour au calme — {{ activeSession.sprint.cooldown }}</div>
             </div>
-            <ul class="sprint-list">
-              <li v-for="(s, i) in (sprintMode === 'exterieur' ? activeSession.sprint.exterieur : activeSession.sprint.tapis)" :key="i">{{ s }}</li>
-            </ul>
-            <div v-if="sprintMode === 'tapis'" class="sprint-note">⚠️ {{ activeSession.sprint.tapisNote }}</div>
-          </div>
 
-          <div class="sprint-block">
-            <div class="sprint-block-title">Technique</div>
-            <ul class="sprint-list"><li v-for="(c, i) in activeSession.sprint.cues" :key="i">{{ c }}</li></ul>
-          </div>
-
-          <div class="sprint-cooldown">🧊 Retour au calme — {{ activeSession.sprint.cooldown }}</div>
+            <!-- Saisie : ce que tu as réellement couru -->
+            <div class="sprint-log">
+              <div class="sprint-block-title">Ce que tu as fait</div>
+              <div v-for="(r, i) in sprintDraft" :key="i" class="sprint-row">
+                <button class="kind-chip" :class="r.kind" @click="r.kind = r.kind === 'echauffement' ? 'sprint' : 'echauffement'">{{ r.kind === 'echauffement' ? 'Échauff.' : 'Sprint' }}</button>
+                <input v-model="r.count" class="sr-count" type="number" inputmode="numeric" placeholder="1">
+                <span class="times">×</span>
+                <input v-model="r.duration" class="sr-dur" type="text" placeholder="20 s">
+                <span class="times">@</span>
+                <input v-model="r.intensity" class="sr-int" type="text" placeholder="16 km/h">
+                <button v-if="sprintDraft.length > 1" class="rm" aria-label="Retirer" @click="removeSprintRow(i)">×</button>
+              </div>
+              <div class="sprint-add">
+                <button class="add-set" @click="addSprintRow('echauffement')">+ Échauffement</button>
+                <button class="add-set" @click="addSprintRow('sprint')">+ Sprint</button>
+              </div>
+              <div class="muted sprint-hint">Ex : Échauff. 1 × 3 min @ 8 km/h, puis Sprint 3 × 20 s @ 16 km/h. Enregistré avec la séance.</div>
+            </div>
           </div>
         </div>
         <button class="btn-primary finish" @click="finishSession">Terminer et enregistrer la séance</button>
@@ -532,7 +620,11 @@ onMounted(() => {
           </div>
           <div v-for="e in s.entries" :key="e.exId" class="history-entry">
             <span class="history-ex">{{ exName(e.exId) }}</span>
-            <span class="mono muted">{{ e.sets.map(x => `${x.w}×${x.r}`).join(' · ') }}</span>
+            <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}`).join(' · ') }}</span>
+          </div>
+          <div v-for="(sp, k) in (s.sprint || [])" :key="'sp' + k" class="history-entry">
+            <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
+            <span class="mono muted">{{ sp.count }} × {{ sp.duration }}<template v-if="sp.intensity"> @ {{ sp.intensity }}</template></span>
           </div>
         </div>
       </div>
@@ -747,6 +839,7 @@ onMounted(() => {
 .ex-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .hint-pill { border-radius: 10px; padding: 10px 12px; font-size: 13px; }
 .hint-pill.progress { background: #e7f0e2; border: 1px solid #bcd8ae; color: #3f7a4f; }
+.hint-pill.stall { background: #f6ece1; border: 1px solid #e6c3b0; color: #b5502f; font-weight: 600; }
 .hint-pill.warmup { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
 .cues { display: flex; flex-direction: column; gap: 3px; }
 .cue { display: flex; gap: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
@@ -754,7 +847,10 @@ onMounted(() => {
 .sets { display: flex; flex-direction: column; gap: 8px; }
 .setrow { display: flex; gap: 8px; align-items: center; }
 .setrow.done .set-label { color: #3f7a4f; }
-.set-label { width: 24px; color: var(--text-muted); font-size: 13px; }
+.setrow.warm input { background: #f9f2e3; border-color: #e6d3a8; }
+.set-label { flex-shrink: 0; min-width: 34px; padding: 6px 4px; background: none; border: 1px solid transparent; border-radius: 7px; color: var(--text-muted); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+.set-label:hover { border-color: var(--bg-accent); }
+.set-label.warm { color: #a97b1e; background: #f6ecd6; border-color: #e6d3a8; }
 .times { color: var(--text-muted); }
 input[type='number'] { background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 8px; padding: 9px 8px; width: 68px; font-size: 16px; text-align: center; -moz-appearance: textfield; appearance: textfield; }
 input[type='number']:focus { outline: none; border-color: var(--accent-primary); }
@@ -763,8 +859,11 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .check.ok { background: #e7f0e2; border-color: #bcd8ae; color: #3f7a4f; }
 .rm { width: 30px; height: 40px; background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; border-radius: 8px; }
 .rm:hover { color: #b5502f; }
+.set-adds { display: flex; gap: 8px; flex-wrap: wrap; }
 .add-set { align-self: flex-start; background: none; border: 1px dashed var(--accent-secondary); color: var(--accent-primary); border-radius: 9px; padding: 8px 14px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .add-set:hover { background: var(--bg-secondary); border-style: solid; }
+.add-set.warm { border-color: #e6d3a8; color: #a97b1e; }
+.add-set.warm:hover { background: #f6ecd6; }
 .last-perf { padding-top: 2px; }
 .sprint-exercise { border-left: 4px solid #b5502f; }
 .sprint-exercise .ex-name { color: #b5502f; }
@@ -785,6 +884,37 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .sprint-toggle button.active { background: #b5502f; border-color: #b5502f; color: #fff; }
 .sprint-note { font-size: 12px; color: #a5451f; background: #f6ece1; border: 1px solid #e6c3b0; border-radius: 8px; padding: 9px 11px; line-height: 1.5; }
 .sprint-cooldown { font-size: 13px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 10px; padding: 11px 12px; line-height: 1.5; }
+/* Bouton info (i) + bulle de détails */
+.sprint-info-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--accent-primary); padding: 2px 0; }
+.sprint-info-btn .i-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--accent-primary); font-style: italic; font-weight: 700; font-size: 11px; }
+.sprint-info-btn.open .i-mark { background: var(--accent-primary); color: var(--bg-primary); }
+.sprint-info { display: flex; flex-direction: column; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 12px; }
+/* Saisie des efforts de course */
+.sprint-log { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--bg-accent); padding-top: 12px; }
+.sprint-row { display: flex; align-items: center; gap: 6px; }
+.kind-chip { flex-shrink: 0; width: 74px; border: 1px solid var(--bg-accent); border-radius: 8px; padding: 8px 4px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; background: var(--bg-secondary); color: var(--text-secondary); }
+.kind-chip.echauffement { border-color: #e6d3a8; color: #a97b1e; background: #f6ecd6; }
+.kind-chip.sprint { border-color: #e3c4b8; color: #b5502f; background: #f6ece1; }
+.sprint-row input { background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 8px; padding: 9px 6px; font-size: 15px; text-align: center; min-width: 0; }
+.sr-count { width: 40px; flex-shrink: 0; }
+.sr-dur { flex: 1; }
+.sr-int { flex: 1.3; }
+.sprint-row .at { color: var(--text-muted); flex-shrink: 0; }
+.sprint-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.sprint-hint { line-height: 1.5; }
+/* Chrono de repos flottant */
+.floating-timer {
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  background: color-mix(in srgb, var(--accent-primary) 96%, black); color: var(--bg-primary);
+  border-radius: 999px; padding: 8px 10px 8px 16px; box-shadow: 0 10px 26px rgba(0,0,0,0.22);
+}
+.ft-time { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
+.ft-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; opacity: 0.85; }
+.ft-btn { background: rgba(255,255,255,0.16); border: none; color: var(--bg-primary); border-radius: 999px; padding: 6px 12px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; }
+.ft-btn.stop { background: rgba(255,255,255,0.92); color: #b5502f; }
+.ft-drop-enter-active, .ft-drop-leave-active { transition: transform 0.25s var(--ease-out), opacity 0.25s; }
+.ft-drop-enter-from, .ft-drop-leave-to { transform: translate(-50%, -18px); opacity: 0; }
 .finish { padding: 14px; font-size: 15px; }
 
 /* Progression — cartes par séance */

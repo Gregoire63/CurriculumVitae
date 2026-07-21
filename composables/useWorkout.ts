@@ -2,10 +2,14 @@ import { ref } from 'vue'
 import { ALL_EXERCISES, topOfRange, suggestedIncrement } from '~/data/sportProgram'
 import type { Exercise } from '~/data/sportProgram'
 
-export interface SetLog { w: number; r: number }
+// warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
+export interface SetLog { w: number; r: number; warm?: boolean }
+const working = (sets: SetLog[]) => sets.filter(s => !s.warm)
 export interface SessionLog { date: string; sets: SetLog[]; durationMin?: number }
 export type Logs = Record<string, SessionLog[]>
 export interface BodyWeightEntry { date: string; kg: number }
+// Effort de sprint (course) : ex. « 3 × 20 s @ 16 km/h »
+export interface SprintEffort { kind: 'echauffement' | 'sprint'; count: number; duration: string; intensity: string }
 // Enregistrement au niveau séance : garde l'ordre, la date ET l'heure
 export interface SessionRecord {
   at: string // ISO complet (date + heure)
@@ -13,6 +17,7 @@ export interface SessionRecord {
   name: string
   durationMin?: number
   entries: { exId: string; sets: SetLog[] }[]
+  sprint?: SprintEffort[]
 }
 
 const LOGS_KEY = 'gr-workout-logs-v1'
@@ -52,7 +57,7 @@ export function useWorkout() {
 
   function bestCharge(exId: string): number {
     const h = logs.value[exId] || []
-    const all = h.flatMap(s => s.sets.map(x => x.w))
+    const all = h.flatMap(s => working(s.sets).map(x => x.w))
     return all.length ? Math.max(...all) : 0
   }
 
@@ -60,6 +65,7 @@ export function useWorkout() {
     entries: { exId: string; sets: SetLog[] }[],
     durationMin?: number,
     meta?: { sessionId: string | null; name: string },
+    sprint?: SprintEffort[],
   ) {
     const now = new Date()
     const at = localDateTime(now) // heure locale
@@ -68,7 +74,8 @@ export function useWorkout() {
     for (const { exId, sets } of entries) {
       if (!sets.length) continue
       const prevBest = bestCharge(exId)
-      const newBest = Math.max(...sets.map(s => s.w))
+      const work = working(sets)
+      const newBest = work.length ? Math.max(...work.map(s => s.w)) : 0
       if (prevBest > 0 && newBest > prevBest) {
         const ex = ALL_EXERCISES.find(e => e.id === exId)
         prs.push(ex ? ex.name : exId)
@@ -80,13 +87,15 @@ export function useWorkout() {
 
     // Enregistrement niveau séance (mémorise tout : ordre, date, heure)
     const recorded = entries.filter(e => e.sets.length)
-    if (recorded.length) {
+    const sprintClean = (sprint ?? []).filter(s => s.duration.trim() || s.intensity.trim())
+    if (recorded.length || sprintClean.length) {
       sessionHistory.value.push({
         at,
         sessionId: meta?.sessionId ?? null,
         name: meta?.name ?? 'Séance',
         durationMin,
         entries: recorded.map(e => ({ exId: e.exId, sets: e.sets })),
+        ...(sprintClean.length ? { sprint: sprintClean } : {}),
       })
       persistSessions()
     }
@@ -96,12 +105,58 @@ export function useWorkout() {
   function progressionHint(ex: Exercise): string | null {
     const last = lastPerf(ex.id)
     const top = topOfRange(ex.reps)
-    if (!last || !top || last.sets.length < ex.sets) return null
-    const allAtTop = last.sets.every(s => s.r >= top)
-    if (!allAtTop) return null
+    const work = last ? working(last.sets) : []
+    if (!last || !top || work.length < ex.sets) return null
+    if (!work.every(s => s.r >= top)) return null
     const inc = suggestedIncrement(ex)
-    const maxW = Math.max(...last.sets.map(s => s.w))
+    const maxW = Math.max(...work.map(s => s.w))
     return `Objectif atteint la dernière fois → passe à ${maxW + inc} kg`
+  }
+
+  // ─── Surcharge progressive ─────────────────────────────────────────────
+  // Charge max d'une séance (séries de travail uniquement, hors échauffement)
+  function topWeightOf(s: SessionLog): number {
+    const w = working(s.sets)
+    return w.length ? Math.max(...w.map(x => x.w)) : 0
+  }
+  // Nb de séances récentes consécutives à la même charge max (stagnation)
+  function sameWeightStreak(exId: string): number {
+    const h = logs.value[exId] || []
+    if (!h.length) return 0
+    const w = topWeightOf(h[h.length - 1])
+    if (!w) return 0
+    let n = 0
+    for (let i = h.length - 1; i >= 0; i--) {
+      if (topWeightOf(h[i]) === w) n++
+      else break
+    }
+    return n
+  }
+  // À partir de combien de séances identiques on force la montée de charge
+  const STALL_SESSIONS = 3
+
+  // Charge conseillée pour la prochaine séance de cet exercice
+  function suggestWeight(ex: Exercise): {
+    weight: number; base: number; inc: number; streak: number
+    reason: 'progress' | 'stall' | 'keep' | 'none'
+  } {
+    const last = lastPerf(ex.id)
+    const work = last ? working(last.sets) : []
+    if (!work.length) return { weight: 0, base: 0, inc: 0, streak: 0, reason: 'none' }
+    const base = topWeightOf(last!)
+    const inc = suggestedIncrement(ex)
+    const top = topOfRange(ex.reps)
+    const streak = sameWeightStreak(ex.id)
+    // 1) objectif de reps atteint la dernière fois → on monte
+    if (top && work.length >= ex.sets && work.every(s => s.r >= top)) {
+      return { weight: base + inc, base, inc, streak, reason: 'progress' }
+    }
+    // 2) même charge depuis STALL_SESSIONS séances → on force la montée
+    if (streak >= STALL_SESSIONS) {
+      return { weight: base + inc, base, inc, streak, reason: 'stall' }
+    }
+    // 3) sinon on garde la charge
+    return { weight: base, base, inc, streak, reason: 'keep' }
   }
 
   function e1rm(sets: SetLog[]): number {
@@ -109,12 +164,15 @@ export function useWorkout() {
   }
 
   function chartData(exId: string) {
-    return (logs.value[exId] || []).map(sess => ({
-      date: sess.date.slice(5),
-      charge: Math.max(...sess.sets.map(s => s.w)),
-      volume: sess.sets.reduce((a, s) => a + s.w * s.r, 0),
-      e1rm: e1rm(sess.sets),
-    }))
+    return (logs.value[exId] || []).map(sess => {
+      const w = working(sess.sets)
+      return {
+        date: sess.date.slice(5),
+        charge: w.length ? Math.max(...w.map(s => s.w)) : 0,
+        volume: w.reduce((a, s) => a + s.w * s.r, 0),
+        e1rm: w.length ? e1rm(w) : 0,
+      }
+    }).filter(d => d.charge > 0)
   }
 
   // Historique groupé par jour (charges à plat) — conservé pour compat
@@ -182,7 +240,7 @@ export function useWorkout() {
 
   return {
     logs, bodyWeight, sessionHistory,
-    lastPerf, bestCharge, recordSession, progressionHint, chartData, history, sessionLog,
+    lastPerf, bestCharge, recordSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     addBodyWeight, exportJSON, importJSON,
   }
 }
