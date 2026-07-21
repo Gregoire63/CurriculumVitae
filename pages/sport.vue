@@ -79,6 +79,8 @@ const sessionStart = ref(0)
 const plateOpen = ref(false)
 const ormOpen = ref(false)
 const showSwitch = ref(false)
+const sprintMode = ref<'exterieur' | 'tapis'>('exterieur')
+const sprintOpen = ref(false)
 
 const titles: Record<View, string> = {
   home: 'Mes séances', session: '', progress: 'Progression',
@@ -389,9 +391,50 @@ onMounted(() => {
             <div v-if="lastLabel(e.id)" class="muted last-perf">{{ lastLabel(e.id) }}</div>
           </div>
         </div>
-        <div v-if="activeSession.sprint" class="card sprint-card">
-          <div class="sprint-title">⚡ {{ activeSession.sprint.title }}</div>
-          <div class="sprint-detail">{{ activeSession.sprint.detail }}</div>
+        <div v-if="activeSession.sprint" class="card no-pad exercise sprint-exercise">
+          <button class="exhead" @click="sprintOpen = !sprintOpen">
+            <div>
+              <div class="ex-name">⚡ {{ activeSession.sprint.title }}</div>
+              <div class="muted mt-2">Optionnel · {{ activeSession.sprint.protocol[0].value }} × {{ activeSession.sprint.protocol[1].value }}</div>
+            </div>
+            <div class="set-counter mono chevron">{{ sprintOpen ? '▲' : '▼' }}</div>
+          </button>
+          <div v-if="sprintOpen" class="ex-body sprint-body">
+          <div class="sprint-head">
+            <div class="sprint-goal">{{ activeSession.sprint.goal }}</div>
+          </div>
+
+          <div class="sprint-protocol">
+            <div v-for="p in activeSession.sprint.protocol" :key="p.label" class="sp-stat">
+              <div class="sp-val mono">{{ p.value }}</div>
+              <div class="sp-lab">{{ p.label }}</div>
+            </div>
+          </div>
+
+          <div class="sprint-block">
+            <div class="sprint-block-title">🔥 Échauffement</div>
+            <ul class="sprint-list"><li v-for="(w, i) in activeSession.sprint.warmup" :key="i">{{ w }}</li></ul>
+          </div>
+
+          <div class="sprint-block">
+            <div class="sprint-block-title">Où cours-tu ?</div>
+            <div class="sprint-toggle">
+              <button :class="{ active: sprintMode === 'exterieur' }" @click="sprintMode = 'exterieur'">🏟️ Extérieur / piste</button>
+              <button :class="{ active: sprintMode === 'tapis' }" @click="sprintMode = 'tapis'">🏃 Tapis</button>
+            </div>
+            <ul class="sprint-list">
+              <li v-for="(s, i) in (sprintMode === 'exterieur' ? activeSession.sprint.exterieur : activeSession.sprint.tapis)" :key="i">{{ s }}</li>
+            </ul>
+            <div v-if="sprintMode === 'tapis'" class="sprint-note">⚠️ {{ activeSession.sprint.tapisNote }}</div>
+          </div>
+
+          <div class="sprint-block">
+            <div class="sprint-block-title">Technique</div>
+            <ul class="sprint-list"><li v-for="(c, i) in activeSession.sprint.cues" :key="i">{{ c }}</li></ul>
+          </div>
+
+          <div class="sprint-cooldown">🧊 Retour au calme — {{ activeSession.sprint.cooldown }}</div>
+          </div>
         </div>
         <button class="btn-primary finish" @click="finishSession">Terminer et enregistrer la séance</button>
       </div>
@@ -723,9 +766,25 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .add-set { align-self: flex-start; background: none; border: 1px dashed var(--accent-secondary); color: var(--accent-primary); border-radius: 9px; padding: 8px 14px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .add-set:hover { background: var(--bg-secondary); border-style: solid; }
 .last-perf { padding-top: 2px; }
-.sprint-card { border-left: 4px solid #b5502f; }
-.sprint-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; color: #b5502f; }
-.sprint-detail { font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.6; }
+.sprint-exercise { border-left: 4px solid #b5502f; }
+.sprint-exercise .ex-name { color: #b5502f; }
+.sprint-body { gap: 14px; padding-top: 4px; }
+.chevron { font-size: 13px; color: var(--text-muted); }
+.sprint-head { display: flex; flex-direction: column; gap: 5px; }
+.sprint-goal { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.sprint-protocol { display: grid; grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); gap: 8px; }
+.sp-stat { background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 10px; padding: 9px 11px; }
+.sp-val { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+.sp-lab { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 3px; }
+.sprint-block { display: flex; flex-direction: column; gap: 8px; }
+.sprint-block-title { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #b5502f; font-weight: 700; }
+.sprint-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.sprint-list li { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.sprint-toggle { display: flex; gap: 6px; }
+.sprint-toggle button { flex: 1; background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-secondary); border-radius: 9px; padding: 9px 8px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.sprint-toggle button.active { background: #b5502f; border-color: #b5502f; color: #fff; }
+.sprint-note { font-size: 12px; color: #a5451f; background: #f6ece1; border: 1px solid #e6c3b0; border-radius: 8px; padding: 9px 11px; line-height: 1.5; }
+.sprint-cooldown { font-size: 13px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 10px; padding: 11px 12px; line-height: 1.5; }
 .finish { padding: 14px; font-size: 15px; }
 
 /* Progression — cartes par séance */

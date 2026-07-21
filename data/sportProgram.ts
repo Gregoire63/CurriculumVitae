@@ -12,13 +12,64 @@ export interface Exercise {
   machine: string
 }
 
+// Plan de sprint détaillé, avec variante extérieur (piste) et tapis
+export interface SprintPlan {
+  title: string
+  goal: string
+  warmup: string[]
+  protocol: { label: string; value: string }[]
+  exterieur: string[]
+  tapis: string[]
+  tapisNote: string
+  cues: string[]
+  cooldown: string
+}
+
 export interface Session {
   id: string
   name: string
   tag: string
   color: string
-  sprint: { title: string; detail: string } | null
+  sprint: SprintPlan | null
   exercises: Exercise[]
+}
+
+// Séance de sprint partagée par les jours « + Sprint » (mardi & vendredi)
+export const SPRINT: SprintPlan = {
+  title: 'Sprints — fin de séance',
+  goal: 'Développer puissance et explosivité sans casser la récup des jambes. On reste à ~90 %, jamais à fond : la qualité prime sur la quantité.',
+  warmup: [
+    '5 min footing léger pour monter la température',
+    'Mobilité : montées de genoux, talons-fesses, pas chassés (2 × 20 m)',
+    '3 accélérations progressives sur 60 m : 60 %, puis 70 %, puis 80 %',
+  ],
+  protocol: [
+    { label: 'Séries', value: '5 à 6' },
+    { label: 'Effort', value: '60–80 m (≈ 10–15 s)' },
+    { label: 'Intensité', value: '85–90 % — pas 100 %' },
+    { label: 'Récup', value: '2 min de marche complète' },
+  ],
+  exterieur: [
+    'Surface souple de préférence : piste synthétique, herbe sèche. Évite le bitume dur.',
+    'Départ debout, accélération progressive sur les 20 premiers mètres.',
+    'Tiens la vitesse max sur 30–40 m, sans crisper.',
+    'Décélère en douceur sur 15–20 m — ne t\'arrête jamais net.',
+  ],
+  tapis: [
+    'Règle la vitesse AVANT de lancer l\'effort : sur tapis on sprinte à vitesse fixe.',
+    'Vitesse cible ≈ 15–18 km/h (commence plus bas et monte semaine après semaine).',
+    'Inclinaison 1–2 % pour se rapprocher des conditions extérieures.',
+    'Attache la pince d\'arrêt d\'urgence à toi — obligatoire.',
+    'Pieds sur les rails latéraux, lance le tapis, attends la vitesse, puis pose-toi sur la bande (mains aux barres au départ si besoin).',
+    'Sprinte 10–15 s, puis repose les pieds sur les rails (laisse le tapis tourner) pour la récup.',
+  ],
+  tapisNote: 'Sur tapis, raisonne en TEMPS (10–15 s) plutôt qu\'en distance, et ne descends jamais du tapis à pleine vitesse.',
+  cues: [
+    'Grandis-toi, buste très légèrement en avant.',
+    'Bras actifs qui rythment la foulée, mains et épaules relâchées.',
+    'Appuis sur l\'avant du pied, fréquence élevée plutôt que grandes enjambées.',
+  ],
+  cooldown: '5 min de marche + étirements légers ischios/mollets. Idéalement un week-end de récup derrière.',
 }
 
 export const PROGRAM: Session[] = [
@@ -43,7 +94,7 @@ export const PROGRAM: Session[] = [
     name: 'Dos · Épaules',
     tag: 'Mardi + Sprint',
     color: '#5f7a6b',
-    sprint: { title: 'Sprint fin de séance', detail: 'Échauffement : 3 accélérations progressives 60-70-80 %. Puis 5-6 × 60-80 m à 85-90 %, récup 2 min marchée.' },
+    sprint: SPRINT,
     exercises: [
       { id: 'tirage-v', name: 'Tirage vertical', sets: 4, reps: '8-10', muscles: ['dos', 'biceps'], cues: ['Prise légèrement plus large que les épaules', 'Tire vers le haut des pecs, coudes vers le bas', 'Ne te balance pas en arrière'], machine: 'Ou tractions lestées si tu les maîtrises' },
       { id: 'rowing-m', name: 'Rowing machine', sets: 4, reps: '8-10', muscles: ['dos', 'biceps'], cues: ['Poitrine collée au support', 'Tire les coudes en arrière, serre les omoplates', 'Pause 1 sec en contraction'], machine: 'Machine rowing assis prise neutre' },
@@ -71,7 +122,7 @@ export const PROGRAM: Session[] = [
     name: 'Pec · Bras B',
     tag: 'Vendredi + Sprint',
     color: '#9a6a4f',
-    sprint: { title: 'Sprint fin de séance', detail: 'Échauffement : 3 accélérations progressives 60-70-80 %. Puis 5-6 × 60-80 m à 85-90 %, récup 2 min marchée. Week-end de récup derrière.' },
+    sprint: SPRINT,
     exercises: [
       { id: 'dev-halteres', name: 'Développé couché haltères', sets: 4, reps: '8-10', muscles: ['pecs', 'epaules-av', 'triceps'], cues: ["Amplitude plus grande qu'à la barre", "Descends jusqu'à l'étirement", 'Trajectoire en léger arc de cercle'], machine: 'Variante du lundi — angle différent' },
       { id: 'ecartes', name: 'Écartés à la poulie', sets: 3, reps: '12-15', muscles: ['pecs'], cues: ['Léger arrondi des coudes, fixe', 'Croise légèrement les mains devant', 'Tension continue, pas de repos en haut'], machine: 'Ou pec deck — cherche la congestion' },
