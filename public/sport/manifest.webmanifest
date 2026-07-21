@@ -1,0 +1,16 @@
+{
+  "name": "Suivi Séances — On Air",
+  "short_name": "Séances",
+  "description": "Suivi d'entraînement recomp : séances, charges, progression, poids de corps.",
+  "start_url": "/sport",
+  "scope": "/sport",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fefcf8",
+  "theme_color": "#fefcf8",
+  "lang": "fr",
+  "icons": [
+    { "src": "/sport/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/sport/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
