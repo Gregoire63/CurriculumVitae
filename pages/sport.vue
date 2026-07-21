@@ -71,7 +71,8 @@ type View = 'home' | 'session' | 'progress' | 'history' | 'rapport' | 'profil'
 const view = ref<View>('home')
 const activeSession = ref<Session | null>(null)
 const openEx = ref<string | null>(null)
-const progressSession = ref<string | null>(null)
+// Progrès : première séance sélectionnée par défaut
+const progressSession = ref<string | null>(PROGRAM[0]?.id ?? null)
 const flash = ref('')
 const draft = reactive<Record<string, { w: string; r: string; done: boolean }[]>>({})
 const sessionStart = ref(0)
@@ -367,7 +368,7 @@ onMounted(() => {
             <div class="set-counter mono" :class="{ complete: draft[e.id] && doneCount(e.id) === draft[e.id].length }">{{ doneCount(e.id) }}/{{ draft[e.id]?.length ?? e.sets }}</div>
           </button>
           <div v-if="openEx === e.id" class="ex-body">
-            <SportMuscleMap :muscles="e.muscles" />
+            <SportExerciseMove :ex-id="e.id"><SportMuscleMap :muscles="e.muscles" /></SportExerciseMove>
             <div v-if="progressionHint(e)" class="hint-pill progress">📈 {{ progressionHint(e) }}</div>
             <div v-if="warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
             <div class="cues">
@@ -729,8 +730,17 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 
 /* Progression — cartes par séance */
 .prog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.prog-card { padding: 13px 14px; gap: 8px; }
-.prog-card.active { border-color: var(--c); box-shadow: 0 10px 24px rgba(139, 111, 92, 0.16); }
+.prog-card { padding: 13px 14px; gap: 8px; transition: transform 0.18s var(--ease-bounce), box-shadow 0.2s, border-color 0.2s, background 0.2s; }
+.prog-card:not(.active) { opacity: 0.72; }
+.prog-card:hover { opacity: 1; }
+.prog-card.active {
+  border-color: var(--c);
+  background: color-mix(in srgb, var(--c) 10%, var(--bg-primary));
+  box-shadow: 0 14px 30px rgba(139, 111, 92, 0.22);
+  transform: translateY(-3px);
+}
+.prog-card.active .sc-name { color: var(--c); }
+.prog-card.active .sc-day { color: var(--accent-strong); }
 .prog-card .sc-name { font-size: 17px; }
 .prog-ex-list { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .prog-ex { display: flex; flex-direction: column; gap: 10px; }
