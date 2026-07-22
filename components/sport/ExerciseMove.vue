@@ -1,24 +1,25 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { hasExerciseImages } from '~/data/exerciseImages'
+import { hasExerciseImages, exerciseImageLabels } from '~/data/exerciseImages'
 
-// Affiche les 2 positions (départ / fin) d'un exercice.
+// Affiche 2 images : positions départ/fin d'un exercice, ou les 2 mouvements d'un superset.
 // Si les images sont absentes (non téléchargées), on rend le contenu du slot (schéma musculaire).
 const props = defineProps<{ exId: string }>()
 const failed = ref(false)
 const has = computed(() => hasExerciseImages(props.exId))
+const labels = computed(() => exerciseImageLabels(props.exId))
 const base = computed(() => `/sport/exercises/${props.exId}`)
 </script>
 
 <template>
   <div v-if="has && !failed" class="exmove">
     <figure class="exmove-fig">
-      <img :src="`${base}-1.jpg`" alt="Position de départ" loading="lazy" @error="failed = true">
-      <figcaption><span class="exmove-dot start"></span>Départ</figcaption>
+      <img :src="`${base}-1.jpg`" :alt="labels[0]" loading="lazy" @error="failed = true">
+      <figcaption><span class="exmove-dot start"></span>{{ labels[0] }}</figcaption>
     </figure>
     <figure class="exmove-fig">
-      <img :src="`${base}-2.jpg`" alt="Position de fin" loading="lazy" @error="failed = true">
-      <figcaption><span class="exmove-dot end"></span>Fin</figcaption>
+      <img :src="`${base}-2.jpg`" :alt="labels[1]" loading="lazy" @error="failed = true">
+      <figcaption><span class="exmove-dot end"></span>{{ labels[1] }}</figcaption>
     </figure>
   </div>
   <slot v-else />

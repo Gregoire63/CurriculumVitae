@@ -47,7 +47,7 @@ function sessionMuscles(s: Session): string[] {
 }
 
 // ─────────── Semaine (planning adaptatif) ───────────
-const SHORT: Record<string, string> = { s1: 'Pec/Bras', s2: 'Dos/Ép.', s3: 'Jambes', s4: 'Pec/Bras' }
+const SHORT: Record<string, string> = { s1: 'Push', s2: 'Dos/Bic', s3: 'Jambes', s4: 'Bras' }
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const sessionById = (id: string | null) => (id ? PROGRAM.find(p => p.id === id) || null : null)
 const weekDays = computed(() => weekPlan.value.map((sid, i) => {
@@ -134,18 +134,24 @@ function startSession(s: Session) {
   activeSession.value = s
   showSwitch.value = false
   for (const k of Object.keys(draft)) delete draft[k]
+  const bw = latestWeight.value ?? 0 // poids de corps (profil) pour les exos au poids du corps
   for (const e of s.exercises) {
     const last = lastPerf(e.id)
     const lastWork = last ? last.sets.filter(x => !x.warm) : [] // on ignore l'échauffement des dernières données
     const sug = suggestWeight(e)
-    const bumped = sug.reason === 'progress' || sug.reason === 'stall'
-    // On reprend la charge de CHAQUE série de la dernière fois (garde un éventuel pyramidal),
-    // et si on force la montée on ajoute l'incrément à chaque série.
+    // Pas de montée auto forcée sur les exos au poids du corps (là on progresse surtout aux reps)
+    const bumped = !e.bodyweight && (sug.reason === 'progress' || sug.reason === 'stall')
     draft[e.id] = Array.from({ length: e.sets }, (_, i) => {
       const prev = lastWork[i]?.w
       let w = ''
-      if (prev != null) w = String(bumped ? prev + sug.inc : prev)
-      else if (bumped && sug.weight) w = String(sug.weight)
+      if (e.bodyweight) {
+        // charge = poids de corps (+ lest) : total de la dernière fois, sinon le poids du profil
+        w = prev != null ? String(prev) : (bw ? String(bw) : '')
+      } else if (prev != null) {
+        w = String(bumped ? prev + sug.inc : prev) // garde le pyramidal, +incrément par série si montée
+      } else if (bumped && sug.weight) {
+        w = String(sug.weight)
+      }
       return { w, r: '', done: false, warm: false }
     })
   }
@@ -204,6 +210,7 @@ function finishSession() {
 function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}`).join(' · ')}` : null }
 // Conseil de surcharge progressive (monte la charge quand on progresse ou qu'on stagne)
 function overloadHint(ex: Exercise): { cls: string; text: string } | null {
+  if (ex.bodyweight) return null // au poids du corps on progresse aux reps, pas de montée forcée
   const s = suggestWeight(ex)
   if (s.reason === 'progress') return { cls: 'progress', text: `🎯 Objectif de reps atteint → +${s.inc} kg par série (jusqu'à ${s.weight} kg)` }
   if (s.reason === 'stall') return { cls: 'stall', text: `⏫ Bloqué ${s.streak} séances à ${s.base} kg — on force +${s.inc} kg par série` }
@@ -436,8 +443,9 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
           </button>
           <div v-if="openEx === e.id" class="ex-body">
             <SportExerciseMove :ex-id="e.id"><SportMuscleMap :muscles="e.muscles" /></SportExerciseMove>
+            <div v-if="e.bodyweight" class="hint-pill bw">🧍 Charge = ton poids de corps<template v-if="latestWeight"> ({{ latestWeight }} kg)</template> + lest. Préremplie — ajuste si tu ajoutes du poids.</div>
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
-            <div v-if="warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
+            <div v-if="!e.bodyweight && warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
               <div class="muted italic mt-6">{{ e.machine }}</div>
@@ -843,6 +851,7 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 .hint-pill.progress { background: #e7f0e2; border: 1px solid #bcd8ae; color: #3f7a4f; }
 .hint-pill.stall { background: #f6ece1; border: 1px solid #e6c3b0; color: #b5502f; font-weight: 600; }
 .hint-pill.warmup { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
+.hint-pill.bw { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
 .cues { display: flex; flex-direction: column; gap: 3px; }
 .cue { display: flex; gap: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 .cue-arrow { color: var(--c, var(--accent-primary)); font-weight: 700; }

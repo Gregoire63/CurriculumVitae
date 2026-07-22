@@ -40,6 +40,7 @@ async function grab(slug, n) {
 }
 
 let ok = 0, fail = 0
+// Exos simples : 2 frames (départ/fin) du même mouvement
 for (const [exId, slug] of Object.entries(SLUGS)) {
   try {
     const [a, b] = await Promise.all([grab(slug, 0), grab(slug, 1)])
@@ -49,6 +50,21 @@ for (const [exId, slug] of Object.entries(SLUGS)) {
     ok++
   } catch (e) {
     console.warn(`✗ ${exId}  (${slug}) — ${e.message}`)
+    fail++
+  }
+}
+// Supersets : 1 image de travail par mouvement
+const pairRe = /'([\w-]+)':\s*\[\s*\{\s*slug:\s*'([^']+)'[^}]*\},\s*\{\s*slug:\s*'([^']+)'/g
+for (const m of mapSrc.matchAll(pairRe)) {
+  const [, exId, slugA, slugB] = m
+  try {
+    const [a, b] = await Promise.all([grab(slugA, 0), grab(slugB, 0)])
+    writeFileSync(join(outDir, `${exId}-1.jpg`), a)
+    writeFileSync(join(outDir, `${exId}-2.jpg`), b)
+    console.log(`✓ ${exId}  (superset : ${slugA} + ${slugB})`)
+    ok++
+  } catch (e) {
+    console.warn(`✗ ${exId}  — ${e.message}`)
     fail++
   }
 }
