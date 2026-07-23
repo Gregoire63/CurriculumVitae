@@ -84,7 +84,7 @@ const heroParallax = computed(() => {
                 <div class="geometric-shape shape-1"></div>
                 <div class="geometric-shape shape-2"></div>
             </div>
-            <PortfolioServices />
+            <LazyPortfolioServices hydrate-on-visible />
         </section>
 
         <!-- Case Studies Section -->
@@ -92,29 +92,29 @@ const heroParallax = computed(() => {
             <div class="section-background light">
                 <div class="grid-pattern"></div>
             </div>
-            <PortfolioCaseStudies />
+            <LazyPortfolioCaseStudies hydrate-on-visible />
         </section>
 
         <!-- Other Projects Section (compact) -->
         <section id="projects" ref="projectsSection" class="section projects-compact-section">
-            <PortfolioOtherProjects />
+            <LazyPortfolioOtherProjects hydrate-on-visible />
         </section>
 
         <!-- Parcours / Expérience professionnelle -->
         <section id="cv" ref="cvSection" class="section cv-section">
-            <PortfolioCv />
+            <LazyPortfolioCv hydrate-on-visible />
         </section>
 
         <!-- Formation (secondaire) -->
         <section id="about" ref="aboutSection" class="section about-section">
-            <PortfolioAbout />
+            <LazyPortfolioAbout hydrate-on-visible />
         </section>
         <!-- Skills Section -->
         <section id="skills" ref="skillsSection" class="section skills-section">
             <div class="section-background dark">
                 <div class="noise-overlay"></div>
             </div>
-            <PortfolioSkills />
+            <LazyPortfolioSkills hydrate-on-visible />
         </section>
 
         <!-- Contact Section -->
@@ -123,24 +123,24 @@ const heroParallax = computed(() => {
                 <div class="gradient-orb orb-1"></div>
                 <div class="gradient-orb orb-2"></div>
             </div>
-            <PortfolioContact />
+            <LazyPortfolioContact hydrate-on-visible />
         </section>
 
         </main>
 
-        <PortfolioPrivacyPolicy />
+        <LazyPortfolioPrivacyPolicy :hydrate-when="store.isPrivacyPolicyOpen" />
 
         <!-- Menu Modal -->
-        <PortfolioMenu />
+        <LazyPortfolioMenu :hydrate-when="store.isMenuOpen" />
 
         <!-- Project Modal (popup au clic sur un projet) -->
-        <PortfolioProjectModal />
+        <LazyPortfolioProjectModal :hydrate-when="store.activeProject !== null" />
 
         <!-- Scroll Progress -->
         <div class="scroll-progress">
             <div class="scroll-progress-bar" :style="{ width: `${store.scrollProgress}%` }"></div>
         </div>
-        <PortfolioFooter />
+        <LazyPortfolioFooter hydrate-on-visible />
     </div>
 </template>
 

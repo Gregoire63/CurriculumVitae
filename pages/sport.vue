@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
+import { PROGRAM } from '~/data/sportProgram'
 import type { Session, Exercise } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
+import '~/assets/css/sport.css'
 
 useHead({
   title: 'Suivi Séances — Grégoire Raturat',
@@ -25,12 +26,11 @@ useHead({
 })
 
 const {
-  logs, bodyWeight, lastPerf, bestCharge, recordSession, updateSession, progressionHint, suggestWeight,
-  chartData, sessionLog, addBodyWeight, exportJSON, importJSON,
+  bodyWeight, lastPerf, recordSession, updateSession, suggestWeight, sessionLog,
 } = useWorkout()
 const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
 const restFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-const { profile, weekPlan, hydrate: hydrateProfile, setHeight, setSex, setBirthYear, setDay, resetPlan, restore: restoreProfile } = useProfile()
+const { weekPlan, hydrate: hydrateProfile, setDay } = useProfile()
 
 // ─────────── Muscles ───────────
 const MUSCLE_LABELS: Record<string, string> = {
@@ -80,9 +80,13 @@ type View = 'home' | 'session' | 'progress' | 'history' | 'rapport' | 'profil'
 const view = ref<View>('home')
 const activeSession = ref<Session | null>(null)
 const openEx = ref<string | null>(null)
-// Progrès : première séance sélectionnée par défaut
-const progressSession = ref<string | null>(PROGRAM[0]?.id ?? null)
 const flash = ref('')
+// Écran de chargement : masque le « gel » d'hydratation au démarrage.
+// Rendu côté serveur (visible dès le 1er paint), il tourne pendant l'hydratation
+// (animation CSS sur le compositeur, donc insensible au blocage du thread JS)
+// puis disparaît dès que l'app est interactive (onMounted, après hydratation).
+const booting = ref(true)
+const splashGone = ref(false)
 const draft = reactive<Record<string, { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }[]>>({})
 const sessionStart = ref(0)
 const plateOpen = ref(false)
@@ -213,7 +217,6 @@ function editSession(rec: SessionRecord) {
     ? rec.sprint.map(sp => ({ kind: sp.kind, count: String(sp.count), duration: sp.duration, intensity: sp.intensity }))
     : (s.sprint ? newSprintRows() : [])
   sessionStart.value = Date.now() - (rec.durationMin ?? 0) * 60000
-  sheetRecord.value = null
   view.value = 'session'
 }
 // On ne compte que les séries de travail (l'échauffement ne compte pas)
@@ -296,156 +299,19 @@ function isDumbbell(ex: Exercise): boolean {
   return !ex.superset && /haltère/i.test(ex.name)
 }
 
-// ─────────── Progression (par séance) ───────────
-const progressSessionObj = computed(() => (progressSession.value ? PROGRAM.find(p => p.id === progressSession.value) ?? null : null))
-function exStats(exId: string) {
-  const d = chartData(exId)
-  if (!d.length) return null
-  return { max: d[d.length - 1].charge, gain: d[d.length - 1].charge - d[0].charge, e1rm: d[d.length - 1].e1rm, data: d }
-}
-const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).map(e => ({ e, stats: exStats(e.id) })))
-// Noms des exercices retirés du programme (pour garder l'historique lisible)
-const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères' }
-const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RETIRED_NAMES[id] ?? id
-
-// ─────────── Poids & IMC ───────────
-const bwData = computed(() => bodyWeight.value.map(e => ({ date: e.date.slice(5), kg: e.kg })))
+// latestWeight : encore utilisé par l'accueil (préremplissage poids de corps) et la séance
 const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
-const bwTrend = computed(() => { const d = bodyWeight.value; return d.length >= 2 ? +(d[d.length - 1].kg - d[0].kg).toFixed(1) : 0 })
-const bmi = computed(() => { const h = profile.value.heightCm, w = latestWeight.value; return h && w ? +(w / ((h / 100) ** 2)).toFixed(1) : null })
-const bmiCat = computed(() => {
-  const b = bmi.value
-  if (b === null) return null
-  if (b < 18.5) return { label: 'Maigreur', color: '#4a6fa5' }
-  if (b < 25) return { label: 'Corpulence normale', color: '#3f7a4f' }
-  if (b < 30) return { label: 'Surpoids', color: '#a97b1e' }
-  return { label: 'Obésité', color: '#b5502f' }
-})
-const age = computed(() => { const y = profile.value.birthYear; return y && todayISO.value ? parseInt(todayISO.value.slice(0, 4), 10) - y : null })
-const bmr = computed(() => {
-  const w = latestWeight.value, h = profile.value.heightCm, a = age.value, s = profile.value.sex
-  if (!w || !h || !a || !s) return null
-  const base = 10 * w + 6.25 * h - 5 * a
-  return Math.round(s === 'h' ? base + 5 : base - 161)
-})
-const maintenance = computed(() => (bmr.value ? Math.round(bmr.value * 1.55) : null))
-
-// ─────────── Rapport ───────────
-const sessions = computed(() => sessionLog())
-const totalSessions = computed(() => sessions.value.length)
 const p2 = (n: number) => String(n).padStart(2, '0')
 
-// ─────────── Journal : calendrier + feuille de séance ───────────
-const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-const calMonth = ref<{ y: number; m: number }>({ y: 2024, m: 0 }) // (ré)initialisé onMounted
-const selectedDay = ref<string | null>(null)
-const sheetRecord = ref<SessionRecord | null>(null)
-const sessionsByDay = computed(() => {
-  const m: Record<string, SessionRecord[]> = {}
-  for (const s of sessions.value) { const d = s.at.slice(0, 10); (m[d] ||= []).push(s) }
-  return m
-})
-const calCells = computed(() => {
-  const { y, m } = calMonth.value
-  const lead = (new Date(y, m, 1).getDay() + 6) % 7 // lundi = 0
-  const days = new Date(y, m + 1, 0).getDate()
-  const cells: { iso: string | null; day: number; sessions: SessionRecord[] }[] = []
-  for (let i = 0; i < lead; i++) cells.push({ iso: null, day: 0, sessions: [] })
-  for (let d = 1; d <= days; d++) {
-    const iso = `${y}-${p2(m + 1)}-${p2(d)}`
-    cells.push({ iso, day: d, sessions: sessionsByDay.value[iso] || [] })
-  }
-  return cells
-})
-const monthLabel = computed(() => `${MONTHS[calMonth.value.m]} ${calMonth.value.y}`)
-const recColor = (rec: SessionRecord) => sessionById(rec.sessionId)?.color || '#8b6f5c'
-const selectedSessions = computed(() => (selectedDay.value ? sessionsByDay.value[selectedDay.value] || [] : []))
-const fmtDayLong = (iso: string) => {
-  const d = new Date(iso + 'T00:00:00')
-  return `${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`
-}
-function calShift(delta: number) {
-  let m = calMonth.value.m + delta
-  let y = calMonth.value.y
-  if (m < 0) { m = 11; y-- } else if (m > 11) { m = 0; y++ }
-  calMonth.value = { y, m }
-}
-function pickDay(iso: string | null, sess: SessionRecord[]) {
-  if (!iso || !sess.length) return
-  selectedDay.value = iso
-  if (sess.length === 1) sheetRecord.value = sess[0]
-}
-const startOfWeekISO = computed(() => {
-  if (!todayISO.value || todayDow.value === null) return null
-  const d = new Date(todayISO.value + 'T00:00:00')
-  d.setDate(d.getDate() - ((todayDow.value + 6) % 7))
-  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
-})
-const sessionsThisWeek = computed(() => (startOfWeekISO.value ? sessions.value.filter(s => s.at.slice(0, 10) >= startOfWeekISO.value!).length : 0))
-const avgDuration = computed(() => {
-  const ds = sessions.value.map(s => s.durationMin).filter((x): x is number => !!x)
-  return ds.length ? Math.round(ds.reduce((a, b) => a + b, 0) / ds.length) : 0
-})
-const totalVolume = computed(() => {
-  let v = 0
-  for (const ss of Object.values(logs.value)) for (const s of ss) for (const set of s.sets) if (!set.warm) v += set.w * set.r + (set.w2 && set.r2 ? set.w2 * set.r2 : 0)
-  return v
-})
-const volumeThisWeek = computed(() => {
-  if (!startOfWeekISO.value) return 0
-  let v = 0
-  for (const ss of Object.values(logs.value)) for (const s of ss) if (s.date >= startOfWeekISO.value!) for (const set of s.sets) if (!set.warm) v += set.w * set.r + (set.w2 && set.r2 ? set.w2 * set.r2 : 0)
-  return v
-})
-const muscleVolume = computed(() => {
-  const m: Record<string, number> = {}
-  for (const [exId, ss] of Object.entries(logs.value)) {
-    const ex = ALL_EXERCISES.find(e => e.id === exId)
-    if (!ex) continue
-    let sets = 0
-    for (const s of ss) sets += s.sets.filter(x => !x.warm).length
-    for (const mus of ex.muscles) { const l = MUSCLE_LABELS[mus] || mus; m[l] = (m[l] || 0) + sets }
-  }
-  return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 7)
-})
-const muscleMax = computed(() => muscleVolume.value[0]?.[1] || 1)
-const RECORD_EXOS = ['dc-barre', 'dev-halteres', 'squat', 'sdt-r', 'tirage-v', 'dev-mil', 'dips']
-const records = computed(() => RECORD_EXOS.map(id => ({ name: exName(id), best: bestCharge(id) })).filter(r => r.best > 0))
-const fmtVol = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} t` : `${Math.round(v)} kg`)
-const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !== null)
-
-// ─────────── Handlers ───────────
-function onWeight(ev: Event) {
-  const kg = parseFloat((ev.target as HTMLInputElement).value)
-  if (!kg || kg < 30 || kg > 250) return
-  addBodyWeight(kg); showFlash('Poids enregistré ✓')
-}
-async function onImport(ev: Event) {
-  const file = (ev.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  try {
-    await importJSON(file, data => restoreProfile(data as { profile?: typeof profile.value; weekPlan?: typeof weekPlan.value }))
-    showFlash('Données importées ✓')
-  } catch { showFlash('Fichier invalide') }
-}
-function onHeight(ev: Event) { setHeight(parseFloat((ev.target as HTMLInputElement).value) || null) }
-function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElement).value, 10) || null) }
-
 onMounted(() => {
+  // Hydratation terminée → on retire l'écran de chargement (fondu court)
+  requestAnimationFrame(() => { booting.value = false })
+  setTimeout(() => { splashGone.value = true }, 450)
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sport-sw.js', { scope: '/sport' }).catch(() => {})
   hydrateProfile()
   const now = new Date()
   todayDow.value = now.getDay()
   todayISO.value = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
-  // Calendrier : ouvre sur le mois de la séance la plus récente (sinon mois courant)
-  const recent = sessionLog()[0]
-  if (recent) {
-    calMonth.value = { y: +recent.at.slice(0, 4), m: +recent.at.slice(5, 7) - 1 }
-    selectedDay.value = recent.at.slice(0, 10)
-  } else {
-    calMonth.value = { y: now.getFullYear(), m: now.getMonth() }
-    selectedDay.value = todayISO.value
-  }
   const desktop = window.matchMedia('(min-width: 1080px)').matches
   plateOpen.value = desktop
   ormOpen.value = desktop
@@ -467,6 +333,13 @@ onUnmounted(() => {
 
 <template>
   <div class="sport-app" :class="{ 'has-bottomnav': view !== 'session' }">
+    <!-- Écran de chargement (masque le gel d'hydratation ; l'anim tourne sur le compositeur) -->
+    <div v-if="!splashGone" class="boot-splash" :class="{ 'boot-hide': !booting }" aria-hidden="true">
+      <div class="boot-mark">GR</div>
+      <div class="boot-spinner"></div>
+      <div class="boot-label">Suivi séances</div>
+    </div>
+
     <header class="sport-header">
       <div class="header-top">
         <button class="brand" @click="go('home')">
@@ -709,202 +582,11 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- ═══════════ RAPPORT ═══════════ -->
-    <div v-if="view === 'rapport'" class="stack">
-      <div v-if="!hasData" class="card empty">Ton rapport se construit au fil des séances.<br>Renseigne ta taille/poids dans <b>Profil</b> et enregistre une séance.</div>
-      <template v-else>
-        <div class="card">
-          <div class="section-label mb-8">Corps</div>
-          <div class="stat-grid">
-            <div class="stat"><div class="stat-v mono">{{ latestWeight ?? '—' }}<span v-if="latestWeight" class="stat-u">kg</span></div><div class="stat-l">Poids actuel</div></div>
-            <div class="stat"><div class="stat-v mono" :style="bmiCat ? { color: bmiCat.color } : {}">{{ bmi ?? '—' }}</div><div class="stat-l">{{ bmiCat ? bmiCat.label : 'IMC (→ Profil)' }}</div></div>
-            <div class="stat"><div class="stat-v mono" :class="bwTrend < 0 ? 'pos' : bwTrend > 0 ? 'warn' : ''">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }}<span class="stat-u">kg</span></div><div class="stat-l">Depuis le début</div></div>
-            <div class="stat"><div class="stat-v mono">{{ maintenance ?? '—' }}<span v-if="maintenance" class="stat-u">kcal</span></div><div class="stat-l">Maintien estimé</div></div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="section-label mb-8">Activité</div>
-          <div class="stat-grid">
-            <div class="stat"><div class="stat-v mono">{{ totalSessions }}</div><div class="stat-l">Séances totales</div></div>
-            <div class="stat"><div class="stat-v mono">{{ sessionsThisWeek }}</div><div class="stat-l">Cette semaine</div></div>
-            <div class="stat"><div class="stat-v mono">{{ avgDuration }}<span class="stat-u">min</span></div><div class="stat-l">Durée moyenne</div></div>
-            <div class="stat"><div class="stat-v mono">{{ fmtVol(totalVolume) }}</div><div class="stat-l">Volume total</div></div>
-          </div>
-          <div class="muted mt-6">Volume cette semaine : <b>{{ fmtVol(volumeThisWeek) }}</b></div>
-        </div>
-        <div v-if="muscleVolume.length" class="card">
-          <div class="section-label mb-8">Répartition musculaire (séries cumulées)</div>
-          <div class="mv-list">
-            <div v-for="[label, count] in muscleVolume" :key="label" class="mv-row">
-              <span class="mv-label">{{ label }}</span>
-              <div class="mv-bar"><div class="mv-fill" :style="{ width: (count / muscleMax * 100) + '%' }"></div></div>
-              <span class="mv-count mono">{{ count }}</span>
-            </div>
-          </div>
-        </div>
-        <div v-if="records.length" class="card">
-          <div class="section-label mb-8">Records (charge max)</div>
-          <div class="rec-list">
-            <div v-for="r in records" :key="r.name" class="rec-row"><span class="rec-name">{{ r.name }}</span><span class="mono rec-val">{{ r.best }} kg</span></div>
-          </div>
-        </div>
-      </template>
-    </div>
-
-    <!-- ═══════════ PROGRESSION (cartes par séance) ═══════════ -->
-    <div v-if="view === 'progress'" class="stack">
-      <div class="section-label">Touche une séance pour voir la progression de tous ses exercices</div>
-      <div class="prog-grid">
-        <button
-          v-for="s in PROGRAM" :key="s.id"
-          class="session-card prog-card" :class="{ active: progressSession === s.id }"
-          :style="{ '--c': s.color }"
-          @click="progressSession = progressSession === s.id ? null : s.id"
-        >
-          <div class="sc-top"><span class="sc-day">{{ s.tag }}</span><span v-if="s.sprint" class="sc-sprint">⚡</span></div>
-          <div class="sc-name">{{ s.name }}</div>
-          <div class="sc-muscles"><span v-for="m in sessionMuscles(s)" :key="m" class="sc-chip">{{ m }}</span></div>
-          <div class="sc-foot">
-            <span class="sc-count mono">{{ s.exercises.length }} exos</span>
-            <span class="sc-go">{{ progressSession === s.id ? 'Masquer ▲' : 'Courbes →' }}</span>
-          </div>
-        </button>
-      </div>
-
-      <template v-if="progressSessionObj">
-        <div class="prog-ex-list">
-          <div v-for="{ e, stats } in progExStats" :key="e.id" class="card prog-ex">
-            <div class="prog-ex-head">
-              <div class="prog-ex-name">{{ e.name }}</div>
-              <div v-if="stats" class="prog-ex-kpis">
-                <span class="pk"><b class="mono">{{ stats.max }}</b> kg max</span>
-                <span class="pk" :class="{ pos: stats.gain > 0 }"><b class="mono">{{ stats.gain > 0 ? '+' : '' }}{{ stats.gain }}</b> kg évol.</span>
-                <span class="pk"><b class="mono">{{ stats.e1rm }}</b> kg 1RM</span>
-              </div>
-            </div>
-            <LazySportSvgChart v-if="stats" :data="stats.data" y-key="charge" :color="progressSessionObj.color" :height="150" />
-            <div v-else class="muted prog-empty">Pas encore de données — enregistre une séance avec cet exercice.</div>
-          </div>
-        </div>
-      </template>
-      <div v-else class="card empty">Choisis une séance ci-dessus pour afficher toutes ses courbes d'un coup.</div>
-    </div>
-
-    <!-- ═══════════ JOURNAL — CALENDRIER ═══════════ -->
-    <div v-if="view === 'history'" class="stack">
-      <div v-if="!sessions.length" class="card empty">Aucune séance enregistrée pour l'instant.<br>Tes séances apparaîtront ici dans le calendrier.</div>
-      <template v-else>
-        <div class="card cal-card">
-          <div class="cal-head">
-            <button class="cal-nav" aria-label="Mois précédent" @click="calShift(-1)">‹</button>
-            <div class="cal-month">{{ monthLabel }}</div>
-            <button class="cal-nav" aria-label="Mois suivant" @click="calShift(1)">›</button>
-          </div>
-          <div class="cal-dow-row"><span v-for="(d, i) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']" :key="i" class="cal-dow">{{ d }}</span></div>
-          <div class="cal-grid">
-            <button
-              v-for="(c, i) in calCells" :key="i"
-              class="cal-cell"
-              :class="{ empty: !c.iso, has: c.sessions.length, today: c.iso === todayISO, sel: c.iso === selectedDay }"
-              :disabled="!c.iso || !c.sessions.length"
-              @click="pickDay(c.iso, c.sessions)"
-            >
-              <span v-if="c.iso" class="cal-day">{{ c.day }}</span>
-              <span v-if="c.sessions.length" class="cal-dots">
-                <span v-for="(s, k) in c.sessions.slice(0, 3)" :key="k" class="cal-dot" :style="{ background: recColor(s) }"></span>
-              </span>
-            </button>
-          </div>
-        </div>
-
-        <div class="section-label">{{ selectedDay ? fmtDayLong(selectedDay) : 'Choisis un jour' }}</div>
-        <div v-if="selectedSessions.length" class="day-sessions">
-          <button v-for="(s, i) in selectedSessions" :key="i" class="card day-session" :style="{ '--c': recColor(s) }" @click="sheetRecord = s">
-            <div class="ds-top">
-              <span class="ds-dot"></span>
-              <span class="ds-name">{{ s.name }}</span>
-              <span class="ds-time mono">{{ s.at.slice(11, 16) }}<template v-if="s.durationMin"> · {{ s.durationMin }} min</template></span>
-            </div>
-            <div class="ds-sum muted">{{ s.entries.length }} exos<template v-if="s.sprint && s.sprint.length"> · ⚡ sprint</template> · touche pour voir / modifier</div>
-          </button>
-        </div>
-        <div v-else class="card empty small">Aucune séance ce jour. Touche un jour marqué d'un point.</div>
-      </template>
-    </div>
-
-    <!-- ═══════════ PROFIL (infos + poids + données) ═══════════ -->
-    <div v-if="view === 'profil'" class="stack">
-      <div class="card">
-        <div class="section-label mb-8">Mon profil</div>
-        <div class="form-grid">
-          <label class="field"><span>Taille (cm)</span><input type="number" inputmode="numeric" :value="profile.heightCm ?? ''" placeholder="180" @change="onHeight"></label>
-          <label class="field"><span>Poids (kg)</span><input type="number" inputmode="decimal" step="0.1" :value="latestWeight ?? ''" placeholder="75" @change="onWeight"></label>
-          <label class="field"><span>Année de naissance</span><input type="number" inputmode="numeric" :value="profile.birthYear ?? ''" placeholder="1998" @change="onYear"></label>
-          <div class="field">
-            <span>Sexe</span>
-            <div class="sex-row">
-              <button class="btn" :class="{ sel: profile.sex === 'h' }" @click="setSex('h')">Homme</button>
-              <button class="btn" :class="{ sel: profile.sex === 'f' }" @click="setSex('f')">Femme</button>
-            </div>
-          </div>
-        </div>
-        <div v-if="bmi || age || bmr" class="profil-summary">
-          <span v-if="bmi" class="ps-item">IMC <b :style="{ color: bmiCat!.color }">{{ bmi }}</b> · {{ bmiCat!.label }}</span>
-          <span v-if="age" class="ps-item">{{ age }} ans</span>
-          <span v-if="bmr" class="ps-item">Métabolisme de base <b>{{ bmr }} kcal</b></span>
-          <span v-if="maintenance" class="ps-item">Maintien ≈ <b>{{ maintenance }} kcal</b></span>
-        </div>
-        <div v-else class="muted">Renseigne taille + poids pour l'IMC, + sexe et année de naissance pour les calories. Tout est calculé à partir de ces données.</div>
-      </div>
-
-      <!-- Suivi du poids (lecture seule : la saisie se fait dans « Mon profil ») -->
-      <div v-if="bwData.length" class="card">
-        <div class="row-between mb-8">
-          <div class="section-label">Suivi du poids</div>
-          <div v-if="bwTrend !== 0" class="mono bmi-inline" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg depuis le début</div>
-        </div>
-        <div class="chart-wrap"><LazySportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
-      </div>
-
-      <!-- Données -->
-      <div class="card">
-        <div class="section-label mb-8">Données</div>
-        <div class="nav-row">
-          <button class="btn flex-1" @click="exportJSON({ profile, weekPlan })">⬇ Exporter</button>
-          <label class="btn flex-1 center">⬆ Importer<input type="file" accept=".json" class="hidden-input" @change="onImport"></label>
-          <button class="btn flex-1" @click="resetPlan()">↺ Réinit. planning</button>
-        </div>
-        <div class="muted mt-6">Ton planning s'adapte tout seul à la séance que tu fais chaque jour. « Réinit. » remet le planning par défaut.</div>
-      </div>
-    </div>
-
-    <!-- Feuille de séance (bottom sheet) : perfs enregistrées + bouton Modifier -->
-    <transition name="sheet">
-      <div v-if="sheetRecord" class="sheet-overlay" @click.self="sheetRecord = null">
-        <div class="sheet">
-          <div class="sheet-handle"></div>
-          <div class="sheet-head" :style="{ '--c': recColor(sheetRecord) }">
-            <div>
-              <div class="sheet-title"><span class="sheet-dot"></span>{{ sheetRecord.name }}</div>
-              <div class="muted mono">{{ sheetRecord.at.slice(0, 10) }} · {{ sheetRecord.at.slice(11, 16) }}<template v-if="sheetRecord.durationMin"> · {{ sheetRecord.durationMin }} min</template></div>
-            </div>
-            <button class="sheet-close" aria-label="Fermer" @click="sheetRecord = null">×</button>
-          </div>
-          <div class="sheet-body">
-            <div v-for="e in sheetRecord.entries" :key="e.exId" class="history-entry">
-              <span class="history-ex">{{ exName(e.exId) }}</span>
-              <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}${x.w2 != null ? ` / ${x.w2}×${x.r2}` : ''}`).join(' · ') }}</span>
-            </div>
-            <div v-for="(sp, k) in (sheetRecord.sprint || [])" :key="'sp' + k" class="history-entry">
-              <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
-              <span class="mono muted">{{ sp.count }} × {{ sp.duration }}<template v-if="sp.intensity"> @ {{ sp.intensity }}</template></span>
-            </div>
-            <div v-if="!sheetRecord.entries.length && !(sheetRecord.sprint || []).length" class="muted">Séance sans détail enregistré.</div>
-          </div>
-          <button class="btn-primary sheet-edit" @click="editSession(sheetRecord!)">✏️ Modifier cette séance</button>
-        </div>
-      </div>
-    </transition>
+    <!-- Onglets secondaires : composants chargés à la demande (moins de JS hydraté sur l'accueil) -->
+    <LazySportReport v-if="view === 'rapport'" :today-iso="todayISO" :today-dow="todayDow" />
+    <LazySportProgress v-if="view === 'progress'" />
+    <LazySportHistory v-if="view === 'history'" :today-iso="todayISO" @edit="editSession" />
+    <LazySportProfile v-if="view === 'profil'" :today-iso="todayISO" @flash="showFlash" />
 
     <!-- Mobile : navigation en bas (barre d'onglets) -->
     <nav v-if="view !== 'session'" class="bottomnav">
@@ -916,390 +598,3 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped>
-.sport-app {
-  min-height: 100vh;
-  background: linear-gradient(160deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
-  color: var(--text-primary);
-  padding-bottom: 40px; max-width: 560px; margin: 0 auto;
-}
-/* Curseur : on garde le curseur custom du portfolio quand il est actif (desktop, pointeur fin) ;
-   sinon on rétablit un curseur natif utilisable (tactile / fenêtre étroite) au lieu du cursor:none global */
-@media (max-width: 1023px), (hover: none), (pointer: coarse) {
-  .sport-app, .sport-app * { cursor: auto !important; }
-  .sport-app button, .sport-app a, .sport-app label, .sport-app select,
-  .sport-app .topnav-tab, .sport-app .bn-tab, .sport-app .session-card, .sport-app .check,
-  .sport-app .switch-link, .sport-app .linklike, .sport-app .add-set { cursor: pointer !important; }
-  .sport-app input, .sport-app textarea { cursor: text !important; }
-}
-.mono { font-family: var(--font-mono); }
-.muted { color: var(--text-muted); font-size: 12px; }
-.italic { font-style: italic; }
-
-.sport-header {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; flex-direction: column; gap: 10px; padding: 12px 16px;
-  background: color-mix(in srgb, var(--bg-primary) 92%, transparent);
-  backdrop-filter: blur(10px); border-bottom: 1px solid var(--bg-accent);
-}
-.header-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-/* Navigation en haut : réservée au desktop (cachée sur mobile, remplacée par la barre du bas) */
-.topnav { display: none; gap: 4px; overflow-x: auto; scrollbar-width: none; }
-.topnav::-webkit-scrollbar { display: none; }
-.topnav-tab {
-  flex: 1 1 0; min-width: 0;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  background: none; border: none; cursor: pointer; padding: 6px 4px; border-radius: 10px;
-  color: var(--text-muted); transition: background 0.15s, color 0.15s;
-}
-.topnav-tab:hover { background: var(--bg-secondary); }
-.topnav-tab.active { color: var(--accent-primary); background: var(--bg-secondary); }
-.tn-icon { font-size: 15px; line-height: 1; }
-.tn-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.02em; white-space: nowrap; }
-.topnav-tab.active .tn-label { font-weight: 700; }
-
-/* Barre de navigation en bas (mobile / tablette) */
-.bottomnav {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  max-width: 560px; margin: 0 auto;
-  display: flex; justify-content: space-around;
-  background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
-  backdrop-filter: blur(12px);
-  border-top: 1px solid var(--bg-accent);
-  padding: 8px 6px calc(10px + env(safe-area-inset-bottom, 0px));
-}
-.bn-tab {
-  flex: 1; background: none; border: none; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 4px 2px; border-radius: 10px; color: var(--text-muted);
-  transition: color 0.15s;
-}
-.bn-icon { font-size: 18px; line-height: 1; filter: grayscale(0.35) opacity(0.75); transition: filter 0.2s; }
-.bn-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.03em; }
-.bn-tab.active { color: var(--accent-primary); }
-.bn-tab.active .bn-icon { filter: none; }
-.bn-tab.active .bn-label { font-weight: 700; }
-/* Réserve l'espace du bas pour ne pas masquer le contenu derrière la barre fixe */
-.sport-app.has-bottomnav { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
-.brand { display: flex; align-items: center; gap: 10px; background: none; border: none; cursor: pointer; text-align: left; }
-.brand-mark { width: 38px; height: 38px; flex-shrink: 0; border-radius: 11px; background: var(--accent-primary); color: var(--bg-primary); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 15px; }
-.brand-text { display: flex; flex-direction: column; }
-.brand-eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-primary); }
-.brand-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; line-height: 1.1; }
-.header-right { display: flex; align-items: center; gap: 8px; }
-.session-clock { font-size: 14px; font-weight: 700; color: var(--accent-primary); white-space: nowrap; }
-
-.btn { background: var(--bg-primary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 10px; padding: 9px 14px; font-family: var(--font-body); font-size: 13px; cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.15s; }
-.btn:hover { border-color: var(--accent-secondary); }
-.btn:active { transform: scale(0.98); }
-.btn.ghost { background: transparent; color: var(--accent-primary); text-decoration: none; }
-.btn.sel { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--bg-primary); }
-.btn-primary { background: var(--accent-primary); border: none; color: var(--bg-primary); border-radius: 12px; padding: 12px 18px; font-family: var(--font-body); font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.15s; }
-.btn-primary:hover { background: var(--accent-strong); }
-.btn-primary:active { transform: scale(0.98); }
-
-.stack { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-.card { background: var(--bg-primary); border: 1px solid var(--bg-accent); border-radius: 18px; padding: 16px; }
-.card.no-pad { padding: 0; overflow: hidden; }
-.section-label { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent-primary); }
-.week-hint { text-transform: none; letter-spacing: 0; }
-.flash { margin: 12px 16px 0; background: #e7f0e2; border: 1px solid #bcd8ae; color: #3f7a4f; border-radius: 12px; padding: 11px 14px; font-size: 14px; font-weight: 500; }
-.row-between { display: flex; justify-content: space-between; align-items: center; }
-.mt-2 { margin-top: 2px; } .mt-6 { margin-top: 8px; } .mb-8 { margin-bottom: 8px; }
-.flex-1 { flex: 1; } .center { text-align: center; } .hidden-input { display: none; }
-.empty { text-align: center; color: var(--text-muted); padding: 32px; font-size: 14px; line-height: 1.6; }
-
-/* Séance du jour */
-.today { border-left: 5px solid var(--c, var(--accent-primary)); background: linear-gradient(135deg, color-mix(in srgb, var(--c) 10%, var(--bg-primary)) 0%, var(--bg-primary) 70%); display: flex; flex-direction: column; gap: 12px; }
-.today.rest { --c: var(--accent-secondary); }
-.today-eyebrow { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--c, var(--accent-primary)); }
-.today-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 22%, transparent); }
-.today-name { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.05; }
-.done-badge { align-self: flex-start; font-size: 12px; font-weight: 600; color: #3f7a4f; background: #e7f0e2; border: 1px solid #bcd8ae; border-radius: 20px; padding: 4px 12px; }
-.rest-txt { font-size: 14px; line-height: 1.5; }
-.today-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.today-go { flex-shrink: 0; }
-.switch-link { align-self: flex-start; background: none; border: none; cursor: pointer; color: var(--text-secondary); font-family: var(--font-mono); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
-.switch-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip-btn { background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-left: 3px solid var(--c); color: var(--text-primary); border-radius: 9px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
-.chip-btn:hover { border-color: var(--c); }
-
-/* Cartes séance */
-.session-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.session-card { display: flex; flex-direction: column; gap: 10px; text-align: left; cursor: pointer; background: var(--bg-primary); border: 1px solid var(--bg-accent); border-left: 4px solid var(--c); border-radius: 16px; padding: 16px; transition: transform 0.2s var(--ease-bounce), box-shadow 0.2s, border-color 0.2s; }
-.session-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(139, 111, 92, 0.14); }
-.sc-top { display: flex; justify-content: space-between; align-items: center; }
-.sc-day { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
-.sc-sprint { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #b5502f; }
-.sc-name { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
-.sc-muscles { display: flex; flex-wrap: wrap; gap: 5px; }
-.sc-chip { font-family: var(--font-mono); font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--bg-secondary); color: var(--accent-strong); border: 1px solid var(--bg-accent); }
-.sc-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 2px; }
-.prog-card .sc-count, .prog-card .sc-go { white-space: nowrap; }
-.sc-count { font-size: 12px; color: var(--text-muted); }
-.sc-go { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--c); }
-
-/* Semaine */
-.week-card { padding: 14px 16px 16px; }
-.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-.week-day { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border-radius: 12px; min-height: 72px; background: color-mix(in srgb, var(--c) 12%, var(--bg-secondary)); border: 1px solid color-mix(in srgb, var(--c) 30%, var(--bg-accent)); }
-.week-day.rest { background: var(--bg-secondary); border-color: var(--bg-accent); }
-.week-day.today { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
-.week-day.today::after { content: 'Auj.'; position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-family: var(--font-mono); font-size: 8px; font-weight: 700; background: var(--accent-strong); color: var(--bg-primary); padding: 1px 6px; border-radius: 20px; }
-.week-dow { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--text-muted); }
-.week-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-.week-label { font-size: 10px; font-weight: 700; color: var(--text-primary); text-align: center; line-height: 1.1; }
-.week-sprint { font-size: 11px; }
-.week-rest { font-size: 10px; color: var(--text-muted); margin-top: 8px; }
-.nav-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.nav-row .btn { flex: 1 1 30%; text-align: center; }
-
-/* Séance */
-.session-layout { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-.session-main { display: flex; flex-direction: column; gap: 12px; }
-.session-tools { display: flex; flex-direction: column; }
-.tools-sticky { position: sticky; top: 74px; z-index: 8; display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
-.timer-box { background: var(--bg-primary); border: 1px solid var(--bg-accent); border-radius: 16px; padding: 14px; }
-.tool { display: flex; flex-direction: column; gap: 8px; }
-.tool-toggle { align-self: flex-start; }
-.exhead { width: 100%; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: none; border: none; text-align: left; color: inherit; }
-.ex-name { font-family: var(--font-display); font-weight: 600; font-size: 16px; }
-.set-counter { font-size: 14px; font-weight: 700; color: var(--text-muted); }
-.set-counter.complete { color: #3f7a4f; }
-.ex-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 12px; }
-.hint-pill { border-radius: 10px; padding: 10px 12px; font-size: 13px; }
-.hint-pill.progress { background: #e7f0e2; border: 1px solid #bcd8ae; color: #3f7a4f; }
-.hint-pill.stall { background: #f6ece1; border: 1px solid #e6c3b0; color: #b5502f; font-weight: 600; }
-.hint-pill.warmup { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
-.hint-pill.bw { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
-.hint-pill.db { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
-.cues { display: flex; flex-direction: column; gap: 3px; }
-.cue { display: flex; gap: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-.cue-arrow { color: var(--c, var(--accent-primary)); font-weight: 700; }
-.sets { display: flex; flex-direction: column; gap: 8px; }
-.setrow { display: flex; gap: 8px; align-items: center; }
-.setrow-head { padding-bottom: 0; margin-bottom: -2px; }
-.setrow-head .times { visibility: hidden; }
-.col-head { width: 68px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
-.setrow.done .set-label { color: #3f7a4f; }
-.setrow.warm input { background: #f9f2e3; border-color: #e6d3a8; }
-.set-label { flex-shrink: 0; min-width: 34px; padding: 6px 4px; background: none; border: 1px solid transparent; border-radius: 7px; color: var(--text-muted); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
-.set-label:hover { border-color: var(--bg-accent); }
-.set-label.warm { color: #a97b1e; background: #f6ecd6; border-color: #e6d3a8; }
-.times { color: var(--text-muted); }
-input[type='number'] { background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 8px; padding: 9px 8px; width: 68px; font-size: 16px; text-align: center; -moz-appearance: textfield; appearance: textfield; }
-input[type='number']:focus { outline: none; border-color: var(--accent-primary); }
-input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; }
-.check { margin-left: auto; min-width: 48px; height: 40px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-muted); border-radius: 9px; font-size: 16px; cursor: pointer; transition: all 0.2s; }
-.check.ok { background: #e7f0e2; border-color: #bcd8ae; color: #3f7a4f; }
-.rm { width: 30px; height: 40px; background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; border-radius: 8px; }
-.rm:hover { color: #b5502f; }
-/* Superset : une charge par mouvement */
-.ss-set { display: flex; flex-direction: column; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 10px 12px; }
-.ss-set.done { border-color: #bcd8ae; background: #f0f5ec; }
-.ss-set-top { display: flex; align-items: center; gap: 8px; }
-.ss-set-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.ss-set-top .check { margin-left: auto; }
-.ss-move { display: flex; align-items: center; gap: 8px; }
-.ss-move-label { flex: 0 0 78px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-strong); }
-.ss-move input { flex: 1; min-width: 0; width: auto; }
-.set-adds { display: flex; gap: 8px; flex-wrap: wrap; }
-.add-set { align-self: flex-start; background: none; border: 1px dashed var(--accent-secondary); color: var(--accent-primary); border-radius: 9px; padding: 8px 14px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.add-set:hover { background: var(--bg-secondary); border-style: solid; }
-.add-set.warm { border-color: #e6d3a8; color: #a97b1e; }
-.add-set.warm:hover { background: #f6ecd6; }
-.last-perf { padding-top: 2px; }
-.sprint-exercise { border-left: 4px solid #b5502f; }
-.sprint-exercise .ex-name { color: #b5502f; }
-.sprint-body { gap: 14px; padding-top: 4px; }
-.chevron { font-size: 13px; color: var(--text-muted); }
-.sprint-head { display: flex; flex-direction: column; gap: 5px; }
-.sprint-goal { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-.sprint-protocol { display: grid; grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); gap: 8px; }
-.sp-stat { background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 10px; padding: 9px 11px; }
-.sp-val { font-weight: 700; font-size: 14px; color: var(--text-primary); }
-.sp-lab { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 3px; }
-.sprint-block { display: flex; flex-direction: column; gap: 8px; }
-.sprint-block-title { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #b5502f; font-weight: 700; }
-.sprint-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
-.sprint-list li { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-.sprint-toggle { display: flex; gap: 6px; }
-.sprint-toggle button { flex: 1; background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-secondary); border-radius: 9px; padding: 9px 8px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }
-.sprint-toggle button.active { background: #b5502f; border-color: #b5502f; color: #fff; }
-.sprint-note { font-size: 12px; color: #a5451f; background: #f6ece1; border: 1px solid #e6c3b0; border-radius: 8px; padding: 9px 11px; line-height: 1.5; }
-.sprint-cooldown { font-size: 13px; color: var(--text-secondary); background: var(--bg-secondary); border-radius: 10px; padding: 11px 12px; line-height: 1.5; }
-/* Bouton info (i) + bulle de détails */
-.sprint-info-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; background: none; border: none; cursor: pointer; font-family: var(--font-mono); font-size: 12px; color: var(--accent-primary); padding: 2px 0; }
-.sprint-info-btn .i-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--accent-primary); font-style: italic; font-weight: 700; font-size: 11px; }
-.sprint-info-btn.open .i-mark { background: var(--accent-primary); color: var(--bg-primary); }
-.sprint-info { display: flex; flex-direction: column; gap: 12px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 12px; }
-/* Saisie des efforts de course */
-.sprint-log { display: flex; flex-direction: column; gap: 12px; border-top: 1px dashed var(--bg-accent); padding-top: 12px; }
-/* Ligne d'effort : puce + suppression sur la 1re ligne, champs sur la 2e (mobile-friendly) */
-.sprint-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 10px; }
-.kind-chip { flex-shrink: 0; min-width: 82px; border: 1px solid var(--bg-accent); border-radius: 8px; padding: 7px 12px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; background: var(--bg-primary); color: var(--text-secondary); }
-.kind-chip.echauffement { border-color: #e6d3a8; color: #a97b1e; background: #f6ecd6; }
-.kind-chip.sprint { border-color: #e3c4b8; color: #b5502f; background: #f6ece1; }
-.sprint-row .rm { margin-left: auto; }
-.sr-fields { flex: 1 1 100%; min-width: 0; display: flex; align-items: center; gap: 8px; }
-.sprint-row input { background: var(--bg-primary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 8px; padding: 10px 8px; font-size: 15px; text-align: center; min-width: 0; }
-.sr-count { width: 56px; flex-shrink: 0; }
-.sr-dur { flex: 1; }
-.sr-int { flex: 1.4; }
-.sprint-add { display: flex; gap: 8px; flex-wrap: wrap; }
-.sprint-hint { line-height: 1.5; }
-/* Chrono de repos flottant */
-.floating-timer {
-  position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 60;
-  display: flex; align-items: center; gap: 10px;
-  background: color-mix(in srgb, var(--accent-primary) 96%, black); color: var(--bg-primary);
-  border-radius: 999px; padding: 8px 10px 8px 16px; box-shadow: 0 10px 26px rgba(0,0,0,0.22);
-}
-.ft-time { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
-.ft-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; opacity: 0.85; }
-.ft-btn { background: rgba(255,255,255,0.16); border: none; color: var(--bg-primary); border-radius: 999px; padding: 6px 12px; font-family: var(--font-mono); font-size: 12px; font-weight: 700; cursor: pointer; }
-.ft-btn.stop { background: rgba(255,255,255,0.92); color: #b5502f; }
-.ft-drop-enter-active, .ft-drop-leave-active { transition: transform 0.25s var(--ease-out), opacity 0.25s; }
-.ft-drop-enter-from, .ft-drop-leave-to { transform: translate(-50%, -18px); opacity: 0; }
-.finish { padding: 14px; font-size: 15px; }
-
-/* Progression — cartes par séance */
-.prog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.prog-card { padding: 13px 14px; gap: 8px; transition: transform 0.18s var(--ease-bounce), box-shadow 0.2s, border-color 0.2s, background 0.2s; }
-.prog-card:not(.active) { opacity: 0.72; }
-.prog-card:hover { opacity: 1; }
-.prog-card.active {
-  border-color: var(--c);
-  background: color-mix(in srgb, var(--c) 10%, var(--bg-primary));
-  box-shadow: 0 14px 30px rgba(139, 111, 92, 0.22);
-  transform: translateY(-3px);
-}
-.prog-card.active .sc-name { color: var(--c); }
-.prog-card.active .sc-day { color: var(--accent-strong); }
-.prog-card .sc-name { font-size: 17px; }
-.prog-ex-list { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.prog-ex { display: flex; flex-direction: column; gap: 10px; }
-.prog-ex-head { display: flex; flex-direction: column; gap: 6px; }
-.prog-ex-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
-.prog-ex-kpis { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-muted); }
-.pk b { color: var(--text-primary); font-size: 14px; font-family: var(--font-mono); }
-.pk.pos b { color: #3f7a4f; }
-.prog-empty { padding: 6px 0 2px; }
-
-/* Journal */
-.history-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.hist-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
-.hist-when { font-size: 12px; color: var(--text-muted); }
-.history-entry { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; }
-.history-ex { color: var(--text-secondary); }
-
-/* Journal — calendrier */
-.cal-card { display: flex; flex-direction: column; gap: 10px; }
-.cal-head { display: flex; align-items: center; justify-content: space-between; }
-.cal-month { font-family: var(--font-display); font-weight: 700; font-size: 16px; text-transform: capitalize; }
-.cal-nav { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--bg-accent); background: var(--bg-primary); color: var(--text-primary); font-size: 18px; line-height: 1; cursor: pointer; }
-.cal-nav:hover { background: var(--bg-secondary); }
-.cal-dow-row, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
-.cal-dow { text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); padding-bottom: 2px; }
-.cal-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--text-secondary); font-family: var(--font-mono); font-size: 13px; cursor: default; padding: 0; }
-.cal-cell.empty { visibility: hidden; }
-.cal-cell.has { cursor: pointer; background: var(--bg-secondary); color: var(--text-primary); font-weight: 700; }
-.cal-cell.has:hover { border-color: var(--bg-accent); }
-.cal-cell.today { border-color: var(--accent-primary); }
-.cal-cell.sel { background: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-primary)); border-color: var(--accent-primary); }
-.cal-day { line-height: 1; }
-.cal-dots { display: flex; gap: 2px; height: 5px; align-items: center; }
-.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
-
-/* Journal — séances du jour sélectionné */
-.day-sessions { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.day-session { width: 100%; text-align: left; cursor: pointer; font: inherit; border-left: 3px solid var(--c); transition: transform 0.15s var(--ease-out), box-shadow 0.2s; }
-.day-session:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(139, 111, 92, 0.16); }
-.ds-top { display: flex; align-items: center; gap: 8px; }
-.ds-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
-.ds-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
-.ds-time { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
-.ds-sum { margin-top: 4px; }
-.empty.small { padding: 14px; text-align: center; }
-
-/* Feuille de séance (bottom sheet) */
-.sheet-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: rgba(20, 14, 10, 0.42); backdrop-filter: blur(2px); }
-.sheet { width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto; background: var(--bg-primary); border-radius: 20px 20px 0 0; padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 12px; }
-.sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--bg-accent); margin: 4px auto 2px; flex: 0 0 auto; }
-.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.sheet-title { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
-.sheet-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
-.sheet-close { width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--bg-accent); background: var(--bg-primary); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
-.sheet-body { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--bg-accent); padding-top: 10px; }
-.sheet-edit { padding: 13px; font-size: 15px; margin-top: 2px; }
-.sheet-enter-active, .sheet-leave-active { transition: opacity 0.25s; }
-.sheet-enter-active .sheet, .sheet-leave-active .sheet { transition: transform 0.28s var(--ease-out); }
-.sheet-enter-from, .sheet-leave-to { opacity: 0; }
-.sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(100%); }
-.trend-down { color: #3f7a4f; font-weight: 700; }
-.trend-up { color: #a97b1e; font-weight: 700; }
-
-/* Rapport */
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.stat { background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 12px; }
-.stat-v { font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--text-primary); }
-.stat-v.pos { color: #3f7a4f; } .stat-v.warn { color: #a97b1e; }
-.stat-u { font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); margin-left: 3px; }
-.stat-l { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 4px; }
-.mv-list { display: flex; flex-direction: column; gap: 8px; }
-.mv-row { display: grid; grid-template-columns: 74px 1fr 34px; align-items: center; gap: 10px; }
-.mv-label { font-size: 13px; color: var(--text-secondary); }
-.mv-bar { height: 8px; background: var(--bg-secondary); border-radius: 20px; overflow: hidden; }
-.mv-fill { height: 100%; background: var(--accent-primary); border-radius: 20px; }
-.mv-count { font-size: 12px; color: var(--text-muted); text-align: right; }
-.rec-list { display: flex; flex-direction: column; }
-.rec-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bg-secondary); font-size: 14px; }
-.rec-row:last-child { border-bottom: none; }
-.rec-name { color: var(--text-secondary); }
-.rec-val { color: var(--text-primary); font-weight: 700; }
-
-/* Profil */
-.form-grid { display: flex; flex-direction: column; gap: 12px; }
-.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-secondary); }
-.field input { width: 100% !important; text-align: left; }
-.sex-row { display: flex; gap: 8px; }
-.sex-row .btn { flex: 1; }
-.profil-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--bg-secondary); }
-.ps-item { font-size: 13px; color: var(--text-secondary); }
-.ps-item b { color: var(--text-primary); }
-.bmi-inline { font-size: 12px; font-weight: 700; }
-.chart-wrap { margin-top: 12px; }
-
-/* Tablette */
-@media (min-width: 680px) {
-  .sport-app { max-width: 760px; }
-  .bottomnav { max-width: 760px; }
-  .tn-label { font-size: 11px; }
-  .today-name { font-size: 34px; }
-  .session-grid { grid-template-columns: repeat(2, 1fr); }
-  .stat-grid { grid-template-columns: repeat(4, 1fr); }
-  .prog-grid { grid-template-columns: repeat(4, 1fr); }
-  .prog-ex-list { grid-template-columns: 1fr 1fr; }
-}
-
-/* Desktop : navigation en haut, on masque la barre du bas */
-@media (min-width: 1080px) {
-  .sport-app { max-width: 1080px; }
-  .sport-app.has-bottomnav { padding-bottom: 40px; }
-  .bottomnav { display: none; }
-  .topnav { display: flex; gap: 6px; max-width: 620px; }
-  .topnav-tab { flex-direction: row; gap: 6px; padding: 8px 14px; }
-  .session-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-  .history-grid { grid-template-columns: 1fr 1fr; align-items: start; }
-  .session-layout { display: grid; grid-template-columns: 1fr 320px; align-items: start; gap: 20px; }
-  .session-tools { order: 2; }
-  .session-main { order: 1; }
-  .tools-sticky { top: 90px; }
-  .tool-toggle { display: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-card, .btn, .btn-primary { transition: none; }
-  .session-card:hover { transform: none; }
-}
-</style>
