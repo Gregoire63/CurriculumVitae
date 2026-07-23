@@ -103,6 +103,41 @@ export function useWorkout() {
     return prs
   }
 
+  // Met à jour une séance déjà enregistrée (édition depuis l'accueil ou le journal).
+  // Touche les deux stockages : le journal (sessionHistory) ET les logs par exercice
+  // (utilisés pour progression/charts). On retrouve les anciennes entrées de logs par
+  // date + égalité des séries, on les remplace par les nouvelles.
+  function updateSession(
+    rec: SessionRecord,
+    entries: { exId: string; sets: SetLog[] }[],
+    durationMin?: number,
+    sprint?: SprintEffort[],
+  ) {
+    const idx = sessionHistory.value.indexOf(rec)
+    if (idx < 0) return
+    const date = rec.at.slice(0, 10)
+    // 1) retire des logs les anciennes entrées de cette séance
+    for (const oldE of rec.entries) {
+      const arr = logs.value[oldE.exId]
+      if (!arr) continue
+      const j = arr.findIndex(l => l.date === date && JSON.stringify(l.sets) === JSON.stringify(oldE.sets))
+      if (j >= 0) { arr.splice(j, 1); if (!arr.length) delete logs.value[oldE.exId] }
+    }
+    // 2) ajoute les nouvelles entrées (séries de travail + échauffement conservés)
+    const recorded = entries.filter(e => e.sets.length)
+    for (const e of recorded) {
+      if (!logs.value[e.exId]) logs.value[e.exId] = []
+      logs.value[e.exId].push({ date, sets: e.sets, durationMin })
+    }
+    // 3) met à jour l'enregistrement séance en place
+    const sprintClean = (sprint ?? []).filter(s => s.duration.trim() || s.intensity.trim())
+    rec.durationMin = durationMin
+    rec.entries = recorded.map(e => ({ exId: e.exId, sets: e.sets }))
+    if (sprintClean.length) rec.sprint = sprintClean
+    else delete rec.sprint
+    persistLogs(); persistSessions()
+  }
+
   function progressionHint(ex: Exercise): string | null {
     const last = lastPerf(ex.id)
     const top = topOfRange(ex.reps)
@@ -241,7 +276,7 @@ export function useWorkout() {
 
   return {
     logs, bodyWeight, sessionHistory,
-    lastPerf, bestCharge, recordSession, progressionHint, suggestWeight, chartData, history, sessionLog,
+    lastPerf, bestCharge, recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     addBodyWeight, exportJSON, importJSON,
   }
 }

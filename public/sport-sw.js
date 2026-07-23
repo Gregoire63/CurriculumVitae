@@ -1,6 +1,6 @@
 // Service worker scopé /sport — cache offline de l'outil de suivi.
 // Le reste du site n'est pas affecté (scope limité au register()).
-const CACHE = 'sport-v2'
+const CACHE = 'sport-v3'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/sport'])))
@@ -32,16 +32,21 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
   if (e.request.method !== 'GET' || url.origin !== location.origin) return
 
-  // Navigation vers /sport : network-first, fallback cache (offline)
+  // Navigation vers /sport : stale-while-revalidate.
+  // On sert immédiatement la version en cache (ouverture instantanée, sans
+  // attendre le réseau) et on rafraîchit en arrière-plan pour la prochaine fois.
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request)
-        .then((res) => {
-          const copy = res.clone()
-          caches.open(CACHE).then((c) => c.put('/sport', copy))
-          return res
-        })
-        .catch(() => caches.match('/sport'))
+      caches.match('/sport').then((cached) => {
+        const network = fetch(e.request)
+          .then((res) => {
+            const copy = res.clone()
+            caches.open(CACHE).then((c) => c.put('/sport', copy))
+            return res
+          })
+          .catch(() => cached)
+        return cached || network
+      })
     )
     return
   }

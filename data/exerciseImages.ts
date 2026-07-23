@@ -11,6 +11,7 @@ export const EXERCISE_IMAGE_SLUGS: Record<string, string> = {
   'curl-incline': 'Incline_Dumbbell_Curl',
   'crunch-cable': 'Cable_Crunch',
   'tirage-v': 'Wide-Grip_Lat_Pulldown',
+  'lombaires': 'Hyperextensions_-_Back_Extensions',
   'tractions': 'Pullups',
   'rowing-m': 'Seated_Cable_Rows',
   'dev-mil': 'Dumbbell_Shoulder_Press',

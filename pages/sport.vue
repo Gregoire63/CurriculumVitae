@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
 import type { Session, Exercise } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
+import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
 
@@ -24,7 +25,7 @@ useHead({
 })
 
 const {
-  logs, bodyWeight, lastPerf, bestCharge, recordSession, progressionHint, suggestWeight,
+  logs, bodyWeight, lastPerf, bestCharge, recordSession, updateSession, progressionHint, suggestWeight,
   chartData, sessionLog, addBodyWeight, exportJSON, importJSON,
 } = useWorkout()
 const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
@@ -35,7 +36,7 @@ const { profile, weekPlan, hydrate: hydrateProfile, setHeight, setSex, setBirthY
 const MUSCLE_LABELS: Record<string, string> = {
   pecs: 'Pecs', 'epaules-av': 'Épaules', 'epaules-lat': 'Épaules', 'epaules-ar': 'Épaules',
   triceps: 'Triceps', biceps: 'Biceps', 'avant-bras': 'Avant-bras', abdos: 'Abdos',
-  dos: 'Dos', quadris: 'Quadris', ischios: 'Ischios', fessiers: 'Fessiers', mollets: 'Mollets',
+  dos: 'Dos', lombaires: 'Lombaires', quadris: 'Quadris', ischios: 'Ischios', fessiers: 'Fessiers', mollets: 'Mollets',
 }
 function sessionMuscles(s: Session): string[] {
   const seen: string[] = []
@@ -68,6 +69,11 @@ const nextSession = computed(() => {
 })
 const otherSessions = computed(() => { const id = todaySession.value?.id; return PROGRAM.filter(s => s.id !== id) })
 const doneToday = computed(() => (todayISO.value ? sessionLog().filter(s => s.at.slice(0, 10) === todayISO.value) : []))
+// Séance du jour déjà enregistrée (→ bouton « Modifier » au lieu de « Démarrer »)
+const todayRecord = computed(() => {
+  if (!todaySession.value) return null
+  return doneToday.value.find(s => s.sessionId === todaySession.value!.id) ?? null
+})
 
 // ─────────── État UI ───────────
 type View = 'home' | 'session' | 'progress' | 'history' | 'rapport' | 'profil'
@@ -81,7 +87,9 @@ const draft = reactive<Record<string, { w: string; r: string; done: boolean; war
 const sessionStart = ref(0)
 const plateOpen = ref(false)
 const ormOpen = ref(false)
-const showSwitch = ref(false)
+// Édition d'une séance déjà enregistrée (au lieu d'en démarrer une neuve)
+const editingRecord = ref<SessionRecord | null>(null)
+const editReturn = ref<View>('home')
 const sprintMode = ref<'exterieur' | 'tapis'>('exterieur')
 const sprintOpen = ref(false)
 const sprintInfoOpen = ref(false)
@@ -140,7 +148,7 @@ onUnmounted(() => { if (elapsedInt) clearInterval(elapsedInt) })
 // ─────────── Séance ───────────
 function startSession(s: Session) {
   activeSession.value = s
-  showSwitch.value = false
+  editingRecord.value = null
   for (const k of Object.keys(draft)) delete draft[k]
   const bw = latestWeight.value ?? 0 // poids de corps (profil) pour les exos au poids du corps
   for (const e of s.exercises) {
@@ -170,6 +178,42 @@ function startSession(s: Session) {
   sprintInfoOpen.value = false
   sprintDraft.value = s.sprint ? newSprintRows() : []
   sessionStart.value = Date.now()
+  view.value = 'session'
+}
+// Rouvre une séance déjà enregistrée pour la modifier (préremplie avec les perfs saisies)
+function editSession(rec: SessionRecord) {
+  const s = sessionById(rec.sessionId) || PROGRAM.find(p => p.name === rec.name)
+  if (!s) return
+  activeSession.value = s
+  editingRecord.value = rec
+  editReturn.value = view.value
+  for (const k of Object.keys(draft)) delete draft[k]
+  const bw = latestWeight.value ?? 0
+  for (const e of s.exercises) {
+    const entry = rec.entries.find(en => en.exId === e.id)
+    if (entry && entry.sets.length) {
+      draft[e.id] = entry.sets.map(st => ({
+        w: st.w != null ? String(st.w) : '',
+        r: st.r != null ? String(st.r) : '',
+        done: true,
+        warm: !!st.warm,
+        w2: st.w2 != null ? String(st.w2) : '',
+        r2: st.r2 != null ? String(st.r2) : '',
+      }))
+    } else {
+      draft[e.id] = Array.from({ length: e.sets }, () => ({
+        w: e.bodyweight && bw ? String(bw) : '', r: '', done: false, warm: false, w2: '', r2: '',
+      }))
+    }
+  }
+  openEx.value = s.exercises[0].id
+  sprintOpen.value = false
+  sprintInfoOpen.value = false
+  sprintDraft.value = (rec.sprint && rec.sprint.length)
+    ? rec.sprint.map(sp => ({ kind: sp.kind, count: String(sp.count), duration: sp.duration, intensity: sp.intensity }))
+    : (s.sprint ? newSprintRows() : [])
+  sessionStart.value = Date.now() - (rec.durationMin ?? 0) * 60000
+  sheetRecord.value = null
   view.value = 'session'
 }
 // On ne compte que les séries de travail (l'échauffement ne compte pas)
@@ -215,11 +259,26 @@ function finishSession() {
   const sprintEfforts = sprintDraft.value
     .filter(r => r.duration.trim() || r.intensity.trim())
     .map(r => ({ kind: r.kind, count: parseInt(r.count, 10) || 1, duration: r.duration.trim(), intensity: r.intensity.trim() }))
+  // Mode édition : on met à jour l'enregistrement existant au lieu d'en créer un nouveau
+  if (editingRecord.value) {
+    updateSession(editingRecord.value, entries, durationMin, sprintEfforts)
+    const back = editReturn.value
+    editingRecord.value = null
+    view.value = back
+    showFlash(`Séance modifiée ✓ (${durationMin} min)`)
+    return
+  }
   const prs = recordSession(entries, durationMin, { sessionId: activeSession.value.id, name: activeSession.value.name }, sprintEfforts)
   // Le planning du jour s'adapte automatiquement à la séance réellement faite
   if (todayIndex.value !== null) setDay(todayIndex.value, activeSession.value.id)
   view.value = 'home'
   showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 PR : ${prs.join(', ')}` : `Séance enregistrée ✓ (${durationMin} min)`)
+}
+// Quitte la séance sans enregistrer (retourne à l'écran d'origine si on éditait)
+function quitSession() {
+  const back = editingRecord.value ? editReturn.value : 'home'
+  editingRecord.value = null
+  view.value = back
 }
 function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}${s.w2 != null ? ` / ${s.w2}×${s.r2}` : ''}`).join(' · ')}` : null }
 // Conseil de surcharge progressive (monte la charge quand on progresse ou qu'on stagne)
@@ -245,7 +304,9 @@ function exStats(exId: string) {
   return { max: d[d.length - 1].charge, gain: d[d.length - 1].charge - d[0].charge, e1rm: d[d.length - 1].e1rm, data: d }
 }
 const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).map(e => ({ e, stats: exStats(e.id) })))
-const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? id
+// Noms des exercices retirés du programme (pour garder l'historique lisible)
+const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères' }
+const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RETIRED_NAMES[id] ?? id
 
 // ─────────── Poids & IMC ───────────
 const bwData = computed(() => bodyWeight.value.map(e => ({ date: e.date.slice(5), kg: e.kg })))
@@ -273,6 +334,47 @@ const maintenance = computed(() => (bmr.value ? Math.round(bmr.value * 1.55) : n
 const sessions = computed(() => sessionLog())
 const totalSessions = computed(() => sessions.value.length)
 const p2 = (n: number) => String(n).padStart(2, '0')
+
+// ─────────── Journal : calendrier + feuille de séance ───────────
+const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+const calMonth = ref<{ y: number; m: number }>({ y: 2024, m: 0 }) // (ré)initialisé onMounted
+const selectedDay = ref<string | null>(null)
+const sheetRecord = ref<SessionRecord | null>(null)
+const sessionsByDay = computed(() => {
+  const m: Record<string, SessionRecord[]> = {}
+  for (const s of sessions.value) { const d = s.at.slice(0, 10); (m[d] ||= []).push(s) }
+  return m
+})
+const calCells = computed(() => {
+  const { y, m } = calMonth.value
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7 // lundi = 0
+  const days = new Date(y, m + 1, 0).getDate()
+  const cells: { iso: string | null; day: number; sessions: SessionRecord[] }[] = []
+  for (let i = 0; i < lead; i++) cells.push({ iso: null, day: 0, sessions: [] })
+  for (let d = 1; d <= days; d++) {
+    const iso = `${y}-${p2(m + 1)}-${p2(d)}`
+    cells.push({ iso, day: d, sessions: sessionsByDay.value[iso] || [] })
+  }
+  return cells
+})
+const monthLabel = computed(() => `${MONTHS[calMonth.value.m]} ${calMonth.value.y}`)
+const recColor = (rec: SessionRecord) => sessionById(rec.sessionId)?.color || '#8b6f5c'
+const selectedSessions = computed(() => (selectedDay.value ? sessionsByDay.value[selectedDay.value] || [] : []))
+const fmtDayLong = (iso: string) => {
+  const d = new Date(iso + 'T00:00:00')
+  return `${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`
+}
+function calShift(delta: number) {
+  let m = calMonth.value.m + delta
+  let y = calMonth.value.y
+  if (m < 0) { m = 11; y-- } else if (m > 11) { m = 0; y++ }
+  calMonth.value = { y, m }
+}
+function pickDay(iso: string | null, sess: SessionRecord[]) {
+  if (!iso || !sess.length) return
+  selectedDay.value = iso
+  if (sess.length === 1) sheetRecord.value = sess[0]
+}
 const startOfWeekISO = computed(() => {
   if (!todayISO.value || todayDow.value === null) return null
   const d = new Date(todayISO.value + 'T00:00:00')
@@ -335,6 +437,15 @@ onMounted(() => {
   const now = new Date()
   todayDow.value = now.getDay()
   todayISO.value = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
+  // Calendrier : ouvre sur le mois de la séance la plus récente (sinon mois courant)
+  const recent = sessionLog()[0]
+  if (recent) {
+    calMonth.value = { y: +recent.at.slice(0, 4), m: +recent.at.slice(5, 7) - 1 }
+    selectedDay.value = recent.at.slice(0, 10)
+  } else {
+    calMonth.value = { y: now.getFullYear(), m: now.getMonth() }
+    selectedDay.value = todayISO.value
+  }
   const desktop = window.matchMedia('(min-width: 1080px)').matches
   plateOpen.value = desktop
   ormOpen.value = desktop
@@ -368,7 +479,7 @@ onUnmounted(() => {
         <div class="header-right">
           <template v-if="view === 'session'">
             <span class="session-clock mono">⏱ {{ fmtClock(elapsed) }}</span>
-            <button class="btn" @click="go('home')">Quitter</button>
+            <button class="btn" @click="quitSession">Quitter</button>
           </template>
           <a v-else href="/" class="btn ghost">↗ Portfolio</a>
         </div>
@@ -403,11 +514,8 @@ onUnmounted(() => {
         <div class="sc-muscles"><span v-for="m in sessionMuscles(todaySession)" :key="m" class="sc-chip">{{ m }}</span></div>
         <div class="today-foot">
           <span class="muted">{{ todaySession.exercises.length }} exercices<template v-if="todaySession.sprint"> · ⚡ sprint</template></span>
-          <button class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">Démarrer la séance →</button>
-        </div>
-        <button class="switch-link" @click="showSwitch = !showSwitch">Plutôt une autre séance aujourd'hui ? {{ showSwitch ? '▲' : '▼' }}</button>
-        <div v-if="showSwitch" class="switch-row">
-          <button v-for="s in otherSessions" :key="s.id" class="chip-btn" :style="{ '--c': s.color }" @click="startSession(s)">{{ s.name }}</button>
+          <button v-if="todayRecord" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="editSession(todayRecord!)">✏️ Modifier la séance →</button>
+          <button v-else class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">Démarrer la séance →</button>
         </div>
       </section>
 
@@ -451,14 +559,14 @@ onUnmounted(() => {
     <div v-if="view === 'session' && activeSession" class="session-layout" :style="{ '--c': activeSession.color }">
       <aside class="session-tools">
         <div class="tools-sticky">
-          <div class="timer-box"><SportRestTimer /></div>
+          <div class="timer-box"><LazySportRestTimer /></div>
           <div class="tool">
             <button class="btn tool-toggle" @click="plateOpen = !plateOpen">🏋️ Calcul de barre {{ plateOpen ? '▲' : '▼' }}</button>
-            <SportPlateCalc v-show="plateOpen" />
+            <LazySportPlateCalc v-show="plateOpen" />
           </div>
           <div class="tool">
             <button class="btn tool-toggle" @click="ormOpen = !ormOpen">🎯 1RM & charges {{ ormOpen ? '▲' : '▼' }}</button>
-            <SportOneRepMax v-show="ormOpen" />
+            <LazySportOneRepMax v-show="ormOpen" />
           </div>
         </div>
       </aside>
@@ -473,14 +581,14 @@ onUnmounted(() => {
             <div class="set-counter mono" :class="{ complete: draft[e.id] && workCount(e.id) > 0 && doneCount(e.id) === workCount(e.id) }">{{ doneCount(e.id) }}/{{ workCount(e.id) || e.sets }}</div>
           </button>
           <div v-if="openEx === e.id" class="ex-body">
-            <SportExerciseMove :ex-id="e.id"><SportMuscleMap :muscles="e.muscles" /></SportExerciseMove>
+            <LazySportExerciseMove :ex-id="e.id"><LazySportMuscleMap :muscles="e.muscles" /></LazySportExerciseMove>
             <div v-if="e.bodyweight" class="hint-pill bw">🧍 Charge = ton poids de corps<template v-if="latestWeight"> ({{ latestWeight }} kg)</template> + lest. Préremplie — ajuste si tu ajoutes du poids.</div>
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
             <div v-if="!e.bodyweight && !e.superset && warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
             <div v-if="isDumbbell(e)" class="hint-pill db">🏋️ Note le poids <strong>total des 2 haltères</strong> (ex. 2 × 20 kg → 40 kg), pas un seul.</div>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
-              <div class="muted italic mt-6">{{ e.machine }}</div>
+              <div v-if="e.machine" class="muted italic mt-6">{{ e.machine }}</div>
             </div>
             <div class="sets">
               <!-- Superset : une charge par mouvement -->
@@ -597,7 +705,7 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <button class="btn-primary finish" @click="finishSession">Terminer et enregistrer la séance</button>
+        <button class="btn-primary finish" @click="finishSession">{{ editingRecord ? 'Enregistrer les modifications' : 'Terminer et enregistrer la séance' }}</button>
       </div>
     </div>
 
@@ -674,7 +782,7 @@ onUnmounted(() => {
                 <span class="pk"><b class="mono">{{ stats.e1rm }}</b> kg 1RM</span>
               </div>
             </div>
-            <SportSvgChart v-if="stats" :data="stats.data" y-key="charge" :color="progressSessionObj.color" :height="150" />
+            <LazySportSvgChart v-if="stats" :data="stats.data" y-key="charge" :color="progressSessionObj.color" :height="150" />
             <div v-else class="muted prog-empty">Pas encore de données — enregistre une séance avec cet exercice.</div>
           </div>
         </div>
@@ -682,25 +790,46 @@ onUnmounted(() => {
       <div v-else class="card empty">Choisis une séance ci-dessus pour afficher toutes ses courbes d'un coup.</div>
     </div>
 
-    <!-- ═══════════ JOURNAL DES SÉANCES ═══════════ -->
+    <!-- ═══════════ JOURNAL — CALENDRIER ═══════════ -->
     <div v-if="view === 'history'" class="stack">
-      <div v-if="!sessions.length" class="card empty">Aucune séance enregistrée pour l'instant.<br>Tes séances apparaîtront ici avec la date et l'heure.</div>
-      <div class="history-grid">
-        <div v-for="(s, i) in sessions" :key="i" class="card">
-          <div class="row-between mb-8">
-            <div class="hist-name">{{ s.name }}</div>
-            <div class="hist-when mono">{{ s.at.slice(0, 10) }} · {{ s.at.slice(11, 16) }}<template v-if="s.durationMin"> · {{ s.durationMin }} min</template></div>
+      <div v-if="!sessions.length" class="card empty">Aucune séance enregistrée pour l'instant.<br>Tes séances apparaîtront ici dans le calendrier.</div>
+      <template v-else>
+        <div class="card cal-card">
+          <div class="cal-head">
+            <button class="cal-nav" aria-label="Mois précédent" @click="calShift(-1)">‹</button>
+            <div class="cal-month">{{ monthLabel }}</div>
+            <button class="cal-nav" aria-label="Mois suivant" @click="calShift(1)">›</button>
           </div>
-          <div v-for="e in s.entries" :key="e.exId" class="history-entry">
-            <span class="history-ex">{{ exName(e.exId) }}</span>
-            <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}${x.w2 != null ? ` / ${x.w2}×${x.r2}` : ''}`).join(' · ') }}</span>
-          </div>
-          <div v-for="(sp, k) in (s.sprint || [])" :key="'sp' + k" class="history-entry">
-            <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
-            <span class="mono muted">{{ sp.count }} × {{ sp.duration }}<template v-if="sp.intensity"> @ {{ sp.intensity }}</template></span>
+          <div class="cal-dow-row"><span v-for="(d, i) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']" :key="i" class="cal-dow">{{ d }}</span></div>
+          <div class="cal-grid">
+            <button
+              v-for="(c, i) in calCells" :key="i"
+              class="cal-cell"
+              :class="{ empty: !c.iso, has: c.sessions.length, today: c.iso === todayISO, sel: c.iso === selectedDay }"
+              :disabled="!c.iso || !c.sessions.length"
+              @click="pickDay(c.iso, c.sessions)"
+            >
+              <span v-if="c.iso" class="cal-day">{{ c.day }}</span>
+              <span v-if="c.sessions.length" class="cal-dots">
+                <span v-for="(s, k) in c.sessions.slice(0, 3)" :key="k" class="cal-dot" :style="{ background: recColor(s) }"></span>
+              </span>
+            </button>
           </div>
         </div>
-      </div>
+
+        <div class="section-label">{{ selectedDay ? fmtDayLong(selectedDay) : 'Choisis un jour' }}</div>
+        <div v-if="selectedSessions.length" class="day-sessions">
+          <button v-for="(s, i) in selectedSessions" :key="i" class="card day-session" :style="{ '--c': recColor(s) }" @click="sheetRecord = s">
+            <div class="ds-top">
+              <span class="ds-dot"></span>
+              <span class="ds-name">{{ s.name }}</span>
+              <span class="ds-time mono">{{ s.at.slice(11, 16) }}<template v-if="s.durationMin"> · {{ s.durationMin }} min</template></span>
+            </div>
+            <div class="ds-sum muted">{{ s.entries.length }} exos<template v-if="s.sprint && s.sprint.length"> · ⚡ sprint</template> · touche pour voir / modifier</div>
+          </button>
+        </div>
+        <div v-else class="card empty small">Aucune séance ce jour. Touche un jour marqué d'un point.</div>
+      </template>
     </div>
 
     <!-- ═══════════ PROFIL (infos + poids + données) ═══════════ -->
@@ -734,7 +863,7 @@ onUnmounted(() => {
           <div class="section-label">Suivi du poids</div>
           <div v-if="bwTrend !== 0" class="mono bmi-inline" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg depuis le début</div>
         </div>
-        <div class="chart-wrap"><SportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
+        <div class="chart-wrap"><LazySportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
       </div>
 
       <!-- Données -->
@@ -748,6 +877,34 @@ onUnmounted(() => {
         <div class="muted mt-6">Ton planning s'adapte tout seul à la séance que tu fais chaque jour. « Réinit. » remet le planning par défaut.</div>
       </div>
     </div>
+
+    <!-- Feuille de séance (bottom sheet) : perfs enregistrées + bouton Modifier -->
+    <transition name="sheet">
+      <div v-if="sheetRecord" class="sheet-overlay" @click.self="sheetRecord = null">
+        <div class="sheet">
+          <div class="sheet-handle"></div>
+          <div class="sheet-head" :style="{ '--c': recColor(sheetRecord) }">
+            <div>
+              <div class="sheet-title"><span class="sheet-dot"></span>{{ sheetRecord.name }}</div>
+              <div class="muted mono">{{ sheetRecord.at.slice(0, 10) }} · {{ sheetRecord.at.slice(11, 16) }}<template v-if="sheetRecord.durationMin"> · {{ sheetRecord.durationMin }} min</template></div>
+            </div>
+            <button class="sheet-close" aria-label="Fermer" @click="sheetRecord = null">×</button>
+          </div>
+          <div class="sheet-body">
+            <div v-for="e in sheetRecord.entries" :key="e.exId" class="history-entry">
+              <span class="history-ex">{{ exName(e.exId) }}</span>
+              <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}${x.w2 != null ? ` / ${x.w2}×${x.r2}` : ''}`).join(' · ') }}</span>
+            </div>
+            <div v-for="(sp, k) in (sheetRecord.sprint || [])" :key="'sp' + k" class="history-entry">
+              <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
+              <span class="mono muted">{{ sp.count }} × {{ sp.duration }}<template v-if="sp.intensity"> @ {{ sp.intensity }}</template></span>
+            </div>
+            <div v-if="!sheetRecord.entries.length && !(sheetRecord.sprint || []).length" class="muted">Séance sans détail enregistré.</div>
+          </div>
+          <button class="btn-primary sheet-edit" @click="editSession(sheetRecord!)">✏️ Modifier cette séance</button>
+        </div>
+      </div>
+    </transition>
 
     <!-- Mobile : navigation en bas (barre d'onglets) -->
     <nav v-if="view !== 'session'" class="bottomnav">
@@ -1035,6 +1192,50 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .hist-when { font-size: 12px; color: var(--text-muted); }
 .history-entry { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 13px; }
 .history-ex { color: var(--text-secondary); }
+
+/* Journal — calendrier */
+.cal-card { display: flex; flex-direction: column; gap: 10px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; }
+.cal-month { font-family: var(--font-display); font-weight: 700; font-size: 16px; text-transform: capitalize; }
+.cal-nav { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--bg-accent); background: var(--bg-primary); color: var(--text-primary); font-size: 18px; line-height: 1; cursor: pointer; }
+.cal-nav:hover { background: var(--bg-secondary); }
+.cal-dow-row, .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-dow { text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); padding-bottom: 2px; }
+.cal-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--text-secondary); font-family: var(--font-mono); font-size: 13px; cursor: default; padding: 0; }
+.cal-cell.empty { visibility: hidden; }
+.cal-cell.has { cursor: pointer; background: var(--bg-secondary); color: var(--text-primary); font-weight: 700; }
+.cal-cell.has:hover { border-color: var(--bg-accent); }
+.cal-cell.today { border-color: var(--accent-primary); }
+.cal-cell.sel { background: color-mix(in srgb, var(--accent-primary) 16%, var(--bg-primary)); border-color: var(--accent-primary); }
+.cal-day { line-height: 1; }
+.cal-dots { display: flex; gap: 2px; height: 5px; align-items: center; }
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+/* Journal — séances du jour sélectionné */
+.day-sessions { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.day-session { width: 100%; text-align: left; cursor: pointer; font: inherit; border-left: 3px solid var(--c); transition: transform 0.15s var(--ease-out), box-shadow 0.2s; }
+.day-session:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(139, 111, 92, 0.16); }
+.ds-top { display: flex; align-items: center; gap: 8px; }
+.ds-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
+.ds-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.ds-time { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.ds-sum { margin-top: 4px; }
+.empty.small { padding: 14px; text-align: center; }
+
+/* Feuille de séance (bottom sheet) */
+.sheet-overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center; background: rgba(20, 14, 10, 0.42); backdrop-filter: blur(2px); }
+.sheet { width: 100%; max-width: 560px; max-height: 82vh; overflow-y: auto; background: var(--bg-primary); border-radius: 20px 20px 0 0; padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 12px; }
+.sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--bg-accent); margin: 4px auto 2px; flex: 0 0 auto; }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sheet-title { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
+.sheet-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
+.sheet-close { width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--bg-accent); background: var(--bg-primary); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
+.sheet-body { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--bg-accent); padding-top: 10px; }
+.sheet-edit { padding: 13px; font-size: 15px; margin-top: 2px; }
+.sheet-enter-active, .sheet-leave-active { transition: opacity 0.25s; }
+.sheet-enter-active .sheet, .sheet-leave-active .sheet { transition: transform 0.28s var(--ease-out); }
+.sheet-enter-from, .sheet-leave-to { opacity: 0; }
+.sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(100%); }
 .trend-down { color: #3f7a4f; font-weight: 700; }
 .trend-up { color: #a97b1e; font-weight: 700; }
 
