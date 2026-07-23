@@ -3,7 +3,8 @@ import { ALL_EXERCISES, topOfRange, suggestedIncrement } from '~/data/sportProgr
 import type { Exercise } from '~/data/sportProgram'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
-export interface SetLog { w: number; r: number; warm?: boolean }
+// w2/r2 : 2e mouvement d'un superset (charge/reps propres)
+export interface SetLog { w: number; r: number; warm?: boolean; w2?: number; r2?: number }
 const working = (sets: SetLog[]) => sets.filter(s => !s.warm)
 export interface SessionLog { date: string; sets: SetLog[]; durationMin?: number }
 export type Logs = Record<string, SessionLog[]>

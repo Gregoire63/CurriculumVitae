@@ -77,7 +77,7 @@ const openEx = ref<string | null>(null)
 // Progrès : première séance sélectionnée par défaut
 const progressSession = ref<string | null>(PROGRAM[0]?.id ?? null)
 const flash = ref('')
-const draft = reactive<Record<string, { w: string; r: string; done: boolean; warm: boolean }[]>>({})
+const draft = reactive<Record<string, { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }[]>>({})
 const sessionStart = ref(0)
 const plateOpen = ref(false)
 const ormOpen = ref(false)
@@ -152,7 +152,9 @@ function startSession(s: Session) {
       } else if (bumped && sug.weight) {
         w = String(sug.weight)
       }
-      return { w, r: '', done: false, warm: false }
+      // superset : charge propre au 2e mouvement, reprise de la dernière fois
+      const w2 = e.superset && lastWork[i]?.w2 != null ? String(lastWork[i]!.w2) : ''
+      return { w, r: '', done: false, warm: false, w2, r2: '' }
     })
   }
   openEx.value = s.exercises[0].id
@@ -165,8 +167,8 @@ function startSession(s: Session) {
 // On ne compte que les séries de travail (l'échauffement ne compte pas)
 const doneCount = (exId: string) => (draft[exId] || []).filter(s => s.done && !s.warm).length
 const workCount = (exId: string) => (draft[exId] || []).filter(s => !s.warm).length
-function addSet(exId: string) { const rows = draft[exId]; const lastW = [...rows].reverse().find(s => !s.warm); rows.push({ w: lastW?.w ?? '', r: '', done: false, warm: false }) }
-function addWarmup(exId: string) { const wu = warmup(exId); draft[exId].unshift({ w: wu ? String(wu[0]) : '', r: '', done: false, warm: true }) }
+function addSet(exId: string) { const rows = draft[exId]; const lastW = [...rows].reverse().find(s => !s.warm); rows.push({ w: lastW?.w ?? '', r: '', done: false, warm: false, w2: lastW?.w2 ?? '', r2: '' }) }
+function addWarmup(exId: string) { const wu = warmup(exId); draft[exId].unshift({ w: wu ? String(wu[0]) : '', r: '', done: false, warm: true, w2: '', r2: '' }) }
 function removeSet(exId: string, i: number) { if (draft[exId].length > 1) draft[exId].splice(i, 1) }
 // Libellé : « Éch » pour l'échauffement, sinon numéro de série de travail
 function setLabel(rows: { warm: boolean }[], i: number) {
@@ -196,7 +198,11 @@ function finishSession() {
   const durationMin = Math.round((Date.now() - sessionStart.value) / 60000)
   const entries = activeSession.value.exercises.map(e => ({
     exId: e.id,
-    sets: (draft[e.id] || []).filter(s => s.done && s.w !== '' && s.r !== '').map(s => ({ w: parseFloat(s.w), r: parseInt(s.r, 10), ...(s.warm ? { warm: true } : {}) })),
+    sets: (draft[e.id] || []).filter(s => s.done && s.w !== '' && s.r !== '').map(s => ({
+      w: parseFloat(s.w), r: parseInt(s.r, 10),
+      ...(e.superset && s.w2 !== '' && s.r2 !== '' ? { w2: parseFloat(s.w2), r2: parseInt(s.r2, 10) } : {}),
+      ...(s.warm ? { warm: true } : {}),
+    })),
   }))
   const sprintEfforts = sprintDraft.value
     .filter(r => r.duration.trim() || r.intensity.trim())
@@ -207,10 +213,10 @@ function finishSession() {
   view.value = 'home'
   showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 PR : ${prs.join(', ')}` : `Séance enregistrée ✓ (${durationMin} min)`)
 }
-function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}`).join(' · ')}` : null }
+function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}${s.w2 != null ? ` / ${s.w2}×${s.r2}` : ''}`).join(' · ')}` : null }
 // Conseil de surcharge progressive (monte la charge quand on progresse ou qu'on stagne)
 function overloadHint(ex: Exercise): { cls: string; text: string } | null {
-  if (ex.bodyweight) return null // au poids du corps on progresse aux reps, pas de montée forcée
+  if (ex.bodyweight || ex.superset) return null // au poids du corps / superset : progression gérée à la main
   const s = suggestWeight(ex)
   if (s.reason === 'progress') return { cls: 'progress', text: `🎯 Objectif de reps atteint → +${s.inc} kg par série (jusqu'à ${s.weight} kg)` }
   if (s.reason === 'stall') return { cls: 'stall', text: `⏫ Bloqué ${s.streak} séances à ${s.base} kg — on force +${s.inc} kg par série` }
@@ -266,13 +272,13 @@ const avgDuration = computed(() => {
 })
 const totalVolume = computed(() => {
   let v = 0
-  for (const ss of Object.values(logs.value)) for (const s of ss) for (const set of s.sets) if (!set.warm) v += set.w * set.r
+  for (const ss of Object.values(logs.value)) for (const s of ss) for (const set of s.sets) if (!set.warm) v += set.w * set.r + (set.w2 && set.r2 ? set.w2 * set.r2 : 0)
   return v
 })
 const volumeThisWeek = computed(() => {
   if (!startOfWeekISO.value) return 0
   let v = 0
-  for (const ss of Object.values(logs.value)) for (const s of ss) if (s.date >= startOfWeekISO.value!) for (const set of s.sets) if (!set.warm) v += set.w * set.r
+  for (const ss of Object.values(logs.value)) for (const s of ss) if (s.date >= startOfWeekISO.value!) for (const set of s.sets) if (!set.warm) v += set.w * set.r + (set.w2 && set.r2 ? set.w2 * set.r2 : 0)
   return v
 })
 const muscleVolume = computed(() => {
@@ -445,23 +451,48 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
             <SportExerciseMove :ex-id="e.id"><SportMuscleMap :muscles="e.muscles" /></SportExerciseMove>
             <div v-if="e.bodyweight" class="hint-pill bw">🧍 Charge = ton poids de corps<template v-if="latestWeight"> ({{ latestWeight }} kg)</template> + lest. Préremplie — ajuste si tu ajoutes du poids.</div>
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
-            <div v-if="!e.bodyweight && warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
+            <div v-if="!e.bodyweight && !e.superset && warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
               <div class="muted italic mt-6">{{ e.machine }}</div>
             </div>
             <div class="sets">
-              <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done, warm: s.warm }">
-                <button class="set-label mono" :class="{ warm: s.warm }" :title="s.warm ? 'Échauffement (non compté) — clic pour repasser en série' : 'Clic pour marquer en échauffement'" @click="s.warm = !s.warm">{{ setLabel(draft[e.id], i) }}</button>
-                <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
-                <span class="times">×</span>
-                <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
-                <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e.reps)">{{ s.done ? '✓' : '○' }}</button>
-                <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
-              </div>
+              <!-- Superset : une charge par mouvement -->
+              <template v-if="e.superset">
+                <div v-for="(s, i) in draft[e.id]" :key="i" class="ss-set" :class="{ done: s.done }">
+                  <div class="ss-set-top">
+                    <span class="mono ss-set-label">Série {{ i + 1 }}</span>
+                    <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e.reps)">{{ s.done ? '✓' : '○' }}</button>
+                    <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
+                  </div>
+                  <div class="ss-move">
+                    <span class="ss-move-label">{{ e.superset[0] }}</span>
+                    <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
+                    <span class="times">×</span>
+                    <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
+                  </div>
+                  <div class="ss-move">
+                    <span class="ss-move-label">{{ e.superset[1] }}</span>
+                    <input v-model="s.w2" type="number" inputmode="decimal" placeholder="kg">
+                    <span class="times">×</span>
+                    <input v-model="s.r2" type="number" inputmode="numeric" placeholder="reps">
+                  </div>
+                </div>
+              </template>
+              <!-- Exercice classique -->
+              <template v-else>
+                <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done, warm: s.warm }">
+                  <button class="set-label mono" :class="{ warm: s.warm }" :title="s.warm ? 'Échauffement (non compté) — clic pour repasser en série' : 'Clic pour marquer en échauffement'" @click="s.warm = !s.warm">{{ setLabel(draft[e.id], i) }}</button>
+                  <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
+                  <span class="times">×</span>
+                  <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
+                  <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e.reps)">{{ s.done ? '✓' : '○' }}</button>
+                  <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
+                </div>
+              </template>
               <div class="set-adds">
                 <button class="add-set" @click="addSet(e.id)">+ Série</button>
-                <button class="add-set warm" @click="addWarmup(e.id)">+ Échauffement</button>
+                <button v-if="!e.superset" class="add-set warm" @click="addWarmup(e.id)">+ Échauffement</button>
               </div>
             </div>
             <div v-if="lastLabel(e.id)" class="muted last-perf">{{ lastLabel(e.id) }}</div>
@@ -630,7 +661,7 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
           </div>
           <div v-for="e in s.entries" :key="e.exId" class="history-entry">
             <span class="history-ex">{{ exName(e.exId) }}</span>
-            <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}`).join(' · ') }}</span>
+            <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}${x.w2 != null ? ` / ${x.w2}×${x.r2}` : ''}`).join(' · ') }}</span>
           </div>
           <div v-for="(sp, k) in (s.sprint || [])" :key="'sp' + k" class="history-entry">
             <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
@@ -870,6 +901,15 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .check.ok { background: #e7f0e2; border-color: #bcd8ae; color: #3f7a4f; }
 .rm { width: 30px; height: 40px; background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; border-radius: 8px; }
 .rm:hover { color: #b5502f; }
+/* Superset : une charge par mouvement */
+.ss-set { display: flex; flex-direction: column; gap: 8px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 10px 12px; }
+.ss-set.done { border-color: #bcd8ae; background: #f0f5ec; }
+.ss-set-top { display: flex; align-items: center; gap: 8px; }
+.ss-set-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.ss-set-top .check { margin-left: auto; }
+.ss-move { display: flex; align-items: center; gap: 8px; }
+.ss-move-label { flex: 0 0 78px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--accent-strong); }
+.ss-move input { flex: 1; min-width: 0; width: auto; }
 .set-adds { display: flex; gap: 8px; flex-wrap: wrap; }
 .add-set { align-self: flex-start; background: none; border: 1px dashed var(--accent-secondary); color: var(--accent-primary); border-radius: 9px; padding: 8px 14px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .add-set:hover { background: var(--bg-secondary); border-style: solid; }

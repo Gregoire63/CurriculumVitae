@@ -11,6 +11,7 @@ export interface Exercise {
   cues: string[]
   machine: string
   bodyweight?: boolean // charge = poids de corps (+ lest) — préremplie avec le poids du profil
+  superset?: [string, string] // 2 mouvements enchaînés — saisie d'une charge par mouvement
 }
 
 // Plan de sprint détaillé, avec variante extérieur (piste) et tapis
@@ -129,7 +130,7 @@ export const PROGRAM: Session[] = [
       { id: 'ecartes', name: 'Écartés à la poulie', sets: 3, reps: '12-15', muscles: ['pecs'], cues: ['Léger arrondi des coudes, fixe', 'Croise légèrement les mains devant', 'Tension continue, pas de repos en haut'], machine: 'Ou pec deck — cherche la congestion' },
       { id: 'tractions', name: 'Tractions (+ tenues)', sets: 4, reps: 'max', muscles: ['dos', 'biceps'], cues: ['Note le nombre de reps à chaque série — objectif : battre ton total', 'Charge préremplie avec ton poids de corps ; ajoute du lest par-dessus dès que tu passes 10-12 reps propres', 'Finis chaque série par 1-2 tractions TENUES : menton au-dessus de la barre, tiens 5-10 s', 'Descente lente et contrôlée (2-3 s) — le négatif fait grossir le dos'], machine: 'Barre de traction — assistance élastique/machine si besoin', bodyweight: true },
       { id: 'curl-21', name: 'Curl 21 (méthode 7-7-7)', sets: 3, reps: '7+7+7 (21)', muscles: ['biceps'], cues: ['7 reps sur la moitié basse (bas → milieu)', '7 reps sur la moitié haute (milieu → haut)', '7 reps en amplitude complète', "Charge légère, aucun élan — c'est la brûlure qui fait le boulot"], machine: 'Barre EZ, haltères ou poulie basse — ton exo qui fait grossir les bras' },
-      { id: 'ss-bras', name: 'Superset triceps : pushdown + extension', sets: 3, reps: '12+12', muscles: ['triceps'], cues: ['12 pushdowns à la corde (poulie haute)', 'Puis SANS repos, 12 extensions au-dessus de la tête (corde, poulie basse)', 'Repos seulement après les deux exos, puis on recommence', 'Deux angles : chef latéral (pushdown) + longue portion (overhead) = triceps complet'], machine: "Poulie corde — haute pour le pushdown, basse pour l'overhead" },
+      { id: 'ss-bras', name: 'Superset triceps : pushdown + extension', sets: 3, reps: '12+12', muscles: ['triceps'], cues: ['12 pushdowns à la corde (poulie haute)', 'Puis SANS repos, 12 extensions au-dessus de la tête (corde, poulie basse)', 'Repos seulement après les deux exos, puis on recommence', 'Deux angles : chef latéral (pushdown) + longue portion (overhead) = triceps complet'], machine: "Poulie corde — haute pour le pushdown, basse pour l'overhead", superset: ['Pushdown', 'Overhead'] },
     ],
   },
 ]
