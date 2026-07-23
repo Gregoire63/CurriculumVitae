@@ -1,6 +1,6 @@
 // Service worker scopé /sport — cache offline de l'outil de suivi.
 // Le reste du site n'est pas affecté (scope limité au register()).
-const CACHE = 'sport-v1'
+const CACHE = 'sport-v2'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/sport'])))
@@ -12,6 +12,19 @@ self.addEventListener('activate', (e) => {
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k.startsWith('sport-') && k !== CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
+  )
+})
+
+// Clic sur la notification de fin de repos : on ramène l'utilisateur sur /sport
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (c.url.includes('/sport') && 'focus' in c) return c.focus()
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('/sport')
+    })
   )
 })
 

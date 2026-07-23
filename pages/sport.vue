@@ -99,6 +99,14 @@ function removeSprintRow(i: number) { sprintDraft.value.splice(i, 1) }
 // Chrono flottant : visible quand on a scrollé vers le bas
 const pageScrolled = ref(false)
 function onScroll() { pageScrolled.value = window.scrollY > 150 }
+// Position du chrono flottant calée sur le viewport VISIBLE (reste visible clavier ouvert sur iOS)
+const floatTop = ref(10)
+const keyboardOpen = ref(false)
+function onViewport() {
+  const vv = import.meta.client ? window.visualViewport : null
+  floatTop.value = (vv ? Math.round(vv.offsetTop) : 0) + 10
+  keyboardOpen.value = vv ? window.innerHeight - vv.height > 120 : false
+}
 
 const titles: Record<View, string> = {
   home: 'Mes séances', session: '', progress: 'Progression',
@@ -223,6 +231,12 @@ function overloadHint(ex: Exercise): { cls: string; text: string } | null {
   return null
 }
 
+// Exercice aux haltères : on note le poids TOTAL des deux haltères (cohérent avec le
+// total d'une barre), jamais la charge d'un seul. Rappel affiché pour rester constant.
+function isDumbbell(ex: Exercise): boolean {
+  return !ex.superset && /haltère/i.test(ex.name)
+}
+
 // ─────────── Progression (par séance) ───────────
 const progressSessionObj = computed(() => (progressSession.value ? PROGRAM.find(p => p.id === progressSession.value) ?? null : null))
 function exStats(exId: string) {
@@ -325,8 +339,19 @@ onMounted(() => {
   plateOpen.value = desktop
   ormOpen.value = desktop
   window.addEventListener('scroll', onScroll, { passive: true })
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewport)
+    window.visualViewport.addEventListener('scroll', onViewport)
+    onViewport()
+  }
 })
-onUnmounted(() => window.removeEventListener('scroll', onScroll))
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
+  if (import.meta.client && window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', onViewport)
+    window.visualViewport.removeEventListener('scroll', onViewport)
+  }
+})
 </script>
 
 <template>
@@ -359,7 +384,7 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
     <!-- Chrono de repos flottant : fixe en haut quand on a scrollé, revient à sa place en haut de page -->
     <transition name="ft-drop">
-      <div v-if="view === 'session' && restLeft > 0 && pageScrolled" class="floating-timer">
+      <div v-if="view === 'session' && restLeft > 0 && (pageScrolled || keyboardOpen)" class="floating-timer" :style="{ top: floatTop + 'px' }">
         <span class="ft-time mono">{{ restFmt(restLeft) }}</span>
         <span class="ft-label">Repos</span>
         <button class="ft-btn" @click="addRest(15)">+15</button>
@@ -452,6 +477,7 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
             <div v-if="e.bodyweight" class="hint-pill bw">🧍 Charge = ton poids de corps<template v-if="latestWeight"> ({{ latestWeight }} kg)</template> + lest. Préremplie — ajuste si tu ajoutes du poids.</div>
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
             <div v-if="!e.bodyweight && !e.superset && warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
+            <div v-if="isDumbbell(e)" class="hint-pill db">🏋️ Note le poids <strong>total des 2 haltères</strong> (ex. 2 × 20 kg → 40 kg), pas un seul.</div>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
               <div class="muted italic mt-6">{{ e.machine }}</div>
@@ -481,6 +507,12 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
               </template>
               <!-- Exercice classique -->
               <template v-else>
+                <div class="setrow setrow-head" aria-hidden="true">
+                  <span class="set-label"></span>
+                  <span class="col-head mono">kg</span>
+                  <span class="times">×</span>
+                  <span class="col-head mono">reps</span>
+                </div>
                 <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done, warm: s.warm }">
                   <button class="set-label mono" :class="{ warm: s.warm }" :title="s.warm ? 'Échauffement (non compté) — clic pour repasser en série' : 'Clic pour marquer en échauffement'" @click="s.warm = !s.warm">{{ setLabel(draft[e.id], i) }}</button>
                   <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
@@ -883,11 +915,15 @@ onUnmounted(() => window.removeEventListener('scroll', onScroll))
 .hint-pill.stall { background: #f6ece1; border: 1px solid #e6c3b0; color: #b5502f; font-weight: 600; }
 .hint-pill.warmup { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
 .hint-pill.bw { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
+.hint-pill.db { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
 .cues { display: flex; flex-direction: column; gap: 3px; }
 .cue { display: flex; gap: 8px; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 .cue-arrow { color: var(--c, var(--accent-primary)); font-weight: 700; }
 .sets { display: flex; flex-direction: column; gap: 8px; }
 .setrow { display: flex; gap: 8px; align-items: center; }
+.setrow-head { padding-bottom: 0; margin-bottom: -2px; }
+.setrow-head .times { visibility: hidden; }
+.col-head { width: 68px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
 .setrow.done .set-label { color: #3f7a4f; }
 .setrow.warm input { background: #f9f2e3; border-color: #e6d3a8; }
 .set-label { flex-shrink: 0; min-width: 34px; padding: 6px 4px; background: none; border: 1px solid transparent; border-radius: 7px; color: var(--text-muted); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
