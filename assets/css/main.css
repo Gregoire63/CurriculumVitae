@@ -1,8 +1,3 @@
-/* Tailwind : on n'importe QUE les utilitaires (pas le preflight/reset, pour ne
-   pas modifier la typo du portfolio). Couvre les quelques classes mt-*, mb-*,
-   flex-1… encore utilisées, sans le runtime @nuxt/ui. */
-@import "tailwindcss/utilities.css" layer(utilities);
-
 /* Transitions globales */
 .page-enter-active,
 .page-leave-active {
