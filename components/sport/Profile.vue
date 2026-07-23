@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
+import { useRestTimer } from '~/composables/useRestTimer'
 
 // Vue « Profil » extraite de /sport (chargée à la demande). État partagé via composables.
 const props = defineProps<{ todayIso: string | null }>()
@@ -9,6 +10,11 @@ const emit = defineEmits<{ flash: [msg: string] }>()
 
 const { bodyWeight, addBodyWeight, exportJSON, importJSON } = useWorkout()
 const { profile, weekPlan, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
+const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS } = useRestTimer()
+const volPct = computed({
+  get: () => Math.round(soundVolume.value * 100),
+  set: (v: number) => { soundVolume.value = Math.min(1, Math.max(0, (Number(v) || 0) / 100)) },
+})
 
 const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
 const bwData = computed(() => bodyWeight.value.map(e => ({ date: e.date.slice(5), kg: e.kg })))
@@ -31,10 +37,15 @@ const bmr = computed(() => {
 })
 const maintenance = computed(() => (bmr.value ? Math.round(bmr.value * 1.55) : null))
 
-function onWeight(ev: Event) {
-  const kg = parseFloat((ev.target as HTMLInputElement).value)
-  if (!kg || kg < 30 || kg > 250) return
-  addBodyWeight(kg); emit('flash', 'Poids enregistré ✓')
+// Nouvelle pesée : enregistre le poids à la date du jour (addBodyWeight garde
+// un point par jour, l'historique se construit au fil des jours pour le graphe).
+const newWeight = ref<number | null>(null)
+function saveWeighIn() {
+  const kg = Number(newWeight.value)
+  if (!kg || kg < 30 || kg > 250) { emit('flash', 'Poids invalide (30–250 kg)'); return }
+  addBodyWeight(kg)
+  newWeight.value = null
+  emit('flash', 'Pesée enregistrée ✓')
 }
 async function onImport(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
@@ -54,7 +65,6 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
       <div class="section-label mb-8">Mon profil</div>
       <div class="form-grid">
         <label class="field"><span>Taille (cm)</span><input type="number" inputmode="numeric" :value="profile.heightCm ?? ''" placeholder="180" @change="onHeight"></label>
-        <label class="field"><span>Poids (kg)</span><input type="number" inputmode="decimal" step="0.1" :value="latestWeight ?? ''" placeholder="75" @change="onWeight"></label>
         <label class="field"><span>Année de naissance</span><input type="number" inputmode="numeric" :value="profile.birthYear ?? ''" placeholder="1998" @change="onYear"></label>
         <div class="field">
           <span>Sexe</span>
@@ -73,12 +83,41 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
       <div v-else class="muted">Renseigne taille + poids pour l'IMC, + sexe et année de naissance pour les calories. Tout est calculé à partir de ces données.</div>
     </div>
 
-    <div v-if="bwData.length" class="card">
+    <div class="card">
       <div class="row-between mb-8">
         <div class="section-label">Suivi du poids</div>
-        <div v-if="bwTrend !== 0" class="mono bmi-inline" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg depuis le début</div>
+        <div v-if="latestWeight" class="mono weight-now">{{ latestWeight }} kg<span v-if="bwTrend !== 0" class="bmi-inline" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'"> · {{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg</span></div>
       </div>
-      <div class="chart-wrap"><LazySportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
+      <div class="weigh-row">
+        <input v-model.number="newWeight" type="number" inputmode="decimal" step="0.1" placeholder="Ton poids (kg)" @keyup.enter="saveWeighIn">
+        <button class="btn-primary" @click="saveWeighIn">＋ Nouvelle pesée</button>
+      </div>
+      <div class="muted mt-6">Chaque pesée est datée du jour → l'historique se construit au fil des jours. Si tu repèses aujourd'hui, la valeur du jour est mise à jour.</div>
+      <div v-if="bwData.length" class="chart-wrap mt-6"><LazySportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
+    </div>
+
+    <!-- Son de fin de repos -->
+    <div class="card">
+      <div class="row-between mb-8">
+        <div class="section-label">Son de fin de repos</div>
+        <button class="btn" :class="{ sel: soundEnabled }" @click="soundEnabled = !soundEnabled">{{ soundEnabled ? 'Activé' : 'Désactivé' }}</button>
+      </div>
+      <div class="form-grid">
+        <label class="field">
+          <span>Son</span>
+          <select v-model="soundType" class="select">
+            <option v-for="o in SOUND_OPTIONS" :key="o.key" :value="o.key">{{ o.label }}</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Volume · {{ volPct }} %</span>
+          <input v-model.number="volPct" type="range" min="0" max="100" step="5" class="range">
+        </label>
+      </div>
+      <div class="nav-row mt-6">
+        <button class="btn flex-1" @click="testSound">🔊 Tester le son</button>
+      </div>
+      <div v-if="!soundEnabled" class="muted mt-6">Son coupé — la vibration de fin de repos reste active.</div>
     </div>
 
     <div class="card">

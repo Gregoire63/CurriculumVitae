@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { KEEPALIVE_WAV } from '~/data/keepAliveAudio'
 
 // Timer de repos partagé (module-scope) : la page peut le démarrer automatiquement
@@ -13,6 +13,75 @@ let keepAlive: HTMLAudioElement | null = null
 let swReg: ServiceWorkerRegistration | null = null
 
 const VIBRATE_PATTERN = [300, 150, 300, 150, 300]
+
+// ─── Réglages du son de fin (choisis dans Profil, mémorisés) ────────────────
+const SETTINGS_KEY = 'gr-timer-sound-v1'
+const soundEnabled = ref(true)
+const soundVolume = ref(0.7) // 0 → 1
+const soundType = ref('bip')
+
+// Motifs sonores générés à la volée (WebAudio) : { fréquence, départ, durée… }
+interface ToneSpec { f: number; t: number; d: number; type?: OscillatorType; peak?: number }
+const SOUNDS: Record<string, ToneSpec[]> = {
+  bip: [{ f: 880, t: 0, d: 0.22 }, { f: 880, t: 0.28, d: 0.22 }],
+  triple: [{ f: 1047, t: 0, d: 0.12 }, { f: 1047, t: 0.16, d: 0.12 }, { f: 1047, t: 0.32, d: 0.16 }],
+  montee: [{ f: 523, t: 0, d: 0.16 }, { f: 659, t: 0.14, d: 0.16 }, { f: 784, t: 0.28, d: 0.28 }],
+  cloche: [{ f: 660, t: 0, d: 0.6, peak: 0.3 }, { f: 1320, t: 0, d: 0.5, peak: 0.15 }, { f: 1980, t: 0, d: 0.35, peak: 0.07 }],
+  doux: [{ f: 440, t: 0, d: 0.5, type: 'triangle', peak: 0.28 }],
+}
+export const SOUND_OPTIONS = [
+  { key: 'bip', label: 'Bip double' },
+  { key: 'triple', label: 'Triple bip' },
+  { key: 'montee', label: 'Montée' },
+  { key: 'cloche', label: 'Cloche' },
+  { key: 'doux', label: 'Doux' },
+]
+
+let settingsHydrated = false
+function hydrateSettings() {
+  if (settingsHydrated || !import.meta.client) return
+  settingsHydrated = true
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (raw) {
+      const s = JSON.parse(raw)
+      if (typeof s.enabled === 'boolean') soundEnabled.value = s.enabled
+      if (typeof s.volume === 'number') soundVolume.value = Math.min(1, Math.max(0, s.volume))
+      if (typeof s.type === 'string' && SOUNDS[s.type]) soundType.value = s.type
+    }
+  } catch { /* réglages illisibles */ }
+}
+if (import.meta.client) {
+  watch([soundEnabled, soundVolume, soundType], () => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value })) } catch { /* ignore */ }
+  })
+}
+
+function getCtx(): AudioContext | null {
+  if (!import.meta.client) return null
+  try {
+    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    audioCtx = audioCtx || new Ctx()
+    if (audioCtx.state === 'suspended') audioCtx.resume()
+    return audioCtx
+  } catch { return null }
+}
+
+function playTones(ctx: AudioContext, vol: number, tones: ToneSpec[]) {
+  const now = ctx.currentTime
+  for (const s of tones) {
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
+    o.connect(g); g.connect(ctx.destination)
+    o.type = s.type || 'sine'
+    o.frequency.value = s.f
+    const peak = Math.max(0.0002, (s.peak ?? 0.35) * vol)
+    g.gain.setValueAtTime(0.0001, now + s.t)
+    g.gain.exponentialRampToValueAtTime(peak, now + s.t + 0.02)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + s.t + s.d)
+    o.start(now + s.t); o.stop(now + s.t + s.d + 0.02)
+  }
+}
 
 // ─── Audio « keep-alive » ───────────────────────────────────────────────────
 // Un onglet en arrière-plan voit ses timers gelés par Chrome Android… sauf s'il
@@ -38,17 +107,14 @@ function stopKeepAlive() {
 
 // Débloque l'audio sur un geste utilisateur (obligatoire sur iOS/mobile)
 function unlockAudio() {
-  if (!import.meta.client) return
+  const ctx = getCtx()
+  if (!ctx) return
   try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    audioCtx = audioCtx || new Ctx()
-    if (audioCtx.state === 'suspended') audioCtx.resume()
-    // bip quasi-silencieux pour finir de déverrouiller le contexte
-    const o = audioCtx.createOscillator()
-    const g = audioCtx.createGain()
+    const o = ctx.createOscillator()
+    const g = ctx.createGain()
     g.gain.value = 0.0001
-    o.connect(g); g.connect(audioCtx.destination)
-    o.start(); o.stop(audioCtx.currentTime + 0.02)
+    o.connect(g); g.connect(ctx.destination)
+    o.start(); o.stop(ctx.currentTime + 0.02)
   } catch { /* audio indisponible */ }
 }
 
@@ -66,27 +132,18 @@ function prepareNotify() {
 }
 
 function beep() {
-  if (!import.meta.client) return
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    audioCtx = audioCtx || new Ctx()
-    if (audioCtx.state === 'suspended') audioCtx.resume()
-    const now = audioCtx.currentTime
-    // deux bips courts
-    for (const t of [0, 0.28]) {
-      const o = audioCtx.createOscillator()
-      const g = audioCtx.createGain()
-      o.connect(g)
-      g.connect(audioCtx.destination)
-      o.type = 'sine'
-      o.frequency.value = 880
-      g.gain.setValueAtTime(0.0001, now + t)
-      g.gain.exponentialRampToValueAtTime(0.35, now + t + 0.02)
-      g.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.22)
-      o.start(now + t)
-      o.stop(now + t + 0.24)
-    }
-  } catch { /* audio indisponible : on ignore */ }
+  if (!import.meta.client || !soundEnabled.value) return
+  const ctx = getCtx()
+  if (!ctx) return
+  try { playTones(ctx, soundVolume.value, SOUNDS[soundType.value] || SOUNDS.bip) } catch { /* audio indisponible */ }
+}
+
+// Bouton « Tester » : joue le son choisi (même si désactivé) + petite vibration
+function testSound() {
+  unlockAudio()
+  const ctx = getCtx()
+  if (ctx) { try { playTones(ctx, soundVolume.value, SOUNDS[soundType.value] || SOUNDS.bip) } catch { /* ignore */ } }
+  try { if (import.meta.client && navigator.vibrate) navigator.vibrate(120) } catch { /* ignore */ }
 }
 
 // Alerte de fin : vibration au premier plan + notification (son + vibration) en arrière-plan
@@ -104,6 +161,7 @@ function alertEnd() {
         tag: 'rest-timer',
         icon: '/sport/icon-192.png',
         badge: '/sport/icon-192.png',
+        silent: !soundEnabled.value,
         vibrate: VIBRATE_PATTERN,
         renotify: true,
       } as NotificationOptions
@@ -165,5 +223,9 @@ if (import.meta.client) {
 }
 
 export function useRestTimer() {
-  return { secondsLeft, totalSeconds, start, stop, addTime }
+  hydrateSettings()
+  return {
+    secondsLeft, totalSeconds, start, stop, addTime,
+    soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS,
+  }
 }

@@ -41,11 +41,28 @@ const calCells = computed(() => {
   return cells
 })
 const monthLabel = computed(() => `${MONTHS[calMonth.value.m]} ${calMonth.value.y}`)
-const selectedSessions = computed(() => (selectedDay.value ? sessionsByDay.value[selectedDay.value] || [] : []))
-const fmtDayLong = (iso: string) => {
+
+// Semaine (lundi → dimanche) contenant le jour sélectionné
+function weekDaysOf(iso: string): string[] {
   const d = new Date(iso + 'T00:00:00')
-  return `${DOW[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase()}`
+  const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  const out: string[] = []
+  for (let i = 0; i < 7; i++) { const x = new Date(mon); x.setDate(mon.getDate() + i); out.push(`${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`) }
+  return out
 }
+const selectedWeekDays = computed(() => (selectedDay.value ? weekDaysOf(selectedDay.value) : []))
+const weekSet = computed(() => new Set(selectedWeekDays.value))
+// Séances de la semaine sélectionnée, en ordre chronologique (lundi → dimanche)
+const weekSessions = computed(() => {
+  const days = weekSet.value
+  return sessions.value.filter(s => days.has(s.at.slice(0, 10))).slice().sort((a, b) => a.at.localeCompare(b.at))
+})
+const fmtDM = (iso: string) => { const d = new Date(iso + 'T00:00:00'); return `${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase().slice(0, 4)}` }
+const weekLabel = computed(() => {
+  const d = selectedWeekDays.value
+  return d.length ? `Semaine du ${fmtDM(d[0])} au ${fmtDM(d[6])}` : 'Choisis un jour'
+})
+const dayShort = (iso: string) => { const d = new Date(iso + 'T00:00:00'); return `${DOW[(d.getDay() + 6) % 7]} ${d.getDate()}` }
 function calShift(delta: number) {
   let m = calMonth.value.m + delta
   let y = calMonth.value.y
@@ -55,7 +72,6 @@ function calShift(delta: number) {
 function pickDay(iso: string | null, sess: SessionRecord[]) {
   if (!iso || !sess.length) return
   selectedDay.value = iso
-  if (sess.length === 1) sheetRecord.value = sess[0]
 }
 function edit(rec: SessionRecord) {
   sheetRecord.value = null
@@ -90,7 +106,7 @@ onMounted(() => {
           <button
             v-for="(c, i) in calCells" :key="i"
             class="cal-cell"
-            :class="{ empty: !c.iso, has: c.sessions.length, today: c.iso === todayIso, sel: c.iso === selectedDay }"
+            :class="{ empty: !c.iso, has: c.sessions.length, today: c.iso === todayIso, sel: c.iso === selectedDay, inweek: c.iso && weekSet.has(c.iso) }"
             :disabled="!c.iso || !c.sessions.length"
             @click="pickDay(c.iso, c.sessions)"
           >
@@ -102,10 +118,11 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="section-label">{{ selectedDay ? fmtDayLong(selectedDay) : 'Choisis un jour' }}</div>
-      <div v-if="selectedSessions.length" class="day-sessions">
-        <button v-for="(s, i) in selectedSessions" :key="i" class="card day-session" :style="{ '--c': recColor(s) }" @click="sheetRecord = s">
+      <div class="section-label">{{ weekLabel }}</div>
+      <div v-if="weekSessions.length" class="day-sessions">
+        <button v-for="(s, i) in weekSessions" :key="i" class="card day-session" :style="{ '--c': recColor(s) }" @click="sheetRecord = s">
           <div class="ds-top">
+            <span class="ds-day mono">{{ dayShort(s.at.slice(0, 10)) }}</span>
             <span class="ds-dot"></span>
             <span class="ds-name">{{ s.name }}</span>
             <span class="ds-time mono">{{ s.at.slice(11, 16) }}<template v-if="s.durationMin"> · {{ s.durationMin }} min</template></span>
@@ -113,7 +130,7 @@ onMounted(() => {
           <div class="ds-sum muted">{{ s.entries.length }} exos<template v-if="s.sprint && s.sprint.length"> · ⚡ sprint</template> · touche pour voir / modifier</div>
         </button>
       </div>
-      <div v-else class="card empty small">Aucune séance ce jour. Touche un jour marqué d'un point.</div>
+      <div v-else class="card empty small">Aucune séance cette semaine. Touche un jour marqué d'un point.</div>
     </template>
 
     <!-- Feuille de séance (bottom sheet) -->

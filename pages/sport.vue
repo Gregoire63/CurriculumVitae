@@ -336,7 +336,8 @@ onUnmounted(() => {
     <!-- Écran de chargement (masque le gel d'hydratation ; l'anim tourne sur le compositeur) -->
     <div v-if="!splashGone" class="boot-splash" :class="{ 'boot-hide': !booting }" aria-hidden="true">
       <div class="boot-mark">GR</div>
-      <div class="boot-spinner"></div>
+      <!-- GIF animé : le pipeline image du navigateur le fait tourner même quand le thread JS est bloqué -->
+      <img src="/sport/spinner.gif" class="boot-spinner-img" width="48" height="48" alt="">
       <div class="boot-label">Suivi séances</div>
     </div>
 

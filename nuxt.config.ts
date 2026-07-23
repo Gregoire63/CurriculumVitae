@@ -1,5 +1,4 @@
 import { defineNuxtConfig } from 'nuxt/config'
-import tailwindcss from '@tailwindcss/vite'
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
     compatibilityDate: '2024-11-01',
@@ -225,9 +224,6 @@ export default defineNuxtConfig({
 
     // Vite configuration
     vite: {
-        // Tailwind v4 en direct (sans le runtime @nuxt/ui, inutilisé) — garde les
-        // quelques utilitaires (mt-*, mb-*, flex-1…) tout en allégeant le bundle global.
-        plugins: [tailwindcss()],
         optimizeDeps: {
             include: ['@vue/devtools-core', '@vue/devtools-kit'],
         },
