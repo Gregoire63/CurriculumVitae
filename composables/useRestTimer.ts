@@ -26,8 +26,8 @@ const SOUNDS: Record<string, ToneSpec[]> = {
   bip: [{ f: 880, t: 0, d: 0.22 }, { f: 880, t: 0.28, d: 0.22 }],
   triple: [{ f: 1047, t: 0, d: 0.12 }, { f: 1047, t: 0.16, d: 0.12 }, { f: 1047, t: 0.32, d: 0.16 }],
   montee: [{ f: 523, t: 0, d: 0.16 }, { f: 659, t: 0.14, d: 0.16 }, { f: 784, t: 0.28, d: 0.28 }],
-  cloche: [{ f: 660, t: 0, d: 0.6, peak: 0.3 }, { f: 1320, t: 0, d: 0.5, peak: 0.15 }, { f: 1980, t: 0, d: 0.35, peak: 0.07 }],
-  doux: [{ f: 440, t: 0, d: 0.5, type: 'triangle', peak: 0.28 }],
+  cloche: [{ f: 660, t: 0, d: 0.6, peak: 0.6 }, { f: 1320, t: 0, d: 0.5, peak: 0.28 }, { f: 1980, t: 0, d: 0.35, peak: 0.14 }],
+  doux: [{ f: 440, t: 0, d: 0.5, type: 'triangle', peak: 0.8 }],
 }
 export const SOUND_OPTIONS = [
   { key: 'bip', label: 'Bip double' },
@@ -75,7 +75,7 @@ function playTones(ctx: AudioContext, vol: number, tones: ToneSpec[]) {
     o.connect(g); g.connect(ctx.destination)
     o.type = s.type || 'sine'
     o.frequency.value = s.f
-    const peak = Math.max(0.0002, (s.peak ?? 0.35) * vol)
+    const peak = Math.max(0.0002, (s.peak ?? 0.9) * vol)
     g.gain.setValueAtTime(0.0001, now + s.t)
     g.gain.exponentialRampToValueAtTime(peak, now + s.t + 0.02)
     g.gain.exponentialRampToValueAtTime(0.0001, now + s.t + s.d)
