@@ -262,6 +262,7 @@ function finishSession() {
   const sprintEfforts = sprintDraft.value
     .filter(r => r.duration.trim() || r.intensity.trim())
     .map(r => ({ kind: r.kind, count: parseInt(r.count, 10) || 1, duration: r.duration.trim(), intensity: r.intensity.trim() }))
+  stopRest() // fin de séance → on coupe le chrono de repos (son/vibration/keep-alive)
   // Mode édition : on met à jour l'enregistrement existant au lieu d'en créer un nouveau
   if (editingRecord.value) {
     updateSession(editingRecord.value, entries, durationMin, sprintEfforts)
@@ -279,6 +280,7 @@ function finishSession() {
 }
 // Quitte la séance sans enregistrer (retourne à l'écran d'origine si on éditait)
 function quitSession() {
+  stopRest() // on quitte → on coupe le chrono de repos (son/vibration/keep-alive)
   const back = editingRecord.value ? editReturn.value : 'home'
   editingRecord.value = null
   view.value = back
@@ -336,8 +338,9 @@ onUnmounted(() => {
     <!-- Écran de chargement (masque le gel d'hydratation ; l'anim tourne sur le compositeur) -->
     <div v-if="!splashGone" class="boot-splash" :class="{ 'boot-hide': !booting }" aria-hidden="true">
       <div class="boot-mark">GR</div>
-      <!-- GIF animé : le pipeline image du navigateur le fait tourner même quand le thread JS est bloqué -->
-      <img src="/sport/spinner.gif" class="boot-spinner-img" width="48" height="48" alt="">
+      <!-- Anneau animé en CSS (transform + will-change) : promu sur le compositeur,
+           il continue de tourner même quand le thread JS est bloqué par l'hydratation. -->
+      <div class="boot-spinner"></div>
       <div class="boot-label">Suivi séances</div>
     </div>
 

@@ -411,7 +411,20 @@ input[type='range'], .range { width: 100%; accent-color: var(--accent-primary); 
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display); font-weight: 700; font-size: 22px;
 }
-.boot-spinner-img { width: 48px; height: 48px; }
+.boot-spinner {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 4px solid color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  border-top-color: var(--accent-primary);
+  /* will-change → le navigateur crée un calque dédié dès le 1er paint et anime la
+     rotation sur le thread compositeur : la roue tourne même pendant le gel JS. */
+  will-change: transform;
+  transform: translateZ(0);
+  animation: boot-spin 0.7s linear infinite;
+}
+@keyframes boot-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .boot-spinner { animation-duration: 1.6s; }
+}
 .boot-label {
   font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.16em; color: var(--accent-primary);
