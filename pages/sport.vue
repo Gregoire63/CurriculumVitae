@@ -26,7 +26,7 @@ useHead({
 })
 
 const {
-  bodyWeight, lastPerf, recordSession, updateSession, suggestWeight, sessionLog,
+  bodyWeight, lastPerf, recordSession, updateSession, suggestWeight, sessionLog, seedDemo,
 } = useWorkout()
 const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
 const restFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -44,6 +44,11 @@ function sessionMuscles(s: Session): string[] {
     const l = MUSCLE_LABELS[m] || m
     if (!seen.includes(l)) seen.push(l)
   }
+  return seen.slice(0, 4)
+}
+function exMuscles(e: Exercise): string[] {
+  const seen: string[] = []
+  for (const m of e.muscles) { const l = MUSCLE_LABELS[m] || m; if (!seen.includes(l)) seen.push(l) }
   return seen.slice(0, 4)
 }
 
@@ -76,17 +81,13 @@ const todayRecord = computed(() => {
 })
 
 // ─────────── État UI ───────────
-type View = 'home' | 'session' | 'progress' | 'history' | 'rapport' | 'profil'
+type View = 'home' | 'progress' | 'history' | 'rapport' | 'profil'
 const view = ref<View>('home')
 const activeSession = ref<Session | null>(null)
 const openEx = ref<string | null>(null)
 const flash = ref('')
-// Écran de chargement : masque le « gel » d'hydratation au démarrage.
-// Rendu côté serveur (visible dès le 1er paint), il tourne pendant l'hydratation
-// (animation CSS sur le compositeur, donc insensible au blocage du thread JS)
-// puis disparaît dès que l'app est interactive (onMounted, après hydratation).
-const booting = ref(true)
-const splashGone = ref(false)
+// L'écran de chargement est géré par Nuxt (spa-loading-template.html) : /sport est
+// rendu 100 % client (ssr:false), donc plus de « gel » d'hydratation à masquer ici.
 const draft = reactive<Record<string, { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }[]>>({})
 const sessionStart = ref(0)
 const plateOpen = ref(false)
@@ -94,6 +95,10 @@ const ormOpen = ref(false)
 // Édition d'une séance déjà enregistrée (au lieu d'en démarrer une neuve)
 const editingRecord = ref<SessionRecord | null>(null)
 const editReturn = ref<View>('home')
+// Aperçu en lecture seule (quand une séance est déjà en cours et qu'on clique une autre)
+const previewSession = ref<Session | null>(null)
+// Brouillon de la séance active, sauvegardé en continu (survit à un refresh)
+const DRAFT_KEY = 'gr-active-draft-v1'
 const sprintMode = ref<'exterieur' | 'tapis'>('exterieur')
 const sprintOpen = ref(false)
 const sprintInfoOpen = ref(false)
@@ -112,19 +117,20 @@ function removeSprintRow(i: number) { sprintDraft.value.splice(i, 1) }
 const pageScrolled = ref(false)
 function onScroll() { pageScrolled.value = window.scrollY > 150 }
 // Position du chrono flottant calée sur le viewport VISIBLE (reste visible clavier ouvert sur iOS)
-const floatTop = ref(10)
+// Décalé sous l'en-tête collant de la feuille (gap haut ~26 px + en-tête ~56 px).
+const floatTop = ref(92)
 const keyboardOpen = ref(false)
 function onViewport() {
   const vv = import.meta.client ? window.visualViewport : null
-  floatTop.value = (vv ? Math.round(vv.offsetTop) : 0) + 10
+  floatTop.value = (vv ? Math.round(vv.offsetTop) : 0) + 92
   keyboardOpen.value = vv ? window.innerHeight - vv.height > 120 : false
 }
 
 const titles: Record<View, string> = {
-  home: 'Mes séances', session: '', progress: 'Progression',
+  home: 'Mes séances', progress: 'Progression',
   history: 'Historique', rapport: 'Mon rapport', profil: 'Profil',
 }
-const pageTitle = computed(() => (view.value === 'session' && activeSession.value ? activeSession.value.name : titles[view.value]))
+const pageTitle = computed(() => titles[view.value])
 const TABS: { id: View; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Accueil' },
   { id: 'rapport', icon: '📊', label: 'Rapport' },
@@ -137,55 +143,163 @@ function showFlash(msg: string) { flash.value = msg; setTimeout(() => { flash.va
 const go = (v: View) => { view.value = v }
 
 // ─────────── Chrono séance ───────────
+// La durée tourne tant qu'une séance est active (même réduite en mini-feuille),
+// pour l'afficher en direct dans la barre « séance en cours ».
 const elapsed = ref(0)
 let elapsedInt: ReturnType<typeof setInterval> | null = null
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-watch(view, (v) => {
+watch(() => activeSession.value, (s) => {
   if (elapsedInt) { clearInterval(elapsedInt); elapsedInt = null }
-  if (v === 'session') {
-    elapsed.value = Math.floor((Date.now() - sessionStart.value) / 1000)
-    elapsedInt = setInterval(() => { elapsed.value = Math.floor((Date.now() - sessionStart.value) / 1000) }, 1000)
+  if (!s) return
+  // Édition d'une ancienne séance : le chrono ne redémarre PAS. On affiche
+  // simplement la durée enregistrée (figée).
+  if (editingRecord.value) {
+    elapsed.value = (editingRecord.value.durationMin ?? 0) * 60
+    return
   }
-})
+  elapsed.value = Math.floor((Date.now() - sessionStart.value) / 1000)
+  elapsedInt = setInterval(() => { elapsed.value = Math.floor((Date.now() - sessionStart.value) / 1000) }, 1000)
+}, { immediate: true })
 onUnmounted(() => { if (elapsedInt) clearInterval(elapsedInt) })
+
+// ─────────── Feuille de séance animée (vrai bottom-sheet, superposé à l'app) ───
+// La feuille est un CALQUE au-dessus de l'onglet courant (qui reste rendu
+// derrière, avec un voile) : quand on la fait glisser vers le bas, on voit
+// l'écran de l'app derrière. sheetOpen est indépendant de `view`.
+const sheetOpen = ref(false)
+const dragY = ref(0)            // translation verticale courante (px)
+const dragging = ref(false)     // doigt en train de glisser → transition figée
+const sheetClosing = ref(false) // la feuille descend puis se démonte
+let dragStartY = 0
+let dragMoved = false
+const sheetVisible = computed(() => !!activeSession.value && (sheetOpen.value || sheetClosing.value))
+const sheetStyle = computed(() => {
+  const t = `translateY(${dragY.value}px)`
+  return dragging.value ? { transform: t, transition: 'none' } : { transform: t }
+})
+// Voile derrière la feuille : opaque à fond, s'éclaircit quand on descend la feuille
+const scrimStyle = computed(() => {
+  const h = import.meta.client ? window.innerHeight : 800
+  const o = Math.max(0, 1 - dragY.value / h)
+  return dragging.value ? { opacity: String(o), transition: 'none' } : { opacity: String(o) }
+})
+function sheetH() { return import.meta.client ? window.innerHeight : 800 }
+
+// Ouvre la feuille : elle monte depuis le bas (par-dessus l'onglet courant)
+function expandSession() {
+  sheetClosing.value = false
+  if (!import.meta.client) { sheetOpen.value = true; return }
+  dragging.value = true          // fige la transition pour placer la feuille en bas
+  dragY.value = sheetH()
+  sheetOpen.value = true
+  requestAnimationFrame(() => {
+    dragging.value = false        // réactive la transition
+    requestAnimationFrame(() => { dragY.value = 0 }) // → remonte en glissant
+  })
+}
+// Anime la DESCENTE de la feuille (glisse vers le bas) puis exécute `after`
+// (nettoyage/état) une fois l'animation finie. Utilisé par toutes les fermetures
+// (réduire, terminer, abandonner) pour un rendu cohérent.
+function animateSheetDown(after?: () => void) {
+  const done = after ?? (() => {})
+  if (!import.meta.client || (!sheetOpen.value && !sheetClosing.value)) { sheetOpen.value = false; done(); return }
+  if (sheetClosing.value) { done(); return }
+  sheetClosing.value = true
+  sheetOpen.value = false         // l'app derrière redevient active
+  requestAnimationFrame(() => { dragY.value = sheetH() })
+  setTimeout(() => { sheetClosing.value = false; dragY.value = 0; done() }, 300)
+}
+// Réduit la feuille : elle descend (l'app est visible derrière) puis se démonte.
+// En mode ÉDITION, fermer ne réduit pas : ça propose d'abandonner les modifs.
+function collapseSession() {
+  if (sheetClosing.value) return
+  if (editingRecord.value) { dragY.value = 0; askCancel(); return } // la feuille remonte, on confirme
+  animateSheetDown()
+}
+// Glisser la poignée : la feuille suit le doigt ; relâchée assez bas → réduit.
+// On écoute sur window pendant le geste → suit le doigt même hors de l'en-tête,
+// pour la souris comme le tactile, sans casser le tap (pas de capture de pointeur).
+function onDragMove(e: PointerEvent) {
+  if (!dragging.value) return
+  const dy = e.clientY - dragStartY
+  if (dy > 4) dragMoved = true
+  dragY.value = Math.max(0, dy)   // uniquement vers le bas
+}
+function onDragEnd() {
+  if (!dragging.value) return
+  dragging.value = false
+  if (import.meta.client) {
+    window.removeEventListener('pointermove', onDragMove)
+    window.removeEventListener('pointerup', onDragEnd)
+    window.removeEventListener('pointercancel', onDragEnd)
+  }
+  if (dragY.value > 110) collapseSession()
+  else dragY.value = 0            // pas assez bas → revient en place (animé)
+}
+function onDragStart(e: PointerEvent) {
+  if (sheetClosing.value || !import.meta.client) return
+  dragging.value = true; dragMoved = false; dragStartY = e.clientY
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+}
+function requestCollapse() { if (!dragMoved) collapseSession() } // tap sur la poignée
+function onSheetScroll(e: Event) { pageScrolled.value = (e.target as HTMLElement).scrollTop > 150 }
+
+// ─────────── Popup « annuler la séance » (remplace le confirm() natif) ────────
+const cancelPromptOpen = ref(false)
+function askCancel() { cancelPromptOpen.value = true }
+function confirmCancel() {
+  cancelPromptOpen.value = false
+  animateSheetDown(() => clearActive()) // la feuille glisse vers le bas puis se ferme
+}
 
 // ─────────── Séance ───────────
 function startSession(s: Session) {
+  // Une séance est déjà en cours : impossible d'en démarrer une autre.
+  // Même séance → on la reprend ; autre séance → aperçu en lecture seule.
+  if (activeSession.value) {
+    if (activeSession.value.id === s.id) expandSession()
+    else previewSession.value = s
+    return
+  }
   activeSession.value = s
   editingRecord.value = null
   for (const k of Object.keys(draft)) delete draft[k]
   const bw = latestWeight.value ?? 0 // poids de corps (profil) pour les exos au poids du corps
   for (const e of s.exercises) {
     const last = lastPerf(e.id)
-    const lastWork = last ? last.sets.filter(x => !x.warm) : [] // on ignore l'échauffement des dernières données
-    const sug = suggestWeight(e)
-    // Pas de montée auto forcée sur les exos au poids du corps (là on progresse surtout aux reps)
-    const bumped = !e.bodyweight && (sug.reason === 'progress' || sug.reason === 'stall')
-    draft[e.id] = Array.from({ length: e.sets }, (_, i) => {
-      const prev = lastWork[i]?.w
-      let w = ''
-      if (e.bodyweight) {
-        // charge = poids de corps (+ lest) : total de la dernière fois, sinon le poids du profil
-        w = prev != null ? String(prev) : (bw ? String(bw) : '')
-      } else if (prev != null) {
-        w = String(bumped ? prev + sug.inc : prev) // garde le pyramidal, +incrément par série si montée
-      } else if (bumped && sug.weight) {
-        w = String(sug.weight)
-      }
-      // superset : charge propre au 2e mouvement, reprise de la dernière fois
-      const w2 = e.superset && lastWork[i]?.w2 != null ? String(lastWork[i]!.w2) : ''
-      return { w, r: '', done: false, warm: false, w2, r2: '' }
-    })
+    if (last && last.sets.length) {
+      // Reprend EXACTEMENT la dernière séance de cet exercice : mêmes lignes
+      // (échauffement inclus), poids ET reps préremplis. Rien n'est coché → il n'y
+      // a plus qu'à ajuster et valider (fini de retaper les reps / rajouter les lignes).
+      draft[e.id] = last.sets.map(st => ({
+        w: st.w != null ? String(st.w) : '',
+        r: st.r != null ? String(st.r) : '',
+        done: false,
+        warm: !!st.warm,
+        w2: st.w2 != null ? String(st.w2) : '',
+        r2: st.r2 != null ? String(st.r2) : '',
+      }))
+    } else {
+      // Aucun historique : lignes par défaut du programme (poids conseillé si dispo)
+      const sug = suggestWeight(e)
+      draft[e.id] = Array.from({ length: e.sets }, () => ({
+        w: e.bodyweight && bw ? String(bw) : (sug.weight ? String(sug.weight) : ''),
+        r: '', done: false, warm: false, w2: '', r2: '',
+      }))
+    }
   }
   openEx.value = s.exercises[0].id
   sprintOpen.value = false
   sprintInfoOpen.value = false
   sprintDraft.value = s.sprint ? newSprintRows() : []
   sessionStart.value = Date.now()
-  view.value = 'session'
+  expandSession()
 }
 // Rouvre une séance déjà enregistrée pour la modifier (préremplie avec les perfs saisies)
 function editSession(rec: SessionRecord) {
+  if (activeSession.value) { showFlash('Termine ou abandonne ta séance en cours avant d’en modifier une autre.'); return }
   const s = sessionById(rec.sessionId) || PROGRAM.find(p => p.name === rec.name)
   if (!s) return
   activeSession.value = s
@@ -217,11 +331,21 @@ function editSession(rec: SessionRecord) {
     ? rec.sprint.map(sp => ({ kind: sp.kind, count: String(sp.count), duration: sp.duration, intensity: sp.intensity }))
     : (s.sprint ? newSprintRows() : [])
   sessionStart.value = Date.now() - (rec.durationMin ?? 0) * 60000
-  view.value = 'session'
+  expandSession()
 }
 // On ne compte que les séries de travail (l'échauffement ne compte pas)
 const doneCount = (exId: string) => (draft[exId] || []).filter(s => s.done && !s.warm).length
 const workCount = (exId: string) => (draft[exId] || []).filter(s => !s.warm).length
+// Un exercice est « fini » quand toutes ses séries de travail sont cochées
+const isExDone = (exId: string) => { const wc = workCount(exId); return wc > 0 && doneCount(exId) === wc }
+const finishedCount = computed(() => (activeSession.value ? activeSession.value.exercises.filter(e => isExDone(e.id)).length : 0))
+// On ne peut enregistrer une NOUVELLE séance qu'à partir de 80% d'exercices finis
+// (en édition, toujours possible).
+const finishReady = computed(() => {
+  if (editingRecord.value) return true
+  const total = activeSession.value?.exercises.length ?? 0
+  return total ? finishedCount.value / total >= 0.8 : true
+})
 function addSet(exId: string) { const rows = draft[exId]; const lastW = [...rows].reverse().find(s => !s.warm); rows.push({ w: lastW?.w ?? '', r: '', done: false, warm: false, w2: lastW?.w2 ?? '', r2: '' }) }
 function addWarmup(exId: string) { const wu = warmup(exId); draft[exId].unshift({ w: wu ? String(wu[0]) : '', r: '', done: false, warm: true, w2: '', r2: '' }) }
 function removeSet(exId: string, i: number) { if (draft[exId].length > 1) draft[exId].splice(i, 1) }
@@ -248,10 +372,23 @@ function warmup(exId: string): number[] | null {
   const steps = [0.5, 0.7, 0.85].map(p => roundTo(w * p, 2.5)).filter(x => x > 0 && x < w)
   return steps.length ? [...new Set(steps)] : null
 }
+// Ferme la séance active : coupe le chrono de repos, vide le brouillon (mémoire +
+// stockage). Appelé quand la séance est terminée (enregistrée) ou abandonnée.
+function clearActive() {
+  stopRest() // coupe le chrono de repos (son/vibration/keep-alive)
+  activeSession.value = null
+  editingRecord.value = null
+  previewSession.value = null
+  sheetOpen.value = false; sheetClosing.value = false; dragY.value = 0
+  for (const k of Object.keys(draft)) delete draft[k]
+  sprintDraft.value = []
+  if (import.meta.client) { try { localStorage.removeItem(DRAFT_KEY) } catch { /* stockage indispo */ } }
+}
 function finishSession() {
-  if (!activeSession.value) return
+  if (!activeSession.value || !finishReady.value) return
+  const sess = activeSession.value
   const durationMin = Math.round((Date.now() - sessionStart.value) / 60000)
-  const entries = activeSession.value.exercises.map(e => ({
+  const entries = sess.exercises.map(e => ({
     exId: e.id,
     sets: (draft[e.id] || []).filter(s => s.done && s.w !== '' && s.r !== '').map(s => ({
       w: parseFloat(s.w), r: parseInt(s.r, 10),
@@ -262,28 +399,23 @@ function finishSession() {
   const sprintEfforts = sprintDraft.value
     .filter(r => r.duration.trim() || r.intensity.trim())
     .map(r => ({ kind: r.kind, count: parseInt(r.count, 10) || 1, duration: r.duration.trim(), intensity: r.intensity.trim() }))
-  stopRest() // fin de séance → on coupe le chrono de repos (son/vibration/keep-alive)
-  // Mode édition : on met à jour l'enregistrement existant au lieu d'en créer un nouveau
+  // Mode édition : on met à jour l'enregistrement existant au lieu d'en créer un
+  // nouveau. On CONSERVE la durée d'origine (le chrono ne tourne pas en édition).
   if (editingRecord.value) {
-    updateSession(editingRecord.value, entries, durationMin, sprintEfforts)
+    const keepMin = editingRecord.value.durationMin
+    updateSession(editingRecord.value, entries, keepMin, sprintEfforts)
     const back = editReturn.value
-    editingRecord.value = null
-    view.value = back
-    showFlash(`Séance modifiée ✓ (${durationMin} min)`)
+    animateSheetDown(() => { clearActive(); view.value = back; showFlash(keepMin ? `Séance modifiée ✓ (${keepMin} min)` : 'Séance modifiée ✓') })
     return
   }
-  const prs = recordSession(entries, durationMin, { sessionId: activeSession.value.id, name: activeSession.value.name }, sprintEfforts)
+  const prs = recordSession(entries, durationMin, { sessionId: sess.id, name: sess.name }, sprintEfforts)
   // Le planning du jour s'adapte automatiquement à la séance réellement faite
-  if (todayIndex.value !== null) setDay(todayIndex.value, activeSession.value.id)
-  view.value = 'home'
-  showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 PR : ${prs.join(', ')}` : `Séance enregistrée ✓ (${durationMin} min)`)
-}
-// Quitte la séance sans enregistrer (retourne à l'écran d'origine si on éditait)
-function quitSession() {
-  stopRest() // on quitte → on coupe le chrono de repos (son/vibration/keep-alive)
-  const back = editingRecord.value ? editReturn.value : 'home'
-  editingRecord.value = null
-  view.value = back
+  if (todayIndex.value !== null) setDay(todayIndex.value, sess.id)
+  animateSheetDown(() => {
+    clearActive()
+    view.value = 'home'
+    showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 PR : ${prs.join(', ')}` : `Séance enregistrée ✓ (${durationMin} min)`)
+  })
 }
 function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}${s.w2 != null ? ` / ${s.w2}×${s.r2}` : ''}`).join(' · ')}` : null }
 // Conseil de surcharge progressive (monte la charge quand on progresse ou qu'on stagne)
@@ -305,12 +437,65 @@ function isDumbbell(ex: Exercise): boolean {
 const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
 const p2 = (n: number) => String(n).padStart(2, '0')
 
+// ─────────── Sauvegarde automatique du brouillon ───────────
+// À chaque changement de la séance active (poids, reps, cases cochées, sprint…), on
+// écrit tout dans localStorage. Un refresh accidentel ne fait plus rien perdre.
+if (import.meta.client) {
+  watch(
+    () => (activeSession.value
+      ? JSON.stringify({
+          id: activeSession.value.id,
+          draft,
+          sprintDraft: sprintDraft.value,
+          sessionStart: sessionStart.value,
+          openEx: openEx.value,
+          editingAt: editingRecord.value?.at ?? null,
+          editReturn: editReturn.value,
+        })
+      : ''),
+    (val) => {
+      try {
+        if (val) localStorage.setItem(DRAFT_KEY, val)
+        else localStorage.removeItem(DRAFT_KEY)
+      } catch { /* stockage plein/indisponible */ }
+    },
+  )
+}
+// Restaure le brouillon au démarrage (après un refresh) et rouvre la séance en cours.
+function restoreDraft() {
+  let raw: string | null = null
+  try { raw = localStorage.getItem(DRAFT_KEY) } catch { return }
+  if (!raw) return
+  try {
+    const s = JSON.parse(raw)
+    const sess = PROGRAM.find(p => p.id === s.id)
+    if (!sess) { localStorage.removeItem(DRAFT_KEY); return }
+    activeSession.value = sess
+    for (const k of Object.keys(draft)) delete draft[k]
+    if (s.draft && typeof s.draft === 'object') Object.assign(draft, s.draft)
+    sprintDraft.value = Array.isArray(s.sprintDraft) ? s.sprintDraft : []
+    sessionStart.value = typeof s.sessionStart === 'number' ? s.sessionStart : Date.now()
+    openEx.value = s.openEx ?? sess.exercises[0].id
+    editReturn.value = s.editReturn || 'home'
+    editingRecord.value = s.editingAt ? (sessionLog().find(r => r.at === s.editingAt) || null) : null
+    view.value = 'home'
+    sheetOpen.value = true // on rouvre directement la séance en cours (feuille ouverte)
+  } catch { try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ } }
+}
+
 onMounted(() => {
-  // Hydratation terminée → on retire l'écran de chargement (fondu court)
-  requestAnimationFrame(() => { booting.value = false })
-  setTimeout(() => { splashGone.value = true }, 450)
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sport-sw.js', { scope: '/sport' }).catch(() => {})
   hydrateProfile()
+  restoreDraft() // rouvre la séance en cours après un refresh accidentel
+  // Données de démo UNIQUEMENT en environnement local/test (jamais en prod) :
+  // actif en `nuxt dev`, ou si NUXT_PUBLIC_SEED_TEST_DATA=true. En prod → rien.
+  try {
+    const seedAllowed = import.meta.dev || useRuntimeConfig().public.seedTestData
+    if (seedAllowed && !localStorage.getItem('gr-seeded-v1') && !sessionLog().length) {
+      seedDemo()
+      localStorage.setItem('gr-seeded-v1', '1')
+    }
+  } catch { /* stockage indisponible */ }
   const now = new Date()
   todayDow.value = now.getDay()
   todayISO.value = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
@@ -334,16 +519,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="sport-app" :class="{ 'has-bottomnav': view !== 'session' }">
-    <!-- Écran de chargement (masque le gel d'hydratation ; l'anim tourne sur le compositeur) -->
-    <div v-if="!splashGone" class="boot-splash" :class="{ 'boot-hide': !booting }" aria-hidden="true">
-      <div class="boot-mark">GR</div>
-      <!-- Anneau animé en CSS (transform + will-change) : promu sur le compositeur,
-           il continue de tourner même quand le thread JS est bloqué par l'hydratation. -->
-      <div class="boot-spinner"></div>
-      <div class="boot-label">Suivi séances</div>
-    </div>
-
+  <div class="sport-app has-bottomnav" :class="{ 'has-minibar': activeSession && !sheetOpen && !sheetClosing }">
     <header class="sport-header">
       <div class="header-top">
         <button class="brand" @click="go('home')">
@@ -354,15 +530,11 @@ onUnmounted(() => {
           </span>
         </button>
         <div class="header-right">
-          <template v-if="view === 'session'">
-            <span class="session-clock mono">⏱ {{ fmtClock(elapsed) }}</span>
-            <button class="btn" @click="quitSession">Quitter</button>
-          </template>
-          <a v-else href="/" class="btn ghost">↗ Portfolio</a>
+          <a href="/" class="btn ghost">↗ Portfolio</a>
         </div>
       </div>
       <!-- Desktop : navigation en haut -->
-      <nav v-if="view !== 'session'" class="topnav">
+      <nav class="topnav">
         <button v-for="t in TABS" :key="t.id" class="topnav-tab" :class="{ active: view === t.id }" @click="go(t.id)">
           <span class="tn-icon">{{ t.icon }}</span>
           <span class="tn-label">{{ t.label }}</span>
@@ -372,7 +544,7 @@ onUnmounted(() => {
 
     <!-- Chrono de repos flottant : fixe en haut quand on a scrollé, revient à sa place en haut de page -->
     <transition name="ft-drop">
-      <div v-if="view === 'session' && restLeft > 0 && (pageScrolled || keyboardOpen)" class="floating-timer" :style="{ top: floatTop + 'px' }">
+      <div v-if="sheetOpen && restLeft > 0 && (pageScrolled || keyboardOpen)" class="floating-timer" :style="{ top: floatTop + 'px' }">
         <span class="ft-time mono">{{ restFmt(restLeft) }}</span>
         <span class="ft-label">Repos</span>
         <button class="ft-btn" @click="addRest(15)">+15</button>
@@ -391,7 +563,8 @@ onUnmounted(() => {
         <div class="sc-muscles"><span v-for="m in sessionMuscles(todaySession)" :key="m" class="sc-chip">{{ m }}</span></div>
         <div class="today-foot">
           <span class="muted">{{ todaySession.exercises.length }} exercices<template v-if="todaySession.sprint"> · ⚡ sprint</template></span>
-          <button v-if="todayRecord" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="editSession(todayRecord!)">✏️ Modifier la séance →</button>
+          <button v-if="activeSession" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">{{ activeSession.id === todaySession.id ? 'Reprendre →' : 'Aperçu' }}</button>
+          <button v-else-if="todayRecord" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="editSession(todayRecord!)">✏️ Modifier la séance →</button>
           <button v-else class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">Démarrer la séance →</button>
         </div>
       </section>
@@ -412,7 +585,7 @@ onUnmounted(() => {
           </div>
           <div class="sc-name">{{ s.name }}</div>
           <div class="sc-muscles"><span v-for="m in sessionMuscles(s)" :key="m" class="sc-chip">{{ m }}</span></div>
-          <div class="sc-foot"><span class="sc-count mono">{{ s.exercises.length }} exercices</span><span class="sc-go">Démarrer →</span></div>
+          <div class="sc-foot"><span class="sc-count mono">{{ s.exercises.length }} exercices</span><span class="sc-go">{{ activeSession ? (activeSession.id === s.id ? 'Reprendre →' : 'Aperçu') : 'Démarrer →' }}</span></div>
         </button>
       </div>
 
@@ -432,9 +605,26 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- ═══════════ SÉANCE ═══════════ -->
-    <div v-if="view === 'session' && activeSession" class="session-layout" :style="{ '--c': activeSession.color }">
-      <aside class="session-tools">
+    <!-- ═══════════ SÉANCE (vraie feuille : monte, descend, glissable au doigt) ═══════════ -->
+    <!-- Voile : l'onglet reste rendu derrière ; on le voit quand on descend la feuille -->
+    <div v-if="sheetVisible" class="sheet-scrim" :style="scrimStyle" @click="collapseSession"></div>
+    <div v-if="sheetVisible && activeSession" class="session-sheet" :style="[{ '--c': activeSession.color }, sheetStyle]" @scroll.passive="onSheetScroll">
+      <div class="session-sheet-head" @pointerdown="onDragStart">
+        <button class="sheet-grab" :aria-label="editingRecord ? 'Fermer' : 'Réduire la séance'" @click="requestCollapse"></button>
+        <div class="ssh-row">
+          <div class="ssh-title">
+            <span class="ssh-dot" aria-hidden="true"></span>
+            <span class="ssh-name">{{ activeSession.name }}</span>
+          </div>
+          <div class="ssh-right">
+            <span v-if="editingRecord" class="ssh-time ssh-edit">✏️ Modification</span>
+            <span v-else class="ssh-time mono">⏱ {{ fmtClock(elapsed) }}</span>
+            <button class="ssh-abandon" :aria-label="editingRecord ? 'Abandonner les modifications' : 'Annuler la séance'" @pointerdown.stop @click="askCancel">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="session-layout">
+        <aside class="session-tools">
         <div class="tools-sticky">
           <div class="timer-box"><LazySportRestTimer /></div>
           <div class="tool">
@@ -582,9 +772,11 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <button class="btn-primary finish" @click="finishSession">{{ editingRecord ? 'Enregistrer les modifications' : 'Terminer et enregistrer la séance' }}</button>
+        <button class="btn-primary finish" :disabled="!finishReady" @click="finishSession">{{ editingRecord ? 'Enregistrer les modifications' : 'Terminer et enregistrer la séance' }}</button>
+        <div v-if="!finishReady && activeSession" class="finish-hint muted">Termine au moins 80 % des exercices pour enregistrer — {{ finishedCount }}/{{ activeSession.exercises.length }} faits.</div>
+          </div>
+        </div>
       </div>
-    </div>
 
     <!-- Onglets secondaires : composants chargés à la demande (moins de JS hydraté sur l'accueil) -->
     <LazySportReport v-if="view === 'rapport'" :today-iso="todayISO" :today-dow="todayDow" />
@@ -592,8 +784,69 @@ onUnmounted(() => {
     <LazySportHistory v-if="view === 'history'" :today-iso="todayISO" @edit="editSession" />
     <LazySportProfile v-if="view === 'profil'" :today-iso="todayISO" @flash="showFlash" />
 
+    <!-- Aperçu lecture seule d'une séance quand une autre est déjà en cours -->
+    <div v-if="previewSession" class="preview-overlay" @click.self="previewSession = null">
+      <div class="preview-sheet" :style="{ '--c': previewSession.color }">
+        <div class="preview-head">
+          <div>
+            <div class="preview-eyebrow">Aperçu · lecture seule</div>
+            <h3 class="preview-title">{{ previewSession.name }}</h3>
+          </div>
+          <button class="sheet-close" aria-label="Fermer" @click="previewSession = null">×</button>
+        </div>
+        <div class="preview-note">🔒 Une séance est déjà en cours. Termine-la ou abandonne-la pour démarrer celle-ci.</div>
+        <div class="preview-list">
+          <div v-for="(e, idx) in previewSession.exercises" :key="e.id" class="preview-ex">
+            <div class="preview-ex-head">
+              <span class="preview-ex-name">{{ idx + 1 }}. {{ e.name }}</span>
+              <span class="preview-ex-sets mono">{{ e.sets }} × {{ e.reps }}</span>
+            </div>
+            <div class="sc-muscles"><span v-for="m in exMuscles(e)" :key="m" class="sc-chip">{{ m }}</span></div>
+            <div v-if="e.cues && e.cues.length" class="preview-cues">
+              <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
+            </div>
+          </div>
+          <div v-if="previewSession.sprint" class="preview-ex">
+            <div class="preview-ex-head"><span class="preview-ex-name">⚡ {{ previewSession.sprint.title }}</span></div>
+          </div>
+        </div>
+        <button class="btn-primary preview-resume" @click="previewSession = null; expandSession()">↩ Reprendre ma séance en cours</button>
+      </div>
+    </div>
+
+    <!-- Popup de confirmation « annuler la séance » (remplace le confirm() natif) -->
+    <transition name="pop">
+      <div v-if="cancelPromptOpen" class="confirm-overlay" @click.self="cancelPromptOpen = false">
+        <div class="confirm-box">
+          <div class="confirm-emoji" aria-hidden="true">{{ editingRecord ? '✏️' : '🗑️' }}</div>
+          <div class="confirm-title">{{ editingRecord ? 'Abandonner les modifications ?' : 'Annuler la séance en cours ?' }}</div>
+          <div class="confirm-text">{{ editingRecord ? 'Les changements non enregistrés seront perdus (la séance d\'origine reste intacte).' : 'Les séries saisies mais non enregistrées seront perdues.' }}</div>
+          <div class="confirm-actions">
+            <button class="btn confirm-keep" @click="cancelPromptOpen = false">{{ editingRecord ? 'Continuer les modifications' : 'Continuer la séance' }}</button>
+            <button class="confirm-yes" @click="confirmCancel">{{ editingRecord ? 'Abandonner les modifications' : 'Annuler la séance' }}</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Mini-feuille « séance en cours » : docké au-dessus de la barre d'onglets,
+         affiche la durée en direct ; on tape dessus pour rouvrir la séance -->
+    <div v-if="activeSession && !sheetOpen && !sheetClosing" class="mini-session" :style="{ '--c': activeSession.color }">
+      <button class="mini-open" @click="expandSession">
+        <span class="mini-grab" aria-hidden="true"></span>
+        <span class="mini-dot" aria-hidden="true"></span>
+        <span class="mini-main">
+          <span class="mini-name">{{ activeSession.name }}</span>
+          <span class="mini-sub">{{ editingRecord ? 'Modification · toucher pour reprendre' : 'Séance en cours · toucher pour reprendre' }}</span>
+        </span>
+        <span class="mini-time mono">⏱ {{ fmtClock(elapsed) }}</span>
+        <span class="mini-chevron" aria-hidden="true">⌃</span>
+      </button>
+      <button class="mini-abandon" aria-label="Annuler la séance" @click="askCancel">✕</button>
+    </div>
+
     <!-- Mobile : navigation en bas (barre d'onglets) -->
-    <nav v-if="view !== 'session'" class="bottomnav">
+    <nav class="bottomnav">
       <button v-for="t in TABS" :key="t.id" class="bn-tab" :class="{ active: view === t.id }" @click="go(t.id)">
         <span class="bn-icon">{{ t.icon }}</span>
         <span class="bn-label">{{ t.label }}</span>

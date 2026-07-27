@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { ALL_EXERCISES, topOfRange, suggestedIncrement } from '~/data/sportProgram'
+import { ALL_EXERCISES, PROGRAM, topOfRange, suggestedIncrement } from '~/data/sportProgram'
 import type { Exercise } from '~/data/sportProgram'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
@@ -230,6 +230,61 @@ export function useWorkout() {
     return [...sessionHistory.value].sort((a, b) => b.at.localeCompare(a.at))
   }
 
+  // ─── Données de démo (pour tester rapidement l'app) ───────────────────────
+  // Génère un historique réaliste : ~10 séances sur ~3 semaines (charges qui
+  // progressent), + un suivi de poids. Écrase les données existantes.
+  function seedDemo() {
+    const idHash = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h }
+    const round25 = (w: number) => Math.max(0, Math.round(w / 2.5) * 2.5)
+    const baseWeight = (ex: Exercise) => (ex.bodyweight ? 70 : 20 + (idHash(ex.id) % 9) * 5)
+    const repTop = (reps: string) => { const m = String(reps).match(/\d+/g); return m ? parseInt(m[m.length - 1], 10) : 10 }
+
+    const newLogs: Logs = {}
+    const newSessions: SessionRecord[] = []
+    const N = 10
+    for (let k = 0; k < N; k++) {
+      const s = PROGRAM[k % PROGRAM.length]
+      const d = new Date()
+      d.setDate(d.getDate() - (N - 1 - k) * 2 - 1) // une séance tous les ~2 jours
+      d.setHours(18, 30, 0, 0)
+      const date = localDate(d)
+      const at = localDateTime(d)
+      const bump = Math.floor(k / 2) * 2.5 // la charge monte au fil des séances
+      const entries: { exId: string; sets: SetLog[] }[] = []
+      for (const e of s.exercises) {
+        const base = round25(baseWeight(e) + (e.bodyweight ? 0 : bump))
+        const reps = Math.max(5, repTop(e.reps) - 1)
+        const sets: SetLog[] = []
+        if (!e.bodyweight && !e.superset && base > 20) sets.push({ w: round25(base * 0.5), r: 10, warm: true })
+        for (let i = 0; i < (e.sets || 3); i++) {
+          const row: SetLog = { w: base, r: reps }
+          if (e.superset) { row.w2 = round25(base * 0.6); row.r2 = reps }
+          sets.push(row)
+        }
+        if (!newLogs[e.id]) newLogs[e.id] = []
+        newLogs[e.id].push({ date, sets, durationMin: 55 })
+        entries.push({ exId: e.id, sets })
+      }
+      newSessions.push({ at, sessionId: s.id, name: s.name, durationMin: 55, entries })
+    }
+    logs.value = newLogs
+    sessionHistory.value = newSessions
+    const bw: BodyWeightEntry[] = []
+    for (let k = 0; k < 6; k++) { const d = new Date(); d.setDate(d.getDate() - (5 - k) * 4); bw.push({ date: localDate(d), kg: Math.round((78 - k * 0.4) * 10) / 10 }) }
+    bodyWeight.value = bw
+    persistLogs(); persistSessions(); persistBW()
+  }
+
+  // Efface toutes les données (séances + poids) et pose le drapeau « déjà semé »
+  // pour repartir vraiment de zéro (pas de rechargement auto des données de démo).
+  function clearAll() {
+    logs.value = {}
+    bodyWeight.value = []
+    sessionHistory.value = []
+    persistLogs(); persistBW(); persistSessions()
+    if (import.meta.client) { try { localStorage.setItem('gr-seeded-v1', '1') } catch { /* ignore */ } }
+  }
+
   function addBodyWeight(kg: number) {
     const date = localDate()
     const existing = bodyWeight.value.find(e => e.date === date)
@@ -277,6 +332,6 @@ export function useWorkout() {
   return {
     logs, bodyWeight, sessionHistory,
     lastPerf, bestCharge, recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
-    addBodyWeight, exportJSON, importJSON,
+    addBodyWeight, exportJSON, importJSON, seedDemo, clearAll,
   }
 }

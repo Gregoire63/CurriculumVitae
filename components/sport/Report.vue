@@ -50,7 +50,8 @@ const startOfWeekISO = computed(() => {
 })
 const sessionsThisWeek = computed(() => (startOfWeekISO.value ? sessions.value.filter(s => s.at.slice(0, 10) >= startOfWeekISO.value!).length : 0))
 const avgDuration = computed(() => {
-  const ds = sessions.value.map(s => s.durationMin).filter((x): x is number => !!x)
+  // On écarte les séances au chrono aberrant (buguées) : < 15 min ou > 2 h
+  const ds = sessions.value.map(s => s.durationMin).filter((x): x is number => typeof x === 'number' && x >= 15 && x <= 120)
   return ds.length ? Math.round(ds.reduce((a, b) => a + b, 0) / ds.length) : 0
 })
 const totalVolume = computed(() => {

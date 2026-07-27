@@ -9,8 +9,9 @@ const props = defineProps<{ todayIso: string | null }>()
 const emit = defineEmits<{ flash: [msg: string] }>()
 
 const { bodyWeight, addBodyWeight, exportJSON, importJSON } = useWorkout()
+
 const { profile, weekPlan, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
-const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS } = useRestTimer()
+const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS } = useRestTimer()
 const volPct = computed({
   get: () => Math.round(soundVolume.value * 100),
   set: (v: number) => { soundVolume.value = Math.min(1, Math.max(0, (Number(v) || 0) / 100)) },
@@ -96,28 +97,30 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
       <div v-if="bwData.length" class="chart-wrap mt-6"><LazySportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
     </div>
 
-    <!-- Son de fin de repos -->
+    <!-- Son & vibration de fin de repos -->
     <div class="card">
       <div class="row-between mb-8">
         <div class="section-label">Son de fin de repos</div>
         <button class="btn" :class="{ sel: soundEnabled }" @click="soundEnabled = !soundEnabled">{{ soundEnabled ? 'Activé' : 'Désactivé' }}</button>
       </div>
       <div class="form-grid">
-        <label class="field">
+        <div class="field">
           <span>Son</span>
-          <select v-model="soundType" class="select">
-            <option v-for="o in SOUND_OPTIONS" :key="o.key" :value="o.key">{{ o.label }}</option>
-          </select>
-        </label>
+          <SportSelect v-model="soundType" :options="SOUND_OPTIONS" />
+        </div>
         <label class="field">
           <span>Volume · {{ volPct }} %</span>
           <input v-model.number="volPct" type="range" min="0" max="100" step="5" class="range">
         </label>
+        <div class="field">
+          <span>Vibration</span>
+          <SportSelect v-model="vibrationLevel" :options="VIBRATION_OPTIONS" />
+        </div>
       </div>
       <div class="nav-row mt-6">
-        <button class="btn flex-1" @click="testSound">🔊 Tester le son</button>
+        <button class="btn flex-1" @click="testSound">🔊 Tester son + vibration</button>
       </div>
-      <div v-if="!soundEnabled" class="muted mt-6">Son coupé — la vibration de fin de repos reste active.</div>
+      <div class="muted mt-6">Le téléphone ne permet pas de régler la <em>force</em> exacte de la vibration : « Légère / Moyenne / Forte » jouent des vibrations de plus en plus longues et répétées.<template v-if="!soundEnabled"> Son coupé — la vibration reste active.</template></div>
     </div>
 
     <div class="card">

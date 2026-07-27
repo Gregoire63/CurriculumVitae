@@ -12,13 +12,28 @@ let audioCtx: AudioContext | null = null
 let keepAlive: HTMLAudioElement | null = null
 let swReg: ServiceWorkerRegistration | null = null
 
-const VIBRATE_PATTERN = [300, 150, 300, 150, 300]
-
-// ─── Réglages du son de fin (choisis dans Profil, mémorisés) ────────────────
+// ─── Réglages du son / vibration de fin (choisis dans Profil, mémorisés) ─────
 const SETTINGS_KEY = 'gr-timer-sound-v1'
 const soundEnabled = ref(true)
 const soundVolume = ref(0.7) // 0 → 1
 const soundType = ref('bip')
+const vibrationLevel = ref('strong') // aucune / légère / moyenne / forte
+
+// Le web ne permet pas de régler l'AMPLITUDE de la vibration, seulement le motif
+// (durées on/off en ms). On simule la « puissance » par des motifs + longs / répétés.
+const VIBRATION_LEVELS: Record<string, number[]> = {
+  off: [],
+  light: [90],
+  medium: [260],
+  strong: [500, 120, 500, 120, 500],
+}
+export const VIBRATION_OPTIONS = [
+  { key: 'off', label: 'Aucune' },
+  { key: 'light', label: 'Légère' },
+  { key: 'medium', label: 'Moyenne' },
+  { key: 'strong', label: 'Forte' },
+]
+function vibratePattern(): number[] { return VIBRATION_LEVELS[vibrationLevel.value] ?? VIBRATION_LEVELS.strong }
 
 // Motifs sonores générés à la volée (WebAudio) : { fréquence, départ, durée… }
 interface ToneSpec { f: number; t: number; d: number; type?: OscillatorType; peak?: number }
@@ -48,12 +63,13 @@ function hydrateSettings() {
       if (typeof s.enabled === 'boolean') soundEnabled.value = s.enabled
       if (typeof s.volume === 'number') soundVolume.value = Math.min(1, Math.max(0, s.volume))
       if (typeof s.type === 'string' && SOUNDS[s.type]) soundType.value = s.type
+      if (typeof s.vibration === 'string' && VIBRATION_LEVELS[s.vibration]) vibrationLevel.value = s.vibration
     }
   } catch { /* réglages illisibles */ }
 }
 if (import.meta.client) {
-  watch([soundEnabled, soundVolume, soundType], () => {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value })) } catch { /* ignore */ }
+  watch([soundEnabled, soundVolume, soundType, vibrationLevel], () => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value, vibration: vibrationLevel.value })) } catch { /* ignore */ }
   })
 }
 
@@ -67,15 +83,39 @@ function getCtx(): AudioContext | null {
   } catch { return null }
 }
 
+// Chaîne « master » : saturation douce (WaveShaper tanh). Elle rend le son
+// nettement plus FORT et plus riche qu'un simple sinus, sans le clipping brutal
+// (les pics sont arrondis) → « 100 % » tape beaucoup plus fort.
+let masterInput: GainNode | null = null
+function makeSatCurve(drive: number): Float32Array {
+  const n = 2048, c = new Float32Array(n)
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; c[i] = Math.tanh(drive * x) }
+  return c
+}
+function getMasterInput(ctx: AudioContext): AudioNode {
+  if (!masterInput) {
+    masterInput = ctx.createGain()
+    masterInput.gain.value = 1.9 // surcharge → attaque la saturation → plus fort
+    const shaper = ctx.createWaveShaper()
+    shaper.curve = makeSatCurve(2.4)
+    shaper.oversample = '4x'
+    const out = ctx.createGain()
+    out.gain.value = 0.98
+    masterInput.connect(shaper); shaper.connect(out); out.connect(ctx.destination)
+  }
+  return masterInput
+}
+
 function playTones(ctx: AudioContext, vol: number, tones: ToneSpec[]) {
   const now = ctx.currentTime
+  const dest = getMasterInput(ctx)
   for (const s of tones) {
     const o = ctx.createOscillator()
     const g = ctx.createGain()
-    o.connect(g); g.connect(ctx.destination)
+    o.connect(g); g.connect(dest)
     o.type = s.type || 'sine'
     o.frequency.value = s.f
-    const peak = Math.max(0.0002, (s.peak ?? 0.9) * vol)
+    const peak = Math.max(0.0002, (s.peak ?? 1) * vol)
     g.gain.setValueAtTime(0.0001, now + s.t)
     g.gain.exponentialRampToValueAtTime(peak, now + s.t + 0.02)
     g.gain.exponentialRampToValueAtTime(0.0001, now + s.t + s.d)
@@ -138,19 +178,20 @@ function beep() {
   try { playTones(ctx, soundVolume.value, SOUNDS[soundType.value] || SOUNDS.bip) } catch { /* audio indisponible */ }
 }
 
-// Bouton « Tester » : joue le son choisi (même si désactivé) + petite vibration
+// Bouton « Tester » : joue le son choisi (même si désactivé) + la vibration choisie
 function testSound() {
   unlockAudio()
   const ctx = getCtx()
   if (ctx) { try { playTones(ctx, soundVolume.value, SOUNDS[soundType.value] || SOUNDS.bip) } catch { /* ignore */ } }
-  try { if (import.meta.client && navigator.vibrate) navigator.vibrate(120) } catch { /* ignore */ }
+  try { const vp = vibratePattern(); if (import.meta.client && navigator.vibrate && vp.length) navigator.vibrate(vp) } catch { /* ignore */ }
 }
 
 // Alerte de fin : vibration au premier plan + notification (son + vibration) en arrière-plan
 function alertEnd() {
   if (!import.meta.client) return
   beep()
-  try { if (navigator.vibrate) navigator.vibrate(VIBRATE_PATTERN) } catch { /* ignore */ }
+  const vp = vibratePattern()
+  try { if (navigator.vibrate && vp.length) navigator.vibrate(vp) } catch { /* ignore */ }
   // Hors de la page (onglet masqué) : la notification système déclenche le son + la
   // vibration même quand navigator.vibrate est ignoré (page non visible).
   try {
@@ -162,7 +203,7 @@ function alertEnd() {
         icon: '/sport/icon-192.png',
         badge: '/sport/icon-192.png',
         silent: !soundEnabled.value,
-        vibrate: VIBRATE_PATTERN,
+        vibrate: vp,
         renotify: true,
       } as NotificationOptions
       if (swReg && swReg.showNotification) swReg.showNotification("⏱️ C'est reparti", opts)
@@ -227,5 +268,6 @@ export function useRestTimer() {
   return {
     secondsLeft, totalSeconds, start, stop, addTime,
     soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS,
+    vibrationLevel, VIBRATION_OPTIONS,
   }
 }
