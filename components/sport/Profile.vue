@@ -110,7 +110,7 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         </div>
         <label class="field">
           <span>Volume · {{ volPct }} %</span>
-          <input v-model.number="volPct" type="range" min="0" max="100" step="5" class="range">
+          <input v-model.number="volPct" type="range" min="0" max="100" step="5" class="range" :style="{ '--fill': volPct + '%' }">
         </label>
         <div class="field">
           <span>Vibration</span>

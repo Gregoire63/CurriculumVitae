@@ -95,13 +95,20 @@ function makeSatCurve(drive: number): Float32Array {
 function getMasterInput(ctx: AudioContext): AudioNode {
   if (!masterInput) {
     masterInput = ctx.createGain()
-    masterInput.gain.value = 1.9 // surcharge → attaque la saturation → plus fort
+    masterInput.gain.value = 4.5 // grosse surcharge → onde quasi CARRÉE = beaucoup plus fort
     const shaper = ctx.createWaveShaper()
-    shaper.curve = makeSatCurve(2.4)
+    shaper.curve = makeSatCurve(3.4)
     shaper.oversample = '4x'
+    // Limiteur : plaque le niveau au maximum sans clipper (volume perçu max)
+    const comp = ctx.createDynamicsCompressor()
+    comp.threshold.value = -2
+    comp.knee.value = 0
+    comp.ratio.value = 20
+    comp.attack.value = 0.001
+    comp.release.value = 0.1
     const out = ctx.createGain()
-    out.gain.value = 0.98
-    masterInput.connect(shaper); shaper.connect(out); out.connect(ctx.destination)
+    out.gain.value = 1.0
+    masterInput.connect(shaper); shaper.connect(comp); comp.connect(out); out.connect(ctx.destination)
   }
   return masterInput
 }
@@ -115,7 +122,7 @@ function playTones(ctx: AudioContext, vol: number, tones: ToneSpec[]) {
     o.connect(g); g.connect(dest)
     o.type = s.type || 'sine'
     o.frequency.value = s.f
-    const peak = Math.max(0.0002, (s.peak ?? 1) * vol)
+    const peak = Math.max(0.0002, (s.peak ?? 1.3) * vol)
     g.gain.setValueAtTime(0.0001, now + s.t)
     g.gain.exponentialRampToValueAtTime(peak, now + s.t + 0.02)
     g.gain.exponentialRampToValueAtTime(0.0001, now + s.t + s.d)
