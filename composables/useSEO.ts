@@ -21,10 +21,10 @@ export interface SEOOptions {
 }
 
 const SITE_URL = 'https://gregoire-raturat.fr'
-const SITE_NAME = 'Grégoire Raturat — Product Engineer Full-Stack'
-// 157 caractères : sous la limite d'affichage (~160) des snippets Google
+const SITE_NAME = 'Grégoire Raturat — Développeur Full-Stack'
+// ~128 caractères : sous la limite d'affichage (~160) des snippets Google
 const DEFAULT_DESCRIPTION =
-    'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.'
+    'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.'
 
 export const useSEO = (options: SEOOptions = {}) => {
     const route = useRoute()
@@ -143,7 +143,7 @@ export const useSEO = (options: SEOOptions = {}) => {
             '@type': 'Person',
             '@id': `${SITE_URL}/#person`,
             name: config.author,
-            jobTitle: 'Product Engineer Full-Stack',
+            jobTitle: 'Développeur Full-Stack',
             url: config.baseUrl,
             image: ogImage,
             sameAs: [config.github, config.linkedin, config.malt],
@@ -167,9 +167,6 @@ export const useSEO = (options: SEOOptions = {}) => {
                 'Python',
                 'PostgreSQL',
                 'Supabase',
-                'RAG',
-                'Claude API',
-                'AI-assisted development',
                 'Full Stack Development',
             ],
             alumniOf: [

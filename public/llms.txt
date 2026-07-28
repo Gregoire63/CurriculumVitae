@@ -1,23 +1,22 @@
-# Grégoire Raturat — Product Engineer Full-Stack (freelance, Lyon)
+# Grégoire Raturat — Développeur Full-Stack (Lyon)
 
-> Développeur freelance basé à Lyon (France), spécialiste du développement assisté par IA. Je conçois et livre des produits web & mobile de bout en bout : MVP, pipelines IA (RAG, API Claude) et intégration de l'IA dans les équipes de développement. Missions courtes, remote OK.
+> Développeur full-stack basé à Lyon (France). Je conçois et développe des applications web et mobile, de la conception à la mise en production.
 
 ## À propos
 - Nom : Grégoire Raturat
-- Rôle : Product Engineer Full-Stack — freelance
+- Rôle : Développeur Full-Stack
 - Localisation : Lyon, France (remote possible)
 - Site : https://gregoire-raturat.fr
 
-## Projets & études de cas
+## Réalisations
 - [DishRank](https://dishrank.fr) : application de notation de plats publiée sur iOS, Android et web (React Native, Next.js, Supabase, TypeScript).
-- Messagerie omnicanale IA : inbox unifiée en production pour indépendants, bâtie sur Chatwoot avec un pipeline RAG (pgvector) et l'API Claude.
+- Messagerie omnicanale : boîte de réception unifiée en production pour indépendants, construite sur Chatwoot (WhatsApp, Instagram, Messenger, email).
 - [ETF PEA](https://etf.gregoire-raturat.fr) : application web de suivi et d'analyse des ETF éligibles au PEA.
 
 ## Compétences
 - Frontend : Vue.js / Nuxt, React / Next.js, TypeScript, Tailwind CSS
 - Mobile : React Native, Expo, publication App Store / Play Store
 - Backend : Node.js, Supabase, PostgreSQL, PostGIS, API REST
-- IA : API Claude, RAG (pgvector), agents & MCP, développement assisté par IA
 - DevOps : Docker, GitLab CI/CD, Nginx, Netlify / Vercel
 
 ## Contact

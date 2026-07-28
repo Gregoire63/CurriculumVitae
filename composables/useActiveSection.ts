@@ -11,7 +11,7 @@ export const useActiveSection = () => {
 
     onMounted(() => {
         // Sections à observer (dans l'ordre d'apparition)
-        const sectionIds = ['hero', 'services', 'cases', 'projects', 'cv', 'about', 'skills', 'contact']
+        const sectionIds = ['hero', 'cases', 'projects', 'cv', 'about', 'skills', 'contact']
         const sections = sectionIds
             .map(id => document.getElementById(id))
             .filter((el): el is HTMLElement => el !== null)

@@ -43,7 +43,7 @@ const socialLinks = [
                     </svg>
                     <div class="footer-text">
                         <h3 class="footer-name">Grégoire Raturat</h3>
-                        <p class="footer-tagline">Product Engineer Full-Stack</p>
+                        <p class="footer-tagline">{{ store.isFrench ? 'Développeur Full-Stack' : 'Full-Stack Developer' }}</p>
                     </div>
                 </div>
 

@@ -7,7 +7,7 @@ const isVisible = ref(false)
 
 interface Skill {
     category: string
-    icon: 'server' | 'layout' | 'check' | 'terminal' | 'blocks' | 'users' | 'mobile'
+    icon: 'server' | 'layout' | 'check' | 'terminal' | 'mobile'
     skills: string[]
 }
 
@@ -22,8 +22,6 @@ const skillsData = computed<Skill[]>(() => [
             'Tailwind CSS',
             'Pinia',
             'HTML5 / CSS3',
-            store.isFrench ? 'Architecture de composants' : 'Component architecture',
-            store.isFrench ? 'Optimisation des performances' : 'Performance optimization',
             'OpenLayers',
         ],
     },
@@ -32,14 +30,14 @@ const skillsData = computed<Skill[]>(() => [
         icon: 'server',
         skills: [
             'Node.js (Express)',
-            store.isFrench ? 'Conception d’API REST' : 'REST API design',
-            'Supabase',
+            store.isFrench ? 'API REST' : 'REST APIs',
             'PostgreSQL',
             'PostGIS',
+            'Supabase',
             'MongoDB',
             'Redis',
             '.NET',
-            store.isFrench ? 'Auth & RBAC (JWT, HMAC)' : 'Auth & RBAC (JWT, HMAC)',
+            'Auth (JWT, RBAC)',
         ],
     },
     {
@@ -54,24 +52,10 @@ const skillsData = computed<Skill[]>(() => [
         ],
     },
     {
-        category: store.isFrench ? 'IA & Data' : 'AI & Data',
-        icon: 'blocks',
-        skills: [
-            store.isFrench ? 'API Claude' : 'Claude API',
-            'RAG (pgvector)',
-            store.isFrench ? 'Agents & MCP' : 'Agents & MCP',
-            'Embeddings',
-            store.isFrench ? 'Prompt engineering' : 'Prompt engineering',
-            'BullMQ',
-            store.isFrench ? 'Maîtrise des coûts LLM' : 'LLM cost control',
-            store.isFrench ? 'Développement assisté par IA' : 'AI-assisted development',
-        ],
-    },
-    {
-        category: 'DevOps & Tools',
+        category: store.isFrench ? 'DevOps & Outils' : 'DevOps & Tools',
         icon: 'terminal',
         skills: [
-            store.isFrench ? 'Git (workflow, code review)' : 'Git (workflow, code review)',
+            'Git',
             'GitLab CI/CD',
             'Docker',
             'Nginx',
@@ -82,32 +66,13 @@ const skillsData = computed<Skill[]>(() => [
         ],
     },
     {
-        category: 'Testing',
+        category: store.isFrench ? 'Tests & Méthodes' : 'Testing & Methods',
         icon: 'check',
         skills: [
-            store.isFrench ? 'Vitest (unitaires, intégration)' : 'Vitest (unit, integration)',
+            'Vitest / Jest',
             'Cypress (E2E)',
-            store.isFrench ? 'Stratégie de tests' : 'Testing strategy',
-        ],
-    },
-    {
-        category: 'Architecture',
-        icon: 'blocks',
-        skills: [
-            store.isFrench ? 'Refactoring & dette technique' : 'Refactoring & technical debt',
-            store.isFrench ? 'Architecture modulaire' : 'Modular architecture',
-            store.isFrench ? 'Industrialisation projet' : 'Project industrialization',
-            store.isFrench ? 'Automatisation & scaffolding' : 'Automation & scaffolding',
-        ],
-    },
-    {
-        category: store.isFrench ? 'Méthodo & Soft skills' : 'Methodology & Soft skills',
-        icon: 'users',
-        skills: [
             'Agile (Scrum / Kanban)',
-            store.isFrench ? 'Communication technique claire' : 'Clear technical communication',
-            store.isFrench ? 'Résolution de problèmes' : 'Problem solving',
-            store.isFrench ? 'Collaboration inter-équipes' : 'Cross-team collaboration',
+            store.isFrench ? 'Revue de code' : 'Code review',
         ],
     },
 ])
@@ -165,7 +130,7 @@ onMounted(() => {
             <div class="section-header reveal delay-1">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ store.isFrench ? 'Expertise' : 'Expertise' }}
+                    Stack
                 </span>
                 <h2 class="section-title">
                     {{ store.isFrench ? 'Compétences techniques' : 'Technical skills' }}
@@ -173,8 +138,8 @@ onMounted(() => {
                 <p class="section-description">
                     {{
                         store.isFrench
-                            ? 'Les technologies et méthodes que j’utilise pour livrer des produits complets, du front à la prod.'
-                            : 'The technologies and methods I use to ship complete products, from front-end to production.'
+                            ? 'Les technologies avec lesquelles je travaille au quotidien.'
+                            : 'The technologies I work with day to day.'
                     }}
                 </p>
             </div>
@@ -202,9 +167,6 @@ onMounted(() => {
                                 <template v-else-if="skillGroup.icon === 'terminal'">
                                     <path d="M4 17l6-6-6-6M12 19h8" />
                                 </template>
-                                <template v-else-if="skillGroup.icon === 'users'">
-                                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                                </template>
                                 <template v-else-if="skillGroup.icon === 'mobile'">
                                     <rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" />
                                 </template>
@@ -214,7 +176,6 @@ onMounted(() => {
                             </svg>
                         </span>
                         <h3 class="category-title">{{ skillGroup.category }}</h3>
-                        <span class="category-count">{{ skillGroup.skills.length }}</span>
                     </div>
 
                     <div class="skills-chips">
@@ -364,18 +325,6 @@ onMounted(() => {
     margin: 0;
     flex: 1;
     min-width: 0;
-}
-
-.category-count {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--accent-tertiary);
-    background: rgba(254, 252, 248, 0.08);
-    border: 1px solid rgba(254, 252, 248, 0.14);
-    border-radius: 100px;
-    padding: 0.15rem 0.5rem;
-    flex-shrink: 0;
 }
 
 /* Skills chips */

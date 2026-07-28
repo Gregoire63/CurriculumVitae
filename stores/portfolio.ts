@@ -19,7 +19,6 @@ export interface Project {
 
 export type SectionName =
     | 'hero'
-    | 'services'
     | 'cases'
     | 'projects'
     | 'cv'
@@ -59,13 +58,12 @@ export const usePortfolioStore = defineStore('portfolio', {
             const fr = state.language === 'fr'
             return [
                 { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
-                { id: 'services', number: '02', label: 'Services' },
-                { id: 'cases', number: '03', label: fr ? 'Études de cas' : 'Case studies' },
-                { id: 'projects', number: '04', label: fr ? 'Projets' : 'Projects' },
-                { id: 'cv', number: '05', label: fr ? 'Parcours' : 'Career' },
-                { id: 'about', number: '06', label: fr ? 'Formation' : 'Education' },
-                { id: 'skills', number: '07', label: fr ? 'Compétences' : 'Skills' },
-                { id: 'contact', number: '08', label: 'Contact' },
+                { id: 'cases', number: '02', label: fr ? 'Réalisations' : 'Selected work' },
+                { id: 'projects', number: '03', label: fr ? 'Projets' : 'Projects' },
+                { id: 'cv', number: '04', label: fr ? 'Parcours' : 'Career' },
+                { id: 'about', number: '05', label: fr ? 'Formation' : 'Education' },
+                { id: 'skills', number: '06', label: fr ? 'Compétences' : 'Skills' },
+                { id: 'contact', number: '07', label: 'Contact' },
             ]
         },
         // Barre de navigation desktop (le menu plein écran liste tout).
@@ -74,10 +72,9 @@ export const usePortfolioStore = defineStore('portfolio', {
             const fr = this.isFrench
             return [
                 { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
-                { id: 'services', number: '02', label: 'Services' },
-                { id: 'cases', number: '03', label: fr ? 'Projets' : 'Projects' },
-                { id: 'cv', number: '05', label: fr ? 'Parcours' : 'Career' },
-                { id: 'contact', number: '08', label: 'Contact' },
+                { id: 'cases', number: '02', label: fr ? 'Projets' : 'Projects' },
+                { id: 'cv', number: '04', label: fr ? 'Parcours' : 'Career' },
+                { id: 'contact', number: '07', label: 'Contact' },
             ]
         },
         // Un item de nav peut rester actif sur plusieurs sections de la page :

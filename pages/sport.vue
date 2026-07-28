@@ -53,7 +53,9 @@ function exMuscles(e: Exercise): string[] {
 }
 
 // ─────────── Semaine (planning adaptatif) ───────────
-const SHORT: Record<string, string> = { s1: 'Push', s2: 'Dos/Bic', s3: 'Jambes', s4: 'Bras' }
+// Libellés courts de la semaine : calqués sur le nom de chaque séance pour éviter
+// toute confusion (« Push » / « Bras » étaient ambigus entre les 2 jours pecs).
+const SHORT: Record<string, string> = { s1: 'Pecs/Ép', s2: 'Dos/Bic', s3: 'Jambes', s4: 'Pecs/Bras' }
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const sessionById = (id: string | null) => (id ? PROGRAM.find(p => p.id === id) || null : null)
 const weekDays = computed(() => weekPlan.value.map((sid, i) => {

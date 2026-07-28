@@ -3,19 +3,18 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 useSEO({
-    title: 'Product Engineer Full-Stack — Freelance à Lyon',
+    title: 'Développeur Full-Stack à Lyon',
     description:
-        'Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA. Missions courtes, remote OK.',
+        'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.',
     keywords: [
-        'développeur freelance lyon',
-        'full-stack',
-        'product engineer',
-        'IA',
-        'RAG',
-        'API Claude',
+        'développeur full-stack lyon',
+        'développeur web',
+        'vue.js',
+        'nuxt',
+        'react',
         'react native',
-        'next.js',
-        'supabase',
+        'node.js',
+        'typescript',
     ],
 })
 
@@ -76,15 +75,6 @@ const heroParallax = computed(() => {
                 </div>
                 <p>{{ store.isFrench ? 'Défiler pour découvrir' : 'Scroll to explore' }}</p>
             </div>
-        </section>
-
-        <!-- Services Section (en premier) -->
-        <section id="services" ref="servicesSection" class="section services-section">
-            <div class="section-background">
-                <div class="geometric-shape shape-1"></div>
-                <div class="geometric-shape shape-2"></div>
-            </div>
-            <LazyPortfolioServices hydrate-on-visible />
         </section>
 
         <!-- Case Studies Section -->
@@ -254,11 +244,6 @@ const heroParallax = computed(() => {
     background: var(--bg-secondary);
 }
 
-/* Services Section */
-.services-section {
-    background: var(--bg-primary);
-}
-
 /* Other Projects Section (compact, pas de pleine hauteur) */
 .projects-compact-section {
     background: var(--bg-primary);
@@ -269,40 +254,6 @@ const heroParallax = computed(() => {
 .about-section {
     background: var(--bg-primary);
     min-height: auto;
-}
-
-.geometric-shape {
-    position: absolute;
-    background: var(--accent-tertiary);
-    opacity: 0.3;
-    border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-    animation: morph 20s infinite alternate;
-}
-
-.shape-1 {
-    width: 500px;
-    height: 500px;
-    top: -100px;
-    right: -100px;
-    animation-delay: 0s;
-}
-
-.shape-2 {
-    width: 400px;
-    height: 400px;
-    bottom: -50px;
-    left: -50px;
-    animation-delay: 2s;
-}
-
-@keyframes morph {
-    0%,
-    100% {
-        border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-    }
-    50% {
-        border-radius: 70% 30% 30% 70% / 70% 70% 30% 30%;
-    }
 }
 
 /* Skills Section */
@@ -400,10 +351,6 @@ const heroParallax = computed(() => {
 }
 
 @media (max-width: 768px) {
-    .geometric-shape {
-        display: none;
-    }
-
     .scroll-indicator {
         bottom: var(--space-md);
     }

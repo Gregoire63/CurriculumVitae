@@ -92,7 +92,7 @@ const handleNavigate = (section: SectionName) => {
                 <div ref="headerRef">
                     <div class="hero-label">
                         <span class="label-line"></span>
-                        <span class="label-text">Product Engineer Full-Stack</span>
+                        <span class="label-text">{{ store.isFrench ? 'Développeur Full-Stack' : 'Full-Stack Developer' }}</span>
                     </div>
 
                     <h1 class="hero-title">
@@ -103,8 +103,8 @@ const handleNavigate = (section: SectionName) => {
                     <p class="hero-description">
                         {{
                             store.isFrench
-                                ? "Je livre des produits complets, de l'idée à la prod — et j'intègre l'IA dans les équipes dev."
-                                : 'I ship complete products, from idea to production — and I bring AI into dev teams.'
+                                ? 'Je conçois et développe des applications web et mobile, de la conception à la mise en production.'
+                                : 'I design and build web and mobile applications, from concept to production.'
                         }}
                     </p>
 
@@ -124,17 +124,12 @@ const handleNavigate = (section: SectionName) => {
                 </div>
 
                 <div ref="actionsRef" class="hero-actions">
-                    <button class="cta-primary" @click="handleNavigate('contact')">
-                        <span class="availability-dot" aria-hidden="true"></span>
-                        {{
-                            store.isFrench
-                                ? 'Disponible pour missions courtes → Me contacter'
-                                : 'Available for short-term engagements → Contact me'
-                        }}
+                    <button class="cta-primary" @click="handleNavigate('cases')">
+                        {{ store.isFrench ? 'Voir mes projets' : 'View my work' }}
                     </button>
 
-                    <button class="cta-secondary" @click="handleNavigate('cases')">
-                        {{ store.isFrench ? 'Voir les études de cas' : 'View case studies' }}
+                    <button class="cta-secondary" @click="handleNavigate('contact')">
+                        {{ store.isFrench ? 'Me contacter' : 'Contact me' }}
                     </button>
                 </div>
 
@@ -153,8 +148,8 @@ const handleNavigate = (section: SectionName) => {
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-item">
-                        <div class="stat-number">10+</div>
-                        <div class="stat-label">Technologies</div>
+                        <div class="stat-number">2</div>
+                        <div class="stat-label">{{ store.isFrench ? 'Apps en production' : 'Apps in production' }}</div>
                     </div>
                 </div>
             </div>
@@ -290,42 +285,6 @@ const handleNavigate = (section: SectionName) => {
 .hero-location svg {
     flex-shrink: 0;
     color: var(--accent-primary);
-}
-
-.availability-dot {
-    flex-shrink: 0;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    /* Vert clair + liseré clair : reste lisible sur le bouton brun (contraste >= 3:1) */
-    background: #86efac;
-    box-shadow:
-        0 0 0 2px rgba(254, 252, 248, 0.7),
-        0 0 0 2px rgba(134, 239, 172, 0);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    .availability-dot {
-        animation: availability-pulse 2s infinite;
-    }
-
-    @keyframes availability-pulse {
-        0% {
-            box-shadow:
-                0 0 0 2px rgba(254, 252, 248, 0.7),
-                0 0 0 2px rgba(134, 239, 172, 0.6);
-        }
-        70% {
-            box-shadow:
-                0 0 0 2px rgba(254, 252, 248, 0.7),
-                0 0 0 9px rgba(134, 239, 172, 0);
-        }
-        100% {
-            box-shadow:
-                0 0 0 2px rgba(254, 252, 248, 0.7),
-                0 0 0 2px rgba(134, 239, 172, 0);
-        }
-    }
 }
 
 /* Actions */

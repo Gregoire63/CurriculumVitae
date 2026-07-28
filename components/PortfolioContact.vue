@@ -159,8 +159,8 @@ const handleSubmit = async (e: Event) => {
                     <p class="section-description">
                         {{
                             store.isFrench
-                                ? "Un MVP à lancer, de l'IA à intégrer dans votre produit, ou une équipe à faire monter sur le développement assisté par IA ? Parlons-en — je réponds rapidement."
-                                : 'An MVP to launch, AI to integrate into your product, or a team to onboard on AI-assisted development? Let\'s talk — I reply quickly.'
+                                ? 'Un projet, une question ou simplement envie d’échanger ? Écrivez-moi, je réponds rapidement.'
+                                : 'A project, a question, or just want to connect? Write to me — I reply quickly.'
                         }}
                     </p>
 

@@ -14,11 +14,6 @@ const DISHRANK_APP_STORE_URL = 'https://dishrank.fr'
 const DISHRANK_PLAY_STORE_URL = 'https://dishrank.fr'
 const DISHRANK_WEB_URL = 'https://dishrank.fr'
 
-interface ArchNode {
-    title: string
-    sub: string
-}
-
 interface CaseStudy {
     id: string
     status: string
@@ -26,16 +21,7 @@ interface CaseStudy {
     meta: string
     title: string
     tagline: string
-    disclaimer?: string
-    problemTitle: string
-    problem: string
-    solutionTitle: string
-    solution: string
-    archItems: Array<{ k: string; v: string }>
-    diagramLabel: string
-    diagram: Array<ArchNode[]>
-    resultsTitle: string
-    results: string
+    summary: string
     tech: string[]
     hasStoreBadges?: boolean
     screenshots?: Array<{ src: string; alt: string }>
@@ -45,9 +31,8 @@ const content = computed<{ label: string; title: string; description: string; ca
     store.isFrench
         ? {
               label: 'Sélection',
-              title: 'Études de cas',
-              description:
-                  'Deux projets racontés comme je travaille : un problème concret, une architecture, des résultats.',
+              title: 'Réalisations',
+              description: 'Des produits conçus, développés et mis en production en autonomie.',
               cases: [
                   {
                       id: 'dishrank',
@@ -56,43 +41,8 @@ const content = computed<{ label: string; title: string; description: string; ca
                       meta: '2026 · Développé en solo',
                       title: 'DishRank',
                       tagline: 'Noter les plats, pas les restaurants',
-                      problemTitle: 'Problème',
-                      problem:
-                          "Les avis en ligne notent les restaurants, jamais les plats. Un 4,5 étoiles ne répond pas à la vraie question une fois à table : qu'est-ce qu'on commande ?",
-                      solutionTitle: 'Solution & architecture',
-                      solution:
-                          'Une application multi-plateforme (iOS, Android, web) pour noter les plats et découvrir les meilleures assiettes autour de soi. Conçue, développée et publiée entièrement en solo, de la maquette à la prod.',
-                      archItems: [
-                          {
-                              k: 'React Native + Next.js',
-                              v: 'une seule base de code produit pour iOS, Android et le web',
-                          },
-                          {
-                              k: 'Supabase / Postgres',
-                              v: 'données, temps réel et stockage des médias',
-                          },
-                          {
-                              k: 'Auth anonyme par tokens HMAC',
-                              v: "zéro friction d'inscription : on note un plat en dix secondes",
-                          },
-                          {
-                              k: 'Images Open Graph dynamiques',
-                              v: 'chaque plat partagé génère sa propre carte visuelle, pensée pour le partage viral',
-                          },
-                      ],
-                      diagramLabel:
-                          'Schéma d’architecture : clients iOS, Android et web vers l’API Next.js, elle-même connectée à Supabase (Postgres, Auth, Storage)',
-                      diagram: [
-                          [
-                              { title: 'iOS · Android', sub: 'React Native' },
-                              { title: 'Web', sub: 'Next.js' },
-                          ],
-                          [{ title: 'API', sub: 'Next.js · OG dynamiques' }],
-                          [{ title: 'Supabase', sub: 'Postgres · Auth · Storage' }],
-                      ],
-                      resultsTitle: 'Résultats',
-                      results:
-                          "Publiée sur l'App Store et Google Play, avec la version web en accès direct — un produit complet livré de bout en bout.",
+                      summary:
+                          'Application iOS, Android et web pour noter les plats et retrouver les meilleures assiettes autour de soi. Conçue, développée et publiée en autonomie, de la maquette à la mise en ligne, sur une base de code commune React Native / Next.js avec Supabase côté données.',
                       tech: ['React Native', 'Next.js', 'Supabase', 'TypeScript'],
                       hasStoreBadges: true,
                       screenshots: [
@@ -102,59 +52,22 @@ const content = computed<{ label: string; title: string; description: string; ca
                       ],
                   },
                   {
-                      id: 'inbox-ia',
+                      id: 'inbox',
                       status: 'En production',
                       statusKind: 'live',
                       meta: '2026 · Produit SaaS',
-                      title: 'Messagerie omnicanale IA',
-                      tagline: 'Une inbox unifiée avec IA pour les tatoueurs',
-                      problemTitle: 'Problème',
-                      problem:
-                          'Les tatoueurs jonglent entre WhatsApp, Instagram, Messenger et email. Résultat : des conversations éparpillées, des devis oubliés et des clients perdus faute de réponse rapide.',
-                      solutionTitle: 'Solution & architecture',
-                      solution:
-                          "Une inbox unifiée, bâtie sur Chatwoot, qui centralise tous les canaux et propose des réponses assistées par IA dans le ton de l'artiste — avec retour à l'humain dès que la conversation le demande (handover bot → humain).",
-                      archItems: [
-                          {
-                              k: 'Chatwoot — hub omnicanal',
-                              v: 'connecte WhatsApp, Instagram, Messenger et email dans une seule inbox open-source',
-                          },
-                          {
-                              k: 'Pipeline RAG — pgvector + API Claude',
-                              v: "réponses ancrées dans le contexte de l'artiste : tarifs, styles, disponibilités",
-                          },
-                          {
-                              k: 'Bot agent branché sur Chatwoot',
-                              v: "brouillons de réponse dans le ton de l'artiste, validés puis envoyés en un clic",
-                          },
-                          {
-                              k: 'Files de traitement BullMQ',
-                              v: 'traitement asynchrone des messages entrants, retries et priorités',
-                          },
-                          {
-                              k: "Coût d'infrastructure maîtrisé : ~85–145 €/mois",
-                              v: 'pour 50 à 200 professionnels, coûts IA compris',
-                          },
-                      ],
-                      diagramLabel:
-                          'Schéma d’architecture : canaux WhatsApp, Instagram, Messenger et email centralisés par Chatwoot, enrichis par le pipeline IA (RAG pgvector + Claude via BullMQ), avec handover vers l’artiste',
-                      diagram: [
-                          [{ title: 'Canaux', sub: 'WhatsApp · Instagram · Messenger · Email' }],
-                          [{ title: 'Chatwoot', sub: 'Inbox omnicanale' }],
-                          [{ title: 'IA', sub: 'RAG pgvector · API Claude · BullMQ' }],
-                          [{ title: 'Artiste', sub: 'Validation & handover' }],
-                      ],
-                      resultsTitle: 'Résultats',
-                      results:
-                          "En production pour des tatoueurs : messages centralisés, réponses assistées par IA validées par l'artiste et handover humain fluide. Toute la stack — Chatwoot, RAG, files, IA — tient sous 150 €/mois.",
-                      tech: ['Chatwoot', 'API Claude', 'pgvector', 'BullMQ', 'Postgres'],
+                      title: 'Messagerie omnicanale',
+                      tagline: 'Une boîte de réception unique pour les tatoueurs',
+                      summary:
+                          "Une messagerie qui regroupe WhatsApp, Instagram, Messenger et email au même endroit, construite sur Chatwoot. Des brouillons de réponse sont proposés à l'artiste, qui garde la main : chaque message est relu et validé avant envoi. Utilisée en production par des tatoueurs.",
+                      tech: ['Chatwoot', 'Node.js', 'PostgreSQL', 'API Claude'],
                   },
               ],
           }
         : {
-              label: 'Selected work',
-              title: 'Case studies',
-              description: 'Two projects told the way I work: a concrete problem, an architecture, results.',
+              label: 'Selection',
+              title: 'Selected work',
+              description: 'Products designed, built and shipped to production on my own.',
               cases: [
                   {
                       id: 'dishrank',
@@ -163,43 +76,8 @@ const content = computed<{ label: string; title: string; description: string; ca
                       meta: '2026 · Built solo',
                       title: 'DishRank',
                       tagline: 'Rate dishes, not restaurants',
-                      problemTitle: 'Problem',
-                      problem:
-                          "Online reviews rate restaurants, never dishes. A 4.5-star rating doesn't answer the real question once you're seated: what should you order?",
-                      solutionTitle: 'Solution & architecture',
-                      solution:
-                          'A multi-platform app (iOS, Android, web) to rate dishes and discover the best plates around you. Designed, built and shipped entirely solo, from mockup to production.',
-                      archItems: [
-                          {
-                              k: 'React Native + Next.js',
-                              v: 'a single product codebase for iOS, Android and the web',
-                          },
-                          {
-                              k: 'Supabase / Postgres',
-                              v: 'data, realtime and media storage',
-                          },
-                          {
-                              k: 'Anonymous auth with HMAC tokens',
-                              v: 'zero signup friction: rate a dish in ten seconds',
-                          },
-                          {
-                              k: 'Dynamic Open Graph images',
-                              v: 'every shared dish generates its own visual card, built for viral sharing',
-                          },
-                      ],
-                      diagramLabel:
-                          'Architecture diagram: iOS, Android and web clients to the Next.js API, connected to Supabase (Postgres, Auth, Storage)',
-                      diagram: [
-                          [
-                              { title: 'iOS · Android', sub: 'React Native' },
-                              { title: 'Web', sub: 'Next.js' },
-                          ],
-                          [{ title: 'API', sub: 'Next.js · dynamic OG' }],
-                          [{ title: 'Supabase', sub: 'Postgres · Auth · Storage' }],
-                      ],
-                      resultsTitle: 'Results',
-                      results:
-                          'Published on the App Store and Google Play, with the web version directly accessible — a complete product shipped end to end.',
+                      summary:
+                          'An iOS, Android and web app to rate dishes and find the best plates around you. Designed, built and published on my own, from mockup to release, on a shared React Native / Next.js codebase with Supabase for the data.',
                       tech: ['React Native', 'Next.js', 'Supabase', 'TypeScript'],
                       hasStoreBadges: true,
                       screenshots: [
@@ -209,52 +87,15 @@ const content = computed<{ label: string; title: string; description: string; ca
                       ],
                   },
                   {
-                      id: 'inbox-ia',
+                      id: 'inbox',
                       status: 'Live in production',
                       statusKind: 'live',
                       meta: '2026 · SaaS product',
-                      title: 'Omnichannel AI messaging',
-                      tagline: 'A unified AI-assisted inbox for tattoo artists',
-                      problemTitle: 'Problem',
-                      problem:
-                          'Tattoo artists juggle WhatsApp, Instagram, Messenger and email. The result: scattered conversations, forgotten quotes and clients lost for lack of a quick reply.',
-                      solutionTitle: 'Solution & architecture',
-                      solution:
-                          "A unified inbox, built on Chatwoot, that centralizes every channel and suggests AI-assisted replies in the artist's tone — handing the conversation back to a human whenever it matters (bot → human handover).",
-                      archItems: [
-                          {
-                              k: 'Chatwoot — omnichannel hub',
-                              v: 'connects WhatsApp, Instagram, Messenger and email into a single open-source inbox',
-                          },
-                          {
-                              k: 'RAG pipeline — pgvector + Claude API',
-                              v: "replies grounded in the artist's context: pricing, styles, availability",
-                          },
-                          {
-                              k: 'Agent bot wired into Chatwoot',
-                              v: "draft replies in the artist's tone, reviewed and sent in one click",
-                          },
-                          {
-                              k: 'BullMQ processing queues',
-                              v: 'asynchronous processing of incoming messages, retries and priorities',
-                          },
-                          {
-                              k: 'Infrastructure under control: ~€85–145/month',
-                              v: 'for 50 to 200 professionals, AI costs included',
-                          },
-                      ],
-                      diagramLabel:
-                          'Architecture diagram: WhatsApp, Instagram, Messenger and email channels centralized by Chatwoot, enriched by the AI pipeline (RAG pgvector + Claude via BullMQ), with handover to the artist',
-                      diagram: [
-                          [{ title: 'Channels', sub: 'WhatsApp · Instagram · Messenger · Email' }],
-                          [{ title: 'Chatwoot', sub: 'Omnichannel inbox' }],
-                          [{ title: 'AI', sub: 'RAG pgvector · Claude API · BullMQ' }],
-                          [{ title: 'Artist', sub: 'Review & handover' }],
-                      ],
-                      resultsTitle: 'Results',
-                      results:
-                          'Live for tattoo artists: centralized messages, AI-assisted replies reviewed by the artist and smooth human handover. The whole stack — Chatwoot, RAG, queues, AI — stays under €150/month.',
-                      tech: ['Chatwoot', 'Claude API', 'pgvector', 'BullMQ', 'Postgres'],
+                      title: 'Omnichannel messaging',
+                      tagline: 'A single inbox for tattoo artists',
+                      summary:
+                          'A messaging tool that brings WhatsApp, Instagram, Messenger and email together in one place, built on Chatwoot. Draft replies are suggested to the artist, who stays in control: every message is reviewed and approved before it goes out. Used in production by tattoo artists.',
+                      tech: ['Chatwoot', 'Node.js', 'PostgreSQL', 'Claude API'],
                   },
               ],
           },
@@ -331,7 +172,6 @@ const trackOutbound = (label: string) => {
                     </div>
                     <h3 class="case-title">{{ cs.title }}</h3>
                     <p class="case-tagline">{{ cs.tagline }}</p>
-                    <p v-if="cs.disclaimer" class="case-disclaimer">{{ cs.disclaimer }}</p>
                     <div class="case-tech">
                         <span v-for="tech in cs.tech" :key="tech" class="tech-tag">{{ tech }}</span>
                     </div>
@@ -340,46 +180,7 @@ const trackOutbound = (label: string) => {
                 <!-- Narrative column -->
                 <div class="case-body">
                     <div class="case-block">
-                        <h4 class="case-block-title">{{ cs.problemTitle }}</h4>
-                        <p>{{ cs.problem }}</p>
-                    </div>
-
-                    <div class="case-block">
-                        <h4 class="case-block-title">{{ cs.solutionTitle }}</h4>
-                        <p>{{ cs.solution }}</p>
-                        <ul class="arch-list">
-                            <li v-for="item in cs.archItems" :key="item.k">
-                                <strong>{{ item.k }}</strong> — {{ item.v }}
-                            </li>
-                        </ul>
-
-                        <!-- Architecture diagram -->
-                        <div class="arch-diagram" role="img" :aria-label="cs.diagramLabel">
-                            <template v-for="(col, colIndex) in cs.diagram" :key="colIndex">
-                                <span v-if="colIndex > 0" class="arch-arrow" aria-hidden="true">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                                        <path
-                                            d="M5 12h14m0 0-6-6m6 6-6 6"
-                                            stroke="currentColor"
-                                            stroke-width="2"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                        />
-                                    </svg>
-                                </span>
-                                <div class="arch-col">
-                                    <div v-for="node in col" :key="node.title" class="arch-node">
-                                        <span class="arch-node-title">{{ node.title }}</span>
-                                        <span class="arch-node-sub">{{ node.sub }}</span>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-
-                    <div class="case-block">
-                        <h4 class="case-block-title">{{ cs.resultsTitle }}</h4>
-                        <p>{{ cs.results }}</p>
+                        <p class="case-summary">{{ cs.summary }}</p>
 
                         <!-- Store badges (DishRank) -->
                         <div v-if="cs.hasStoreBadges" class="store-badges">
@@ -584,18 +385,6 @@ const trackOutbound = (label: string) => {
     margin-bottom: var(--space-sm);
 }
 
-.case-disclaimer {
-    font-size: 0.875rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    font-style: italic;
-    padding: var(--space-xs) var(--space-sm);
-    border-left: 3px solid var(--accent-secondary);
-    background: var(--bg-secondary);
-    border-radius: 0 8px 8px 0;
-    margin-bottom: var(--space-sm);
-}
-
 .case-tech {
     display: flex;
     flex-wrap: wrap;
@@ -618,111 +407,11 @@ const trackOutbound = (label: string) => {
     gap: var(--space-md);
 }
 
-.case-block-title {
-    font-family: var(--font-mono);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: var(--accent-primary);
-    margin: 0 0 var(--space-xs) 0;
-}
-
-.case-block p {
-    font-size: 0.9375rem;
-    line-height: 1.7;
+.case-summary {
+    font-size: 1rem;
+    line-height: 1.8;
     color: var(--text-secondary);
-}
-
-.arch-list {
-    margin: var(--space-sm) 0 0 0;
-    padding-left: 1.2rem;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-}
-
-.arch-list li {
-    font-size: 0.9375rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-}
-
-.arch-list li::marker {
-    color: var(--accent-primary);
-}
-
-.arch-list strong {
-    color: var(--text-primary);
-    font-weight: 700;
-}
-
-/* Architecture diagram */
-.arch-diagram {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-xs);
-    margin-top: var(--space-md);
-    padding: var(--space-sm);
-    background: var(--bg-secondary);
-    border: 1px dashed var(--accent-secondary);
-    border-radius: 16px;
-}
-
-.arch-col {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: var(--space-xs);
-    flex: 1;
-    min-width: 0;
-}
-
-.arch-node {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    background: var(--bg-primary);
-    border: 1px solid var(--bg-accent);
-    border-radius: 12px;
-    padding: 0.6rem 0.75rem;
-    text-align: center;
-}
-
-.arch-node-title {
-    font-family: var(--font-mono);
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.arch-node-sub {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    color: var(--text-secondary);
-    overflow-wrap: break-word;
-}
-
-.arch-arrow {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent-primary);
-    transform: rotate(90deg);
-}
-
-@media (min-width: 768px) {
-    .arch-diagram {
-        flex-direction: row;
-        align-items: stretch;
-        padding: var(--space-sm) var(--space-md);
-    }
-
-    .arch-arrow {
-        transform: none;
-        flex-shrink: 0;
-    }
+    margin: 0;
 }
 
 /* Store badges */

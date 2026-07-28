@@ -145,19 +145,19 @@ const experiences = computed<Experience[]>(() => [
     },
     {
         period: store.isFrench ? 'Depuis 2021' : 'Since 2021',
-        title: store.isFrench ? 'Product Engineer Freelance' : 'Freelance Product Engineer',
+        title: store.isFrench ? 'Développeur Full-Stack Freelance' : 'Freelance Full-Stack Developer',
         company: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         location: store.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
         description: store.isFrench
             ? [
                   'DishRank — app de notation de plats publiée sur iOS, Android et web (React Native + Next.js + Supabase)',
-                  'Messagerie omnicanale IA en production pour indépendants (Chatwoot + RAG + API Claude)',
+                  'Messagerie omnicanale en production pour indépendants (Chatwoot + API Claude)',
                   'ETF PEA — application web de suivi et d’analyse d’ETF éligibles au PEA',
                   'Produits livrés de bout en bout : conception, développement, déploiement et maintenance',
               ]
             : [
                   'DishRank — dish-rating app published on iOS, Android and web (React Native + Next.js + Supabase)',
-                  'Omnichannel AI messaging in production for independents (Chatwoot + RAG + Claude API)',
+                  'Omnichannel messaging in production for independents (Chatwoot + Claude API)',
                   'ETF PEA — web app to track and analyze PEA-eligible ETFs',
                   'Products shipped end to end: design, development, deployment and maintenance',
               ],
@@ -268,8 +268,8 @@ if (import.meta.client) {
                 <p class="section-description">
                     {{
                         store.isFrench
-                            ? "Plus de 5 ans à concevoir et livrer des produits web & mobile de bout en bout — de la migration d'architecture à la mise en production — avec une spécialité en développement assisté par IA."
-                            : '5+ years designing and shipping web & mobile products end to end — from architecture migration to production — with a focus on AI-assisted development.'
+                            ? 'Plus de 5 ans à concevoir et développer des applications web et mobile, de la conception à la mise en production.'
+                            : '5+ years designing and building web and mobile applications, from design through to production.'
                     }}
                 </p>
 
