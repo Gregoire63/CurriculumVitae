@@ -18,6 +18,11 @@ const soundEnabled = ref(true)
 const soundVolume = ref(0.7) // 0 → 1
 const soundType = ref('bip')
 const vibrationLevel = ref('strong') // aucune / légère / moyenne / forte
+// Relais vers une montre connectée (Decathlon FIT 100 S…) : voir plus bas.
+// Actif par défaut — c'est le comportement attendu en salle ; le réglage Profil
+// est là pour le couper, pas pour l'allumer.
+const watchNotify = ref(true)
+const watchStatus = ref<'unknown' | 'unsupported' | 'default' | 'granted' | 'denied'>('unknown')
 
 // Le web ne permet pas de régler l'AMPLITUDE de la vibration, seulement le motif
 // (durées on/off en ms). On simule la « puissance » par des motifs + longs / répétés.
@@ -64,12 +69,14 @@ function hydrateSettings() {
       if (typeof s.volume === 'number') soundVolume.value = Math.min(1, Math.max(0, s.volume))
       if (typeof s.type === 'string' && SOUNDS[s.type]) soundType.value = s.type
       if (typeof s.vibration === 'string' && VIBRATION_LEVELS[s.vibration]) vibrationLevel.value = s.vibration
+      if (typeof s.watch === 'boolean') watchNotify.value = s.watch
     }
   } catch { /* réglages illisibles */ }
+  refreshWatchStatus()
 }
 if (import.meta.client) {
-  watch([soundEnabled, soundVolume, soundType, vibrationLevel], () => {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value, vibration: vibrationLevel.value })) } catch { /* ignore */ }
+  watch([soundEnabled, soundVolume, soundType, vibrationLevel, watchNotify], () => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value, vibration: vibrationLevel.value, watch: watchNotify.value })) } catch { /* ignore */ }
   })
 }
 
@@ -165,17 +172,97 @@ function unlockAudio() {
   } catch { /* audio indisponible */ }
 }
 
+// ─── Notification système & relais montre connectée ─────────────────────────
+// Aucune montre Decathlon (FIT 100 S…) n'expose de SDK tiers : impossible d'y
+// installer une app. Le seul canal ouvert est le relais de notifications du
+// téléphone — Decathlon Hub répercute la notification et fait vibrer le poignet.
+// Or la notification n'était envoyée QUE page masquée : en salle l'app reste
+// ouverte, donc rien au poignet. `watchNotify` la déclenche aussi app visible.
+const NOTIF_TAG = 'rest-timer'
+const NOTIF_TITLE = "⏱️ C'est reparti"
+const NOTIF_AUTOCLOSE_MS = 12000
+
+function notifSupported(): boolean {
+  return import.meta.client && 'Notification' in window
+}
+
+function refreshWatchStatus() {
+  if (!import.meta.client) return
+  watchStatus.value = notifSupported() ? (Notification.permission as 'default' | 'granted' | 'denied') : 'unsupported'
+}
+
+async function getSwReg(): Promise<ServiceWorkerRegistration | null> {
+  if (swReg) return swReg
+  if (!import.meta.client || !('serviceWorker' in navigator)) return null
+  try { swReg = await navigator.serviceWorker.ready } catch { swReg = null }
+  return swReg
+}
+
+// Demande la permission si elle n'a jamais été tranchée (doit partir d'un tap).
+async function askNotifPermission(): Promise<boolean> {
+  if (!notifSupported()) { watchStatus.value = 'unsupported'; return false }
+  if (Notification.permission === 'default') {
+    try { await Notification.requestPermission() } catch { /* refus */ }
+  }
+  refreshWatchStatus()
+  return watchStatus.value === 'granted'
+}
+
+async function showRestNotification(body: string, silent: boolean, autoClose: boolean) {
+  if (!notifSupported() || Notification.permission !== 'granted') return
+  // vibrate/renotify : hors du type DOM NotificationOptions mais gérés par Android via le SW
+  const opts = {
+    body,
+    tag: NOTIF_TAG,
+    icon: '/sport/icon-192.png',
+    badge: '/sport/icon-192.png',
+    silent,
+    vibrate: vibratePattern(),
+    renotify: true,
+  } as NotificationOptions
+  const reg = await getSwReg()
+  try {
+    if (reg && reg.showNotification) await reg.showNotification(NOTIF_TITLE, opts)
+    else new Notification(NOTIF_TITLE, opts) // desktop sans service worker
+  } catch { return }
+  // App sous les yeux : la notification n'a servi qu'à faire vibrer la montre.
+  // On la retire pour ne pas empiler des lignes dans le volet du téléphone.
+  if (autoClose && reg) {
+    setTimeout(() => {
+      reg.getNotifications({ tag: NOTIF_TAG }).then((ns) => ns.forEach((n) => n.close())).catch(() => {})
+    }, NOTIF_AUTOCLOSE_MS)
+  }
+}
+
 // Prépare la notification système (son + vibration en arrière-plan sur Android)
 function prepareNotify() {
   if (!import.meta.client) return
   try {
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {})
+    if (notifSupported() && Notification.permission === 'default') {
+      Notification.requestPermission().then(refreshWatchStatus).catch(() => {})
     }
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.ready.then((r) => { swReg = r }).catch(() => {})
-    }
+    getSwReg()
   } catch { /* notifications indisponibles */ }
+}
+
+// Active/désactive le relais montre. Le réglage reflète TON choix et reste sur
+// « Activé » même si le navigateur bloque les notifications : c'est l'état de la
+// permission (watchStatus) qui est affiché à part, pour pouvoir la débloquer.
+async function setWatchNotify(on: boolean): Promise<boolean> {
+  watchNotify.value = on
+  if (!on) return false
+  const ok = await askNotifPermission()
+  if (ok) getSwReg()
+  return ok
+}
+
+// « Tester ma montre » : envoie exactement la notification de fin de repos telle
+// qu'elle partira app ouverte (muette, auto-refermée) → test fidèle du relais.
+async function testWatch(): Promise<'granted' | 'denied' | 'unsupported'> {
+  if (!notifSupported()) { watchStatus.value = 'unsupported'; return 'unsupported' }
+  if (!(await askNotifPermission())) return 'denied'
+  await showRestNotification('Test — ta montre doit vibrer ⌚', true, true)
+  return 'granted'
 }
 
 function beep() {
@@ -199,24 +286,14 @@ function alertEnd() {
   beep()
   const vp = vibratePattern()
   try { if (navigator.vibrate && vp.length) navigator.vibrate(vp) } catch { /* ignore */ }
-  // Hors de la page (onglet masqué) : la notification système déclenche le son + la
-  // vibration même quand navigator.vibrate est ignoré (page non visible).
-  try {
-    if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-      // vibrate/renotify : hors du type DOM NotificationOptions mais gérés par Android via le SW
-      const opts = {
-        body: 'Repos terminé — série suivante 💪',
-        tag: 'rest-timer',
-        icon: '/sport/icon-192.png',
-        badge: '/sport/icon-192.png',
-        silent: !soundEnabled.value,
-        vibrate: vp,
-        renotify: true,
-      } as NotificationOptions
-      if (swReg && swReg.showNotification) swReg.showNotification("⏱️ C'est reparti", opts)
-      else new Notification("⏱️ C'est reparti", opts) // desktop
-    }
-  } catch { /* notification impossible */ }
+  // Page masquée : la notification porte le son ET la vibration, car navigator.vibrate
+  // est ignoré hors de la page. Page visible + relais montre : le son vient d'être joué
+  // par WebAudio, la notification part donc en muet — elle ne sert qu'à faire vibrer
+  // la montre — et se referme seule pour ne pas encombrer le volet de notifications.
+  const hidden = document.hidden
+  if (hidden || watchNotify.value) {
+    showRestNotification('Repos terminé — série suivante 💪', hidden ? !soundEnabled.value : true, !hidden)
+  }
 }
 
 function clear() {
@@ -276,5 +353,6 @@ export function useRestTimer() {
     secondsLeft, totalSeconds, start, stop, addTime,
     soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS,
     vibrationLevel, VIBRATION_OPTIONS,
+    watchNotify, watchStatus, setWatchNotify, testWatch,
   }
 }

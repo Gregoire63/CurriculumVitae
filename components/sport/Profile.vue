@@ -23,7 +23,26 @@ function onRestore() {
 }
 
 const { profile, weekPlan, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
-const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS } = useRestTimer()
+const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS, watchNotify, watchStatus, setWatchNotify, testWatch } = useRestTimer()
+
+// Relais montre : la fin de repos part en notification téléphone même app ouverte,
+// pour que la montre (FIT 100 S…) la répercute et vibre au poignet. Actif par défaut.
+const watchMsg = ref('')
+const PERM_BLOCKED = 'Notifications refusées pour ce site — autorise-les (cadenas dans la barre d’adresse, ou réglages Android de l’app), puis réessaie.'
+// Réglage sur « Activé » mais permission jamais accordée → le relais ne partira pas.
+const watchBlocked = computed(() => watchNotify.value && watchStatus.value !== 'granted' && watchStatus.value !== 'unknown')
+async function onToggleWatch() {
+  if (watchNotify.value) { await setWatchNotify(false); watchMsg.value = ''; return }
+  watchMsg.value = (await setWatchNotify(true))
+    ? 'Notifications autorisées ✓ Lance le test et regarde ton poignet.'
+    : PERM_BLOCKED
+}
+async function onTestWatch() {
+  const r = await testWatch()
+  watchMsg.value = r === 'granted'
+    ? 'Notification envoyée — ta montre doit vibrer dans la seconde.'
+    : r === 'unsupported' ? 'Ce navigateur ne gère pas les notifications.' : PERM_BLOCKED
+}
 const volPct = computed({
   get: () => Math.round(soundVolume.value * 100),
   set: (v: number) => { soundVolume.value = Math.min(1, Math.max(0, (Number(v) || 0) / 100)) },
@@ -133,6 +152,21 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         <button class="btn flex-1" @click="testSound">🔊 Tester son + vibration</button>
       </div>
       <div class="muted mt-6">Le téléphone ne permet pas de régler la <em>force</em> exacte de la vibration : « Légère / Moyenne / Forte » jouent des vibrations de plus en plus longues et répétées.<template v-if="!soundEnabled"> Son coupé — la vibration reste active.</template></div>
+    </div>
+
+    <!-- Relais vers la montre connectée (via les notifications du téléphone) -->
+    <div class="card">
+      <div class="row-between mb-8">
+        <div class="section-label">Montre connectée</div>
+        <button class="btn" :class="{ sel: watchNotify }" @click="onToggleWatch">{{ watchNotify ? 'Activé' : 'Désactivé' }}</button>
+      </div>
+      <div class="muted">La fin de repos part en notification téléphone <b>même quand l’app est ouverte</b> : ta montre la relaie et vibre au poignet. Coupe-le ici si tu ne veux pas de notification pendant tes séances.</div>
+      <div class="nav-row mt-6">
+        <button class="btn flex-1" :disabled="!watchNotify" @click="onTestWatch">⌚ Tester ma montre</button>
+      </div>
+      <div v-if="watchBlocked" class="muted mt-6 export-warn">⚠️ Les notifications ne sont pas encore autorisées pour ce site : le relais ne partira pas. Appuie sur « Tester ma montre » pour les autoriser.</div>
+      <div v-if="watchMsg" class="muted mt-6">{{ watchMsg }}</div>
+      <div class="muted mt-6">À faire une fois côté téléphone : dans <b>Decathlon Hub</b> → notifications, autoriser l’app depuis laquelle tu ouvres le chrono (Chrome, ou l’icône installée sur l’écran d’accueil). La montre reçoit le signal de <em>fin</em> de repos — pas le décompte, et aucun bouton depuis le poignet : Decathlon n’ouvre pas sa montre aux apps tierces.</div>
     </div>
 
     <div class="card">
