@@ -155,7 +155,6 @@
 .hint-pill { border-radius: 10px; padding: 10px 12px; font-size: 13px; }
 .hint-pill.progress { background: #e7f0e2; border: 1px solid #bcd8ae; color: #3f7a4f; }
 .hint-pill.stall { background: #f6ece1; border: 1px solid #e6c3b0; color: #b5502f; font-weight: 600; }
-.hint-pill.warmup { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
 .hint-pill.bw { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
 .hint-pill.db { background: #eef1f5; border: 1px solid #cdd8e4; color: #4a6fa5; }
 .cues { display: flex; flex-direction: column; gap: 3px; }
@@ -193,7 +192,22 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .add-set:hover { background: var(--bg-secondary); border-style: solid; }
 .add-set.warm { border-color: #e6d3a8; color: #a97b1e; }
 .add-set.warm:hover { background: #f6ecd6; }
-.last-perf { padding-top: 2px; }
+/* Ressenti de l'exercice : un tap → la charge conseillée s'adapte la fois suivante */
+.effort { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+.effort-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+.effort-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.effort-chip { flex: 1 1 0; min-width: 84px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-muted); border-radius: 9px; padding: 9px 8px; font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.effort-chip:hover { border-color: var(--accent-secondary); color: var(--text-primary); }
+.effort-chip.sel { color: #fff; border-color: transparent; }
+.effort-chip.easy.sel { background: #3f7a4f; }
+.effort-chip.ok.sel { background: #4a6fa5; }
+.effort-chip.hard.sel { background: #a97b1e; }
+.effort-chip.fail.sel { background: #b5502f; }
+.hint-pill.keep { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
+/* Note libre de fin de séance */
+.note-card { margin-top: 4px; }
+.note-input { width: 100%; box-sizing: border-box; background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-primary); border-radius: 10px; padding: 10px 12px; font-family: var(--font-body); font-size: 15px; resize: vertical; }
+.note-input:focus { outline: none; border-color: var(--accent-secondary); }
 .sprint-exercise { border-left: 4px solid #b5502f; }
 .sprint-exercise .ex-name { color: #b5502f; }
 .sprint-body { gap: 14px; padding-top: 4px; }
@@ -338,16 +352,65 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .stat-u { font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); margin-left: 3px; }
 .stat-l { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-top: 4px; }
 .mv-list { display: flex; flex-direction: column; gap: 8px; }
-.mv-row { display: grid; grid-template-columns: 74px 1fr 34px; align-items: center; gap: 10px; }
+.mv-row { display: grid; grid-template-columns: 104px 1fr 34px; align-items: center; gap: 10px; }
 .mv-label { font-size: 13px; color: var(--text-secondary); }
-.mv-bar { height: 8px; background: var(--bg-secondary); border-radius: 20px; overflow: hidden; }
-.mv-fill { height: 100%; background: var(--accent-primary); border-radius: 20px; }
+.mv-bar { position: relative; height: 8px; background: var(--bg-secondary); border-radius: 20px; overflow: hidden; }
+.mv-fill { position: relative; height: 100%; background: var(--accent-primary); border-radius: 20px; }
 .mv-count { font-size: 12px; color: var(--text-muted); text-align: right; }
+/* Zone cible hebdomadaire (10–20 séries) : repère discret derrière la barre */
+.mv-target { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, #3f7a4f 22%, transparent); }
+.mv-fill.low { background: #b5502f; }
+.mv-fill.ok { background: #3f7a4f; }
+.mv-fill.high { background: #a97b1e; }
+.mv-count.low { color: #b5502f; font-weight: 700; }
+.mv-count.ok { color: #3f7a4f; }
+.mv-count.high { color: #a97b1e; font-weight: 700; }
+/* Bascule Semaine / Depuis le début */
+.mv-toggle { display: flex; gap: 4px; }
+.mv-tab { background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-muted); border-radius: 8px; padding: 5px 10px; font-family: var(--font-body); font-size: 12px; cursor: pointer; }
+.mv-tab.active { background: var(--accent-primary); border-color: transparent; color: #fff; font-weight: 600; }
 .rec-list { display: flex; flex-direction: column; }
 .rec-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bg-secondary); font-size: 14px; }
 .rec-row:last-child { border-bottom: none; }
 .rec-name { color: var(--text-secondary); }
 .rec-val { color: var(--text-primary); font-weight: 700; }
+.rec-row-wide { align-items: flex-start; gap: 12px; }
+.rec-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rec-when { font-family: var(--font-mono); font-size: 11px; }
+.rec-vals { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: 0 0 auto; }
+.rec-sub { font-size: 11px; }
+.backup-warn { border-color: #e6c3b0; background: color-mix(in srgb, #f6ece1 55%, var(--bg-primary)); }
+/* ── Fatigue & récupération ── */
+.fat-deload { border-color: #e6c3b0; background: color-mix(in srgb, #f6ece1 55%, var(--bg-primary)); }
+.fat-badge { font-family: var(--font-mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--bg-accent); background: var(--bg-secondary); color: var(--text-secondary); white-space: nowrap; }
+.fat-badge.high { border-color: #e6d3a8; color: #a97b1e; }
+.fat-badge.deload { border-color: #e6c3b0; color: #b5502f; font-weight: 700; }
+.fat-badge.fresh { border-color: #bcd8ae; color: #3f7a4f; }
+.fat-gauge { height: 8px; border-radius: 20px; background: var(--bg-secondary); overflow: hidden; margin-bottom: 10px; }
+.fat-gauge-fill { height: 100%; border-radius: 20px; background: var(--accent-primary); transition: width 0.3s; }
+.fat-gauge-fill.fresh { background: #3f7a4f; }
+.fat-gauge-fill.building { background: #4a6fa5; }
+.fat-gauge-fill.high { background: #a97b1e; }
+.fat-gauge-fill.deload { background: #b5502f; }
+.fat-advice { font-size: 14px; color: var(--text-primary); line-height: 1.5; }
+.fat-reasons { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-secondary); }
+.fat-reasons li { margin-bottom: 2px; }
+.fat-weeks { display: flex; align-items: flex-end; gap: 6px; height: 68px; margin: 14px 0 6px; }
+.fat-week { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+.fat-week-bar { flex: 1; width: 100%; display: flex; align-items: flex-end; background: var(--bg-secondary); border-radius: 6px; overflow: hidden; }
+.fat-week-fill { width: 100%; background: var(--accent-secondary); border-radius: 6px; }
+.fat-week.current .fat-week-fill { background: repeating-linear-gradient(45deg, var(--accent-primary), var(--accent-primary) 4px, transparent 4px, transparent 8px); }
+.fat-week-lbl { font-size: 9px; color: var(--text-muted); }
+.fat-week.current .fat-week-lbl { color: var(--accent-primary); font-weight: 700; }
+.fat-caveat { font-style: italic; }
+/* Bandeau d'accueil quand une décharge est conseillée */
+.deload-banner { display: flex; align-items: center; gap: 10px; border-radius: 12px; padding: 11px 14px; background: color-mix(in srgb, #f6ece1 70%, var(--bg-primary)); border: 1px solid #e6c3b0; color: #b5502f; font-size: 13px; }
+.deload-banner b { white-space: nowrap; }
+.link-btn { background: none; border: none; padding: 0; color: inherit; font-family: var(--font-body); font-size: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.export-warn { color: #b5502f; }
+.restore-btn { margin-top: 8px; display: block; font-size: 13px; }
+.history-effort { margin-left: 6px; }
+.history-note { margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); font-size: 13px; color: var(--text-secondary); }
 
 /* Profil — champs & selects « maison » (design épuré, cohérent) */
 .form-grid { display: flex; flex-direction: column; gap: 14px; }

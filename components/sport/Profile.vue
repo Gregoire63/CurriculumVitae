@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import { useRestTimer } from '~/composables/useRestTimer'
@@ -8,7 +8,19 @@ import { useRestTimer } from '~/composables/useRestTimer'
 const props = defineProps<{ todayIso: string | null }>()
 const emit = defineEmits<{ flash: [msg: string] }>()
 
-const { bodyWeight, addBodyWeight, exportJSON, importJSON } = useWorkout()
+const { bodyWeight, addBodyWeight, exportJSON, importJSON, lastExportAt, daysSinceExport, backupDate, restoreBackup } = useWorkout()
+
+// Sauvegarde : tout vit dans le navigateur, donc on affiche l'âge du dernier export
+// et on propose l'instantané de secours écrit automatiquement (1×/jour).
+const EXPORT_STALE_DAYS = 30
+const exportAge = computed(() => (props.todayIso ? daysSinceExport(props.todayIso) : null))
+const exportStale = computed(() => exportAge.value === null || exportAge.value > EXPORT_STALE_DAYS)
+const backupOn = ref<string | null>(null)
+onMounted(() => { backupOn.value = backupDate() })
+function onRestore() {
+  if (!confirm('Remplacer les données actuelles par l’instantané de secours ? Fais un export avant si tu as un doute.')) return
+  emit('flash', restoreBackup() ? 'Instantané restauré ✓' : 'Aucun instantané disponible')
+}
 
 const { profile, weekPlan, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
 const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS } = useRestTimer()
@@ -129,6 +141,14 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         <button class="btn flex-1" @click="exportJSON({ profile, weekPlan })">⬇ Exporter</button>
         <label class="btn flex-1 center">⬆ Importer<input type="file" accept=".json" class="hidden-input" @change="onImport"></label>
         <button class="btn flex-1" @click="resetPlan()">↺ Réinit. planning</button>
+      </div>
+      <div class="muted mt-6" :class="{ 'export-warn': exportStale }">
+        <template v-if="lastExportAt">{{ exportStale ? '⚠️' : '✓' }} Dernière sauvegarde : <b>{{ lastExportAt }}</b><template v-if="exportAge !== null"> (il y a {{ exportAge }} j)</template>.</template>
+        <template v-else>⚠️ <b>Jamais sauvegardé.</b> Tout est stocké dans ce navigateur — vider les données du site effacerait tout ton historique.</template>
+      </div>
+      <div v-if="backupOn" class="muted mt-6">
+        Filet de sécurité automatique du <b>{{ backupOn }}</b> conservé dans le navigateur.
+        <button class="btn restore-btn" @click="onRestore">↩ Restaurer cet instantané</button>
       </div>
       <div class="muted mt-6">Le planning de la semaine est fixe (Lundi Pecs/Ép · Mardi Dos/Bic · Jeudi Jambes · Vendredi Pecs/Bras). Tu peux démarrer n'importe quelle séance n'importe quand — ça ne change pas le planning. « Réinit. » le remet par défaut.</div>
     </div>

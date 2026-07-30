@@ -6,6 +6,8 @@ import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
+import { warmupLoad, EFFORT_OPTIONS, isEffort } from '~/utils/sportStats'
+import type { Effort, PrKind } from '~/utils/sportStats'
 import '~/assets/css/sport.css'
 
 useHead({
@@ -26,13 +28,16 @@ useHead({
 })
 
 const {
-  bodyWeight, lastPerf, recordSession, updateSession, suggestWeight, sessionLog, seedDemo,
+  bodyWeight, lastPerf, lastEffort, recordSession, updateSession, suggestWeight, sessionLog, seedDemo, fatigue,
 } = useWorkout()
 const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
 const restFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 const { weekPlan, hydrate: hydrateProfile } = useProfile()
 
 // ─────────── Muscles ───────────
+// Libellés COMPACTS pour les pastilles des cartes de séance (les 3 faisceaux
+// d'épaule y sont regroupés, sinon la carte déborde). L'analyse de volume, elle,
+// les distingue — cf. MUSCLE_LABELS dans utils/sportStats.
 const MUSCLE_LABELS: Record<string, string> = {
   pecs: 'Pecs', 'epaules-av': 'Épaules', 'epaules-lat': 'Épaules', 'epaules-ar': 'Épaules',
   triceps: 'Triceps', biceps: 'Biceps', 'avant-bras': 'Avant-bras', abdos: 'Abdos',
@@ -91,6 +96,12 @@ const flash = ref('')
 // L'écran de chargement est géré par Nuxt (spa-loading-template.html) : /sport est
 // rendu 100 % client (ssr:false), donc plus de « gel » d'hydratation à masquer ici.
 const draft = reactive<Record<string, { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }[]>>({})
+// Ressenti déclaré par exercice (facile / correct / dur / échec) : c'est lui qui
+// permet d'auto-réguler la charge conseillée à la séance suivante.
+const draftEffort = reactive<Record<string, Effort>>({})
+// Note libre de la séance (douleur, sommeil, machine occupée…) : c'est ce qui
+// explique une mauvaise séance quand on la relit des semaines plus tard.
+const sessionNote = ref('')
 const sessionStart = ref(0)
 const plateOpen = ref(false)
 const ormOpen = ref(false)
@@ -268,14 +279,16 @@ function startSession(s: Session) {
   activeSession.value = s
   editingRecord.value = null
   for (const k of Object.keys(draft)) delete draft[k]
+  for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+  sessionNote.value = ''
   const bw = latestWeight.value ?? 0 // poids de corps (profil) pour les exos au poids du corps
   for (const e of s.exercises) {
     const last = lastPerf(e.id)
+    let rows: DraftRow[]
     if (last && last.sets.length) {
-      // Reprend EXACTEMENT la dernière séance de cet exercice : mêmes lignes
-      // (échauffement inclus), poids ET reps préremplis. Rien n'est coché → il n'y
-      // a plus qu'à ajuster et valider (fini de retaper les reps / rajouter les lignes).
-      draft[e.id] = last.sets.map(st => ({
+      // Reprend la dernière séance de cet exercice : poids ET reps des séries de
+      // travail préremplis. Rien n'est coché → il n'y a plus qu'à ajuster et valider.
+      rows = last.sets.map(st => ({
         w: st.w != null ? String(st.w) : '',
         r: st.r != null ? String(st.r) : '',
         done: false,
@@ -286,11 +299,14 @@ function startSession(s: Session) {
     } else {
       // Aucun historique : lignes par défaut du programme (poids conseillé si dispo)
       const sug = suggestWeight(e)
-      draft[e.id] = Array.from({ length: e.sets }, () => ({
+      rows = Array.from({ length: e.sets }, () => ({
         w: e.bodyweight && bw ? String(bw) : (sug.weight ? String(sug.weight) : ''),
         r: '', done: false, warm: false, w2: '', r2: '',
       }))
     }
+    // Échauffement auto : une série d'échauffement en tête, calculée sur la charge
+    // de travail la plus lourde (voir withWarmup) — remplace tout échauffement repris.
+    draft[e.id] = withWarmup(e, rows)
   }
   openEx.value = s.exercises[0].id
   sprintOpen.value = false
@@ -308,9 +324,12 @@ function editSession(rec: SessionRecord) {
   editingRecord.value = rec
   editReturn.value = view.value
   for (const k of Object.keys(draft)) delete draft[k]
+  for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+  sessionNote.value = rec.note ?? ''
   const bw = latestWeight.value ?? 0
   for (const e of s.exercises) {
     const entry = rec.entries.find(en => en.exId === e.id)
+    if (entry && isEffort(entry.effort)) draftEffort[e.id] = entry.effort
     if (entry && entry.sets.length) {
       draft[e.id] = entry.sets.map(st => ({
         w: st.w != null ? String(st.w) : '',
@@ -348,8 +367,13 @@ const finishReady = computed(() => {
   const total = activeSession.value?.exercises.length ?? 0
   return total ? finishedCount.value / total >= 0.8 : true
 })
+// Un 2e tap sur le même ressenti l'annule (on peut se tromper de bouton)
+function setEffort(exId: string, v: Effort) {
+  if (draftEffort[exId] === v) delete draftEffort[exId]
+  else draftEffort[exId] = v
+}
 function addSet(exId: string) { const rows = draft[exId]; const lastW = [...rows].reverse().find(s => !s.warm); rows.push({ w: lastW?.w ?? '', r: '', done: false, warm: false, w2: lastW?.w2 ?? '', r2: '' }) }
-function addWarmup(exId: string) { const wu = warmup(exId); draft[exId].unshift({ w: wu ? String(wu[0]) : '', r: '', done: false, warm: true, w2: '', r2: '' }) }
+function addWarmup(exId: string) { const wu = warmupFor(exId); draft[exId].unshift({ w: wu !== null ? String(wu) : '', r: '', done: false, warm: true, w2: '', r2: '' }) }
 function removeSet(exId: string, i: number) { if (draft[exId].length > 1) draft[exId].splice(i, 1) }
 // Libellé : « Éch » pour l'échauffement, sinon numéro de série de travail
 function setLabel(rows: { warm: boolean }[], i: number) {
@@ -366,13 +390,24 @@ function restForReps(reps: string): number {
   return 75
 }
 function toggleSet(s: { done: boolean; warm: boolean }, reps: string) { s.done = !s.done; if (s.done && !s.warm) startRest(restForReps(reps)) }
-function roundTo(v: number, step: number) { return Math.round(v / step) * step }
-function warmup(exId: string): number[] | null {
-  const firstWork = (draft[exId] || []).find(s => !s.warm) // 1re série de travail
-  const w = parseFloat(firstWork?.w || '')
-  if (!w || w <= 20) return null
-  const steps = [0.5, 0.7, 0.85].map(p => roundTo(w * p, 2.5)).filter(x => x > 0 && x < w)
-  return steps.length ? [...new Set(steps)] : null
+type DraftRow = { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }
+// Charge d'échauffement d'un exercice, d'après la série de travail la plus lourde
+// actuellement saisie (utilisée par le bouton « + Échauffement »).
+function warmupFor(exId: string): number | null {
+  const work = (draft[exId] || []).filter(s => !s.warm)
+  return warmupLoad(Math.max(0, ...work.map(r => parseFloat(r.w) || 0)))
+}
+// Échauffement auto : sur un exercice suffisamment chargé (hors poids du corps et
+// hors superset), on garantit UNE série d'échauffement en tête, calculée à ~50 % de
+// la charge de travail la plus lourde (arrondie à 2,5 kg). Recalculée à chaque
+// démarrage à partir des séries de travail préremplies — donc de tes dernières perfs.
+// Tout échauffement repris de l'ancienne séance est remplacé par cette série calculée.
+function withWarmup(e: Exercise, rows: DraftRow[]): DraftRow[] {
+  const work = rows.filter(r => !r.warm)
+  if (e.bodyweight || e.superset) return work // pas d'échauffement chiffré ici
+  const wu = warmupLoad(Math.max(0, ...work.map(r => parseFloat(r.w) || 0)))
+  if (wu === null) return work // charge trop légère → échauffement inutile
+  return [{ w: String(wu), r: '10', done: false, warm: true, w2: '', r2: '' }, ...work]
 }
 // Ferme la séance active : coupe le chrono de repos, vide le brouillon (mémoire +
 // stockage). Appelé quand la séance est terminée (enregistrée) ou abandonnée.
@@ -383,6 +418,8 @@ function clearActive() {
   previewSession.value = null
   sheetOpen.value = false; sheetClosing.value = false; dragY.value = 0
   for (const k of Object.keys(draft)) delete draft[k]
+  for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+  sessionNote.value = ''
   sprintDraft.value = []
   if (import.meta.client) { try { localStorage.removeItem(DRAFT_KEY) } catch { /* stockage indispo */ } }
 }
@@ -397,6 +434,7 @@ function finishSession() {
       ...(e.superset && s.w2 !== '' && s.r2 !== '' ? { w2: parseFloat(s.w2), r2: parseInt(s.r2, 10) } : {}),
       ...(s.warm ? { warm: true } : {}),
     })),
+    ...(draftEffort[e.id] ? { effort: draftEffort[e.id] } : {}),
   }))
   const sprintEfforts = sprintDraft.value
     .filter(r => r.duration.trim() || r.intensity.trim())
@@ -405,27 +443,46 @@ function finishSession() {
   // nouveau. On CONSERVE la durée d'origine (le chrono ne tourne pas en édition).
   if (editingRecord.value) {
     const keepMin = editingRecord.value.durationMin
-    updateSession(editingRecord.value, entries, keepMin, sprintEfforts)
+    updateSession(editingRecord.value, entries, keepMin, sprintEfforts, sessionNote.value)
     const back = editReturn.value
     animateSheetDown(() => { clearActive(); view.value = back; showFlash(keepMin ? `Séance modifiée ✓ (${keepMin} min)` : 'Séance modifiée ✓') })
     return
   }
-  const prs = recordSession(entries, durationMin, { sessionId: sess.id, name: sess.name }, sprintEfforts)
+  const prs = recordSession(entries, durationMin, { sessionId: sess.id, name: sess.name, note: sessionNote.value }, sprintEfforts)
   // Le planning hebdo reste STABLE : on ne réécrit plus le jour avec la séance
   // faite (ça faisait dériver la semaine — mauvais jour, doublons).
   animateSheetDown(() => {
     clearActive()
     view.value = 'home'
-    showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 PR : ${prs.join(', ')}` : `Séance enregistrée ✓ (${durationMin} min)`)
+    showFlash(prs.length ? `Séance enregistrée (${durationMin} min) — 🏆 ${prLabel(prs)}` : `Séance enregistrée ✓ (${durationMin} min)`)
   })
 }
-function lastLabel(exId: string) { const last = lastPerf(exId); if (!last) return null; const work = last.sets.filter(s => !s.warm); return work.length ? `Dernière (${last.date}) : ${work.map(s => `${s.w}×${s.r}${s.w2 != null ? ` / ${s.w2}×${s.r2}` : ''}`).join(' · ')}` : null }
-// Conseil de surcharge progressive (monte la charge quand on progresse ou qu'on stagne)
+// Message de records : « charge », « reps » et « 1RM » sont trois progrès distincts.
+const PR_WORDS: Record<PrKind, string> = { charge: 'charge', reps: 'reps', e1rm: '1RM' }
+function prLabel(prs: { name: string; kinds: PrKind[] }[]): string {
+  return 'PR ' + prs.map(p => `${p.name} (${p.kinds.map(k => PR_WORDS[k]).join(' + ')})`).join(', ')
+}
+// Décharge conseillée : accumulation de volume, ressenti dégradé ou stagnation
+// généralisée. Détail et raisons dans l'onglet Rapport.
+const deloadAdvised = computed(() => {
+  if (!todayISO.value || todayDow.value === null) return false
+  return fatigue(todayISO.value, todayDow.value).level === 'deload'
+})
+
+// Conseil de surcharge progressive. Tient compte du ressenti déclaré la dernière
+// fois : « facile » fait monter, « dur » consolide, « échec » fait redescendre.
 function overloadHint(ex: Exercise): { cls: string; text: string } | null {
   if (ex.bodyweight || ex.superset) return null // au poids du corps / superset : progression gérée à la main
   const s = suggestWeight(ex)
-  if (s.reason === 'progress') return { cls: 'progress', text: `🎯 Objectif de reps atteint → +${s.inc} kg par série (jusqu'à ${s.weight} kg)` }
+  const felt = lastEffort(ex.id)
+  if (s.reason === 'deload') return { cls: 'stall', text: `💥 Échec la dernière fois → on redescend à ${s.weight} kg pour repartir propre` }
+  if (s.reason === 'progress') {
+    return felt === 'easy' && s.weight === s.base + s.inc
+      ? { cls: 'progress', text: `😀 Noté « facile » la dernière fois → passe à ${s.weight} kg` }
+      : { cls: 'progress', text: `🎯 Objectif de reps atteint → +${s.inc} kg par série (jusqu'à ${s.weight} kg)` }
+  }
   if (s.reason === 'stall') return { cls: 'stall', text: `⏫ Bloqué ${s.streak} séances à ${s.base} kg — on force +${s.inc} kg par série` }
+  if (s.reason === 'keep' && felt === 'hard') return { cls: 'keep', text: `😤 C'était dur → on reste à ${s.base} kg et on gagne des reps` }
   return null
 }
 
@@ -448,6 +505,8 @@ if (import.meta.client) {
       ? JSON.stringify({
           id: activeSession.value.id,
           draft,
+          draftEffort,
+          note: sessionNote.value,
           sprintDraft: sprintDraft.value,
           sessionStart: sessionStart.value,
           openEx: openEx.value,
@@ -475,6 +534,11 @@ function restoreDraft() {
     activeSession.value = sess
     for (const k of Object.keys(draft)) delete draft[k]
     if (s.draft && typeof s.draft === 'object') Object.assign(draft, s.draft)
+    for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+    if (s.draftEffort && typeof s.draftEffort === 'object') {
+      for (const [k, v] of Object.entries(s.draftEffort)) if (isEffort(v)) draftEffort[k] = v
+    }
+    sessionNote.value = typeof s.note === 'string' ? s.note : ''
     sprintDraft.value = Array.isArray(s.sprintDraft) ? s.sprintDraft : []
     sessionStart.value = typeof s.sessionStart === 'number' ? s.sessionStart : Date.now()
     openEx.value = s.openEx ?? sess.exercises[0].id
@@ -558,6 +622,11 @@ onUnmounted(() => {
 
     <!-- ═══════════ ACCUEIL ═══════════ -->
     <div v-if="view === 'home'" class="stack">
+      <!-- Décharge conseillée : l'info n'est utile qu'ici, avant de démarrer -->
+      <div v-if="deloadAdvised" class="deload-banner">
+        <span>🔴</span>
+        <span><b>Semaine de décharge conseillée.</b> Garde les mêmes charges, coupe ~40 % des séries et stoppe 3 reps avant l'échec. <button class="link-btn" @click="view = 'rapport'">Voir pourquoi →</button></span>
+      </div>
       <section v-if="todaySession" class="today card" :style="{ '--c': todaySession.color }">
         <div class="today-eyebrow"><span class="today-dot"></span> Séance du jour · {{ todayEntry!.dow }}</div>
         <h2 class="today-name">{{ todaySession.name }}</h2>
@@ -653,7 +722,6 @@ onUnmounted(() => {
             <LazySportExerciseMove :ex-id="e.id"><LazySportMuscleMap :muscles="e.muscles" /></LazySportExerciseMove>
             <div v-if="e.bodyweight" class="hint-pill bw">🧍 Charge = ton poids de corps<template v-if="latestWeight"> ({{ latestWeight }} kg)</template> + lest. Préremplie — ajuste si tu ajoutes du poids.</div>
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
-            <div v-if="!e.bodyweight && !e.superset && warmup(e.id)" class="hint-pill warmup">🔥 Échauffement : <span class="mono">{{ warmup(e.id)!.join(' · ') }} kg</span></div>
             <div v-if="isDumbbell(e)" class="hint-pill db">🏋️ Note le poids <strong>total des 2 haltères</strong> (ex. 2 × 20 kg → 40 kg), pas un seul.</div>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
@@ -704,7 +772,18 @@ onUnmounted(() => {
                 <button v-if="!e.superset" class="add-set warm" @click="addWarmup(e.id)">+ Échauffement</button>
               </div>
             </div>
-            <div v-if="lastLabel(e.id)" class="muted last-perf">{{ lastLabel(e.id) }}</div>
+            <!-- Ressenti : un tap, et la charge conseillée s'adapte la prochaine fois -->
+            <div class="effort">
+              <span class="effort-label">Ressenti</span>
+              <div class="effort-chips">
+                <button
+                  v-for="o in EFFORT_OPTIONS" :key="o.value"
+                  class="effort-chip" :class="[o.value, { sel: draftEffort[e.id] === o.value }]"
+                  :aria-pressed="draftEffort[e.id] === o.value"
+                  @click="setEffort(e.id, o.value)"
+                >{{ o.icon }} {{ o.label }}</button>
+              </div>
+            </div>
           </div>
         </div>
         <div v-if="activeSession.sprint" class="card no-pad exercise sprint-exercise">
@@ -773,6 +852,11 @@ onUnmounted(() => {
               <div class="muted sprint-hint">Ex : Échauff. 1 × 3 min @ 8 km/h, puis Sprint 3 × 20 s @ 16 km/h. Enregistré avec la séance.</div>
             </div>
           </div>
+        </div>
+        <div class="card note-card">
+          <div class="section-label mb-8">Note de séance <span class="muted">· facultatif</span></div>
+          <textarea v-model="sessionNote" class="note-input" rows="2" placeholder="Douleur épaule, mal dormi, banc occupé…"></textarea>
+          <div class="muted mt-6">C'est ce qui expliquera une séance en dessous quand tu la reliras dans un mois.</div>
         </div>
         <button class="btn-primary finish" :disabled="!finishReady" @click="finishSession">{{ editingRecord ? 'Enregistrer les modifications' : 'Terminer et enregistrer la séance' }}</button>
         <div v-if="!finishReady && activeSession" class="finish-hint muted">Termine au moins 80 % des exercices pour enregistrer — {{ finishedCount }}/{{ activeSession.exercises.length }} faits.</div>

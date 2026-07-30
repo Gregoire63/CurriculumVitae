@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
+import { EFFORT_OPTIONS } from '~/utils/sportStats'
 
 // Vue « Journal » (calendrier + feuille de séance) extraite de /sport (chargée à la demande).
 const props = defineProps<{ todayIso: string | null }>()
@@ -13,8 +14,11 @@ const { sessionLog } = useWorkout()
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const p2 = (n: number) => String(n).padStart(2, '0')
-const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères' }
+const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères', 'curl-ez': 'Curl barre EZ' }
 const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RETIRED_NAMES[id] ?? id
+// Ressenti déclaré pendant la séance (facile / correct / dur / échec)
+const effortIcon = (e?: string) => EFFORT_OPTIONS.find(o => o.value === e)?.icon ?? ''
+const effortLabel = (e?: string) => EFFORT_OPTIONS.find(o => o.value === e)?.label ?? ''
 const sessionById = (id: string | null) => (id ? PROGRAM.find(p => p.id === id) || null : null)
 const recColor = (rec: SessionRecord) => sessionById(rec.sessionId)?.color || '#8b6f5c'
 
@@ -147,13 +151,14 @@ onMounted(() => {
           </div>
           <div class="sheet-body">
             <div v-for="e in sheetRecord.entries" :key="e.exId" class="history-entry">
-              <span class="history-ex">{{ exName(e.exId) }}</span>
+              <span class="history-ex">{{ exName(e.exId) }}<span v-if="effortIcon(e.effort)" class="history-effort" :title="effortLabel(e.effort)">{{ effortIcon(e.effort) }}</span></span>
               <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}${x.w2 != null ? ` / ${x.w2}×${x.r2}` : ''}`).join(' · ') }}</span>
             </div>
             <div v-for="(sp, k) in (sheetRecord.sprint || [])" :key="'sp' + k" class="history-entry">
               <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
               <span class="mono muted">{{ sp.count }} × {{ sp.duration }}<template v-if="sp.intensity"> @ {{ sp.intensity }}</template></span>
             </div>
+            <div v-if="sheetRecord.note" class="history-note">📝 {{ sheetRecord.note }}</div>
             <div v-if="!sheetRecord.entries.length && !(sheetRecord.sprint || []).length" class="muted">Séance sans détail enregistré.</div>
           </div>
           <button class="btn-primary sheet-edit" @click="edit(sheetRecord!)">✏️ Modifier cette séance</button>
