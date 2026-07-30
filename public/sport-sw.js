@@ -1,9 +1,32 @@
 // Service worker scopé /sport — cache offline de l'outil de suivi.
 // Le reste du site n'est pas affecté (scope limité au register()).
-const CACHE = 'sport-v3'
+const CACHE = 'sport-v4'
+const SHELL = '/sport'
+const NAV_TIMEOUT_MS = 3000
+
+// Ne met en cache que ce qui est réellement servable. Une réponse d'erreur ou
+// une REDIRECTION mise en cache rendait /sport inaccessible durablement : servie
+// à une navigation, la redirection repart sur la même URL, le SW la ressert…
+// jusqu'à ERR_TOO_MANY_REDIRECTS, et le rechargement n'y changeait rien
+// puisque la réponse fautive venait du cache.
+function cacheable(res) {
+  return !!res && res.ok && !res.redirected && res.type === 'basic'
+}
+
+function put(request, res) {
+  if (!cacheable(res)) return
+  const copy = res.clone()
+  caches.open(CACHE).then((c) => c.put(request, copy)).catch(() => { /* quota */ })
+}
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/sport'])))
+  // Un échec de mise en cache ne doit pas faire échouer l'installation, sinon le
+  // SW ne s'active jamais et la page dépend d'un cache qui n'existera pas.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => fetch(SHELL).then((res) => (cacheable(res) ? c.put(SHELL, res) : undefined)))
+      .catch(() => { /* hors-ligne à l'install */ })
+  )
   self.skipWaiting()
 })
 
@@ -28,43 +51,49 @@ self.addEventListener('notificationclick', (e) => {
   )
 })
 
+// Navigation : réseau d'abord, cache en repli. Le HTML référence des assets
+// _nuxt dont le nom est haché ; servir un HTML périmé après un déploiement fait
+// pointer la page vers des fichiers qui n'existent plus et l'app ne démarre pas.
+// Le cache ne sert donc que hors-ligne, ou si le réseau traîne au-delà du délai.
+function navigate(request) {
+  return new Promise((resolve) => {
+    let settled = false
+    const done = (r) => { if (!settled) { settled = true; resolve(r) } }
+    const fallback = () => caches.match(SHELL).then((cached) => (cached ? done(cached) : undefined))
+    const timer = setTimeout(fallback, NAV_TIMEOUT_MS)
+    fetch(request)
+      .then((res) => {
+        clearTimeout(timer)
+        put(SHELL, res)
+        done(res)
+      })
+      .catch(() => {
+        clearTimeout(timer)
+        caches.match(SHELL).then((cached) => done(cached || Response.error()))
+      })
+  })
+}
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
   if (e.request.method !== 'GET' || url.origin !== location.origin) return
 
-  // Navigation vers /sport : stale-while-revalidate.
-  // On sert immédiatement la version en cache (ouverture instantanée, sans
-  // attendre le réseau) et on rafraîchit en arrière-plan pour la prochaine fois.
   if (e.request.mode === 'navigate') {
-    e.respondWith(
-      caches.match('/sport').then((cached) => {
-        const network = fetch(e.request)
-          .then((res) => {
-            const copy = res.clone()
-            caches.open(CACHE).then((c) => c.put('/sport', copy))
-            return res
-          })
-          .catch(() => cached)
-        return cached || network
-      })
-    )
+    e.respondWith(navigate(e.request))
     return
   }
 
-  // Assets (_nuxt, icônes, manifest) : stale-while-revalidate
+  // Assets (_nuxt, icônes, manifest) : noms hachés donc immuables → cache d'abord,
+  // réseau seulement en cas d'absence. Le changement de version du cache suffit
+  // à repartir propre.
   if (url.pathname.startsWith('/_nuxt/') || url.pathname.startsWith('/sport/')) {
     e.respondWith(
       caches.match(e.request).then((cached) => {
-        const network = fetch(e.request)
-          .then((res) => {
-            if (res.ok) {
-              const copy = res.clone()
-              caches.open(CACHE).then((c) => c.put(e.request, copy))
-            }
-            return res
-          })
-          .catch(() => cached)
-        return cached || network
+        if (cached) return cached
+        return fetch(e.request).then((res) => {
+          put(e.request, res)
+          return res
+        })
       })
     )
   }

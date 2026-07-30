@@ -864,11 +864,25 @@ onUnmounted(() => {
         </div>
       </div>
 
-    <!-- Onglets secondaires : composants chargés à la demande (moins de JS hydraté sur l'accueil) -->
-    <LazySportReport v-if="view === 'rapport'" :today-iso="todayISO" :today-dow="todayDow" />
-    <LazySportProgress v-if="view === 'progress'" />
-    <LazySportHistory v-if="view === 'history'" :today-iso="todayISO" @edit="editSession" />
-    <LazySportProfile v-if="view === 'profil'" :today-iso="todayISO" @flash="showFlash" />
+    <!-- Onglets secondaires : composants chargés à la demande (moins de JS hydraté
+         sur l'accueil). Suspense affiche un squelette le temps du chunk, plutôt
+         qu'un écran vide entre le clic sur l'onglet et l'arrivée du composant. -->
+    <Suspense v-if="view === 'rapport'">
+      <LazySportReport :today-iso="todayISO" :today-dow="todayDow" />
+      <template #fallback><SportSkeleton :cards="4" chart /></template>
+    </Suspense>
+    <Suspense v-else-if="view === 'progress'">
+      <LazySportProgress />
+      <template #fallback><SportSkeleton :cards="3" chart /></template>
+    </Suspense>
+    <Suspense v-else-if="view === 'history'">
+      <LazySportHistory :today-iso="todayISO" @edit="editSession" />
+      <template #fallback><SportSkeleton :cards="2" /></template>
+    </Suspense>
+    <Suspense v-else-if="view === 'profil'">
+      <LazySportProfile :today-iso="todayISO" @flash="showFlash" />
+      <template #fallback><SportSkeleton :cards="5" chart /></template>
+    </Suspense>
 
     <!-- Aperçu lecture seule d'une séance quand une autre est déjà en cours -->
     <div v-if="previewSession" class="preview-overlay" @click.self="previewSession = null">
