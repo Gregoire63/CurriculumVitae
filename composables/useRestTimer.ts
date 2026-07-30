@@ -23,6 +23,10 @@ const vibrationLevel = ref('strong') // aucune / légère / moyenne / forte
 // est là pour le couper, pas pour l'allumer.
 const watchNotify = ref(true)
 const watchStatus = ref<'unknown' | 'unsupported' | 'default' | 'granted' | 'denied'>('unknown')
+// Notification muette app ouverte : évite le doublon sonore, MAIS Android range les
+// notifications muettes dans la section « silencieuses » que la plupart des relais de
+// montre ignorent. Désactivé par défaut : le poignet prime sur le doublon.
+const watchSilent = ref(false)
 
 // Le web ne permet pas de régler l'AMPLITUDE de la vibration, seulement le motif
 // (durées on/off en ms). On simule la « puissance » par des motifs + longs / répétés.
@@ -70,13 +74,14 @@ function hydrateSettings() {
       if (typeof s.type === 'string' && SOUNDS[s.type]) soundType.value = s.type
       if (typeof s.vibration === 'string' && VIBRATION_LEVELS[s.vibration]) vibrationLevel.value = s.vibration
       if (typeof s.watch === 'boolean') watchNotify.value = s.watch
+      if (typeof s.watchSilent === 'boolean') watchSilent.value = s.watchSilent
     }
   } catch { /* réglages illisibles */ }
   refreshWatchStatus()
 }
 if (import.meta.client) {
-  watch([soundEnabled, soundVolume, soundType, vibrationLevel, watchNotify], () => {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value, vibration: vibrationLevel.value, watch: watchNotify.value })) } catch { /* ignore */ }
+  watch([soundEnabled, soundVolume, soundType, vibrationLevel, watchNotify, watchSilent], () => {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ enabled: soundEnabled.value, volume: soundVolume.value, type: soundType.value, vibration: vibrationLevel.value, watch: watchNotify.value, watchSilent: watchSilent.value })) } catch { /* ignore */ }
   })
 }
 
@@ -179,6 +184,7 @@ function unlockAudio() {
 // Or la notification n'était envoyée QUE page masquée : en salle l'app reste
 // ouverte, donc rien au poignet. `watchNotify` la déclenche aussi app visible.
 const NOTIF_TAG = 'rest-timer'
+const TEST_TAG = 'rest-timer-test'
 const NOTIF_TITLE = "⏱️ C'est reparti"
 const NOTIF_AUTOCLOSE_MS = 12000
 
@@ -208,12 +214,12 @@ async function askNotifPermission(): Promise<boolean> {
   return watchStatus.value === 'granted'
 }
 
-async function showRestNotification(body: string, silent: boolean, autoClose: boolean) {
+async function showRestNotification(body: string, silent: boolean, autoClose: boolean, tag = NOTIF_TAG) {
   if (!notifSupported() || Notification.permission !== 'granted') return
   // vibrate/renotify : hors du type DOM NotificationOptions mais gérés par Android via le SW
   const opts = {
     body,
-    tag: NOTIF_TAG,
+    tag,
     icon: '/sport/icon-192.png',
     badge: '/sport/icon-192.png',
     silent,
@@ -229,7 +235,7 @@ async function showRestNotification(body: string, silent: boolean, autoClose: bo
   // On la retire pour ne pas empiler des lignes dans le volet du téléphone.
   if (autoClose && reg) {
     setTimeout(() => {
-      reg.getNotifications({ tag: NOTIF_TAG }).then((ns) => ns.forEach((n) => n.close())).catch(() => {})
+      reg.getNotifications({ tag }).then((ns) => ns.forEach((n) => n.close())).catch(() => {})
     }, NOTIF_AUTOCLOSE_MS)
   }
 }
@@ -257,11 +263,19 @@ async function setWatchNotify(on: boolean): Promise<boolean> {
 }
 
 // « Tester ma montre » : envoie exactement la notification de fin de repos telle
-// qu'elle partira app ouverte (muette, auto-refermée) → test fidèle du relais.
+// qu'elle partira app ouverte → test fidèle du relais, réglages compris.
 async function testWatch(): Promise<'granted' | 'denied' | 'unsupported'> {
   if (!notifSupported()) { watchStatus.value = 'unsupported'; return 'unsupported' }
   if (!(await askNotifPermission())) return 'denied'
-  await showRestNotification('Test — ta montre doit vibrer ⌚', true, true)
+  const reg = await getSwReg()
+  // Android ré-alerte plus fiablement sur une notification neuve que sur le
+  // remplacement d'une notification encore affichée → on retire le test précédent.
+  if (reg) {
+    try { (await reg.getNotifications({ tag: TEST_TAG })).forEach((n) => n.close()) } catch { /* ignore */ }
+  }
+  const silent = !soundEnabled.value || watchSilent.value
+  const body = silent ? 'Test muet — ta montre doit vibrer ⌚' : 'Test — ta montre doit vibrer ⌚'
+  await showRestNotification(body, silent, true, TEST_TAG)
   return 'granted'
 }
 
@@ -283,16 +297,22 @@ function testSound() {
 // Alerte de fin : vibration au premier plan + notification (son + vibration) en arrière-plan
 function alertEnd() {
   if (!import.meta.client) return
-  beep()
+  const hidden = document.hidden
+  // Page masquée : la notification porte le son ET la vibration, car navigator.vibrate
+  // est ignoré hors de la page — comportement d'origine, inchangé.
+  // Page visible + relais montre : la notification doit être SONORE. Une notification
+  // muette atterrit dans la section « silencieuses » d'Android, que les relais de
+  // montre filtrent — le poignet ne reçoit alors rien. C'est donc elle qui joue le son,
+  // et on saute le bip WebAudio pour ne pas l'entendre deux fois.
+  const silentNotif = !soundEnabled.value || (!hidden && watchSilent.value)
+  const notifWillSound = watchNotify.value && !hidden && !silentNotif
+    && notifSupported() && Notification.permission === 'granted'
+
+  if (!notifWillSound) beep()
   const vp = vibratePattern()
   try { if (navigator.vibrate && vp.length) navigator.vibrate(vp) } catch { /* ignore */ }
-  // Page masquée : la notification porte le son ET la vibration, car navigator.vibrate
-  // est ignoré hors de la page. Page visible + relais montre : le son vient d'être joué
-  // par WebAudio, la notification part donc en muet — elle ne sert qu'à faire vibrer
-  // la montre — et se referme seule pour ne pas encombrer le volet de notifications.
-  const hidden = document.hidden
   if (hidden || watchNotify.value) {
-    showRestNotification('Repos terminé — série suivante 💪', hidden ? !soundEnabled.value : true, !hidden)
+    showRestNotification('Repos terminé — série suivante 💪', silentNotif, !hidden)
   }
 }
 
@@ -353,6 +373,6 @@ export function useRestTimer() {
     secondsLeft, totalSeconds, start, stop, addTime,
     soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS,
     vibrationLevel, VIBRATION_OPTIONS,
-    watchNotify, watchStatus, setWatchNotify, testWatch,
+    watchNotify, watchSilent, watchStatus, setWatchNotify, testWatch,
   }
 }
