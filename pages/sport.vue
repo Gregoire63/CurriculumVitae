@@ -30,7 +30,7 @@ const {
 } = useWorkout()
 const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
 const restFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-const { weekPlan, hydrate: hydrateProfile, setDay } = useProfile()
+const { weekPlan, hydrate: hydrateProfile } = useProfile()
 
 // ─────────── Muscles ───────────
 const MUSCLE_LABELS: Record<string, string> = {
@@ -411,8 +411,8 @@ function finishSession() {
     return
   }
   const prs = recordSession(entries, durationMin, { sessionId: sess.id, name: sess.name }, sprintEfforts)
-  // Le planning du jour s'adapte automatiquement à la séance réellement faite
-  if (todayIndex.value !== null) setDay(todayIndex.value, sess.id)
+  // Le planning hebdo reste STABLE : on ne réécrit plus le jour avec la séance
+  // faite (ça faisait dériver la semaine — mauvais jour, doublons).
   animateSheetDown(() => {
     clearActive()
     view.value = 'home'

@@ -130,7 +130,7 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         <label class="btn flex-1 center">⬆ Importer<input type="file" accept=".json" class="hidden-input" @change="onImport"></label>
         <button class="btn flex-1" @click="resetPlan()">↺ Réinit. planning</button>
       </div>
-      <div class="muted mt-6">Ton planning s'adapte tout seul à la séance que tu fais chaque jour. « Réinit. » remet le planning par défaut.</div>
+      <div class="muted mt-6">Le planning de la semaine est fixe (Lundi Pecs/Ép · Mardi Dos/Bic · Jeudi Jambes · Vendredi Pecs/Bras). Tu peux démarrer n'importe quelle séance n'importe quand — ça ne change pas le planning. « Réinit. » le remet par défaut.</div>
     </div>
   </div>
 </template>

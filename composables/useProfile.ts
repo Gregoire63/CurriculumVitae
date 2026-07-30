@@ -27,8 +27,18 @@ export function useProfile() {
   function hydrate() {
     if (hydrated || !import.meta.client) return
     profile.value = { ...profile.value, ...safeParse(localStorage.getItem(PROFILE_KEY), {}) }
-    const p = safeParse<WeekPlan>(localStorage.getItem(PLAN_KEY), DEFAULT_PLAN)
-    if (Array.isArray(p) && p.length === 7) weekPlan.value = p
+    // Nettoyage unique : l'ancien planning « adaptatif » se réécrivait à chaque
+    // séance et finissait par dériver (mauvais jour, doublons). On repart une seule
+    // fois du planning par défaut, puis il reste STABLE (plus d'auto-adaptation).
+    const MIGR_KEY = 'gr-plan-fixed-v1'
+    if (!localStorage.getItem(MIGR_KEY)) {
+      weekPlan.value = [...DEFAULT_PLAN]
+      persistPlan()
+      try { localStorage.setItem(MIGR_KEY, '1') } catch { /* stockage indispo */ }
+    } else {
+      const p = safeParse<WeekPlan>(localStorage.getItem(PLAN_KEY), DEFAULT_PLAN)
+      if (Array.isArray(p) && p.length === 7) weekPlan.value = p
+    }
     hydrated = true
   }
   function persistProfile() { if (import.meta.client) localStorage.setItem(PROFILE_KEY, JSON.stringify(profile.value)) }
