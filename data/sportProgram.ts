@@ -84,9 +84,9 @@ export const PROGRAM: Session[] = [
     exercises: [
       { id: 'dc-barre', name: 'Développé couché barre', sets: 4, reps: '6-8', muscles: ['pecs', 'epaules-av', 'triceps'], cues: ['Omoplates serrées, pieds ancrés au sol', 'Barre au niveau des mamelons, coudes ~45°', 'Pousse en explosif, descends en 2 sec'], machine: 'Alternative On Air : machine convergente si les barres sont prises' },
       { id: 'di-halteres', name: 'Développé incliné haltères', sets: 3, reps: '8-10', muscles: ['pecs', 'epaules-av'], cues: ['Banc à 30° max, pas plus', "Descends jusqu'à l'étirement du pec", 'Ne claque pas les haltères en haut'], machine: '' },
-      { id: 'dips', name: 'Dips lestés', sets: 3, reps: '8-12', muscles: ['pecs', 'triceps'], cues: ['Buste penché en avant = pec, droit = triceps', "Descends jusqu'à 90° aux coudes", 'Charge préremplie avec ton poids de corps — ajoute ton lest par-dessus dès que tu passes 12 reps'], machine: 'Alternative : machine à dips assis', bodyweight: true },
       { id: 'dev-mil', name: 'Développé militaire haltères', sets: 2, reps: '8-10', muscles: ['epaules-av', 'epaules-lat', 'triceps'], cues: ['Assis dossier à 85°', 'Descends les haltères au niveau des oreilles', "Gainage serré, pas d'arche lombaire"], machine: 'Alternative : machine développé épaules' },
       { id: 'elev-lat', name: 'Élévations latérales', sets: 3, reps: '15', muscles: ['epaules-lat'], cues: ["Monte jusqu'à l'horizontale, pas plus", 'Petit doigt légèrement vers le haut', 'Léger et strict > lourd et moche'], machine: 'Ou poulie basse unilatéral' },
+      { id: 'dips', name: 'Dips lestés', sets: 3, reps: '8-12', muscles: ['pecs', 'triceps'], cues: ['Buste penché en avant = pec, droit = triceps', "Descends jusqu'à 90° aux coudes", 'Charge préremplie avec ton poids de corps — ajoute ton lest par-dessus dès que tu passes 12 reps'], machine: 'Alternative : machine à dips assis', bodyweight: true },
       { id: 'crunch-cable', name: 'Crunch à la poulie', sets: 3, reps: '12-15', muscles: ['abdos'], cues: ['À genoux face à la poulie haute', 'Enroule la colonne, ne tire pas avec les bras', 'Charge progressive'], machine: '' },
     ],
   },

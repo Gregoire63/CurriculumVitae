@@ -292,17 +292,9 @@ function testSound() {
 function alertEnd() {
   if (!import.meta.client) return
   const hidden = document.hidden
-  // Page masquée : la notification porte le son ET la vibration, car navigator.vibrate
-  // est ignoré hors de la page — comportement d'origine, inchangé.
-  // Page visible + relais montre : la notification doit être SONORE. Une notification
-  // muette atterrit dans la section « silencieuses » d'Android, que les relais de
-  // montre filtrent — le poignet ne reçoit alors rien. C'est donc elle qui joue le son,
-  // et on saute le bip WebAudio pour ne pas l'entendre deux fois.
   const silentNotif = !soundEnabled.value
-  const notifWillSound = watchNotify.value && !hidden && !silentNotif
-    && notifSupported() && Notification.permission === 'granted'
 
-  if (!notifWillSound) beep()
+  beep()
   const vp = vibratePattern()
   try { if (navigator.vibrate && vp.length) navigator.vibrate(vp) } catch { /* ignore */ }
   if (hidden || watchNotify.value) {
