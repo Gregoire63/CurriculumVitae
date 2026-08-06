@@ -17,8 +17,12 @@ const views = [
         <path d="M33,28 Q50,22 67,28 L64,60 Q62,80 60,80 L62,108 L58,132 L52,132 L51,108 L49,108 L48,132 L42,132 L38,108 L40,80 Q38,80 36,60 Z" fill="#d9cbb4" />
         <path d="M22,29 L17,74 L24,76 L31,42 Z" fill="#d9cbb4" />
         <path d="M78,29 L83,74 L76,76 L69,42 Z" fill="#d9cbb4" />
-        <template v-for="(d, m) in v.paths" :key="m">
-          <path v-if="muscles.includes(m as string)" :d="d" fill="#b5502f" opacity="0.95" />
+        <!-- La variable de boucle ne doit pas s'appeler « d » : l'attribut SVG porte le
+             même nom, et `:d="d"` empêche le compilateur de résoudre la variable dans le
+             scope du v-for. Nuxt la prend alors pour un identifiant global et lui invente
+             un auto-import, qui casse le build dès qu'un fichier de utils/ change. -->
+        <template v-for="(shape, m) in v.paths" :key="m">
+          <path v-if="muscles.includes(m as string)" :d="shape" fill="#b5502f" opacity="0.95" />
         </template>
       </svg>
       <div class="silhouette-label">{{ v.label }}</div>

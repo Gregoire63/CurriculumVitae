@@ -53,6 +53,13 @@ export default defineNuxtConfig({
     },
 
     runtimeConfig: {
+        // Withings : renseigné par NUXT_WITHINGS_CLIENT_ID / NUXT_WITHINGS_CLIENT_SECRET.
+        // Volontairement HORS de `public` — le secret ne doit jamais partir dans le bundle
+        // client. Tous les échanges de jetons passent par server/api/withings/.
+        withings: {
+            clientId: '',
+            clientSecret: '',
+        },
         public: {
             siteUrl: 'https://gregoire-raturat.fr',
             // Charge des données de démo dans /sport UNIQUEMENT en local/test.

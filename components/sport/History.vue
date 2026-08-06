@@ -1,169 +1,187 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
+import { PROGRAM } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
-import { EFFORT_OPTIONS } from '~/utils/sportStats'
+import { useNutrition } from '~/composables/useNutrition'
+import { useProfile } from '~/composables/useProfile'
+import { bmrMifflin, dayBurn, dayEnergy, sessionsOn } from '~/lib/nutritionStats'
 
-// Vue « Journal » (calendrier + feuille de séance) extraite de /sport (chargée à la demande).
+// Vue « Journal » : UN calendrier, rien d'autre. Le détail d'une journée s'ouvre en
+// feuille au clic.
+//
+// L'écran empilait avant le calendrier, la liste des séances de la semaine et le
+// planning nutrition de cette même semaine — trois vues qui répondaient à la même
+// question pour trois jours différents, et qu'il fallait relire de haut en bas pour
+// savoir ce qui s'était passé un mardi. Une case, une feuille, tout est dedans.
 const props = defineProps<{ todayIso: string | null }>()
 const emit = defineEmits<{ edit: [rec: SessionRecord] }>()
 
-const { sessionLog } = useWorkout()
+const { sessionLog, bodyWeight } = useWorkout()
+const { hydrate, dayFor, stepsFor, ttConfirmed } = useNutrition()
+const { profile } = useProfile()
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
-const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
 const p2 = (n: number) => String(n).padStart(2, '0')
-const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères', 'curl-ez': 'Curl barre EZ' }
-const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RETIRED_NAMES[id] ?? id
-// Ressenti déclaré pendant la séance (facile / correct / dur / échec)
-const effortIcon = (e?: string) => EFFORT_OPTIONS.find(o => o.value === e)?.icon ?? ''
-const effortLabel = (e?: string) => EFFORT_OPTIONS.find(o => o.value === e)?.label ?? ''
-const sessionById = (id: string | null) => (id ? PROGRAM.find(p => p.id === id) || null : null)
-const recColor = (rec: SessionRecord) => sessionById(rec.sessionId)?.color || '#8b6f5c'
+const recColor = (rec: SessionRecord) => PROGRAM.find(p => p.id === rec.sessionId)?.color || '#8b6f5c'
 
 const sessions = computed(() => sessionLog())
-const calMonth = ref<{ y: number; m: number }>({ y: 2024, m: 0 })
-const selectedDay = ref<string | null>(null)
-const sheetRecord = ref<SessionRecord | null>(null)
+const calMonth = ref<{ y: number, m: number }>({ y: 2024, m: 0 })
+const openIso = ref<string | null>(null)
 
 const sessionsByDay = computed(() => {
   const m: Record<string, SessionRecord[]> = {}
   for (const s of sessions.value) { const d = s.at.slice(0, 10); (m[d] ||= []).push(s) }
   return m
 })
-const calCells = computed(() => {
+interface Cell {
+  iso: string
+  day: number
+  outside: -1 | 0 | 1 // mois précédent / courant / suivant
+  sessions: SessionRecord[]
+  tt: boolean
+  future: boolean
+  kcal: number | null
+}
+
+/** Cible calorique du jour, telle que la feuille l'affichera. */
+function targetOf(iso: string, gym: boolean, tt: boolean): number | null {
+  if (bmr.value === null || !kg.value) return null
+  const rec = sessionsOn(sessionLog(), iso)
+  const burn = rec.length ? dayBurn(rec, kg.value, bmr.value) : (gym ? DEFAULT_BURN : 0)
+  return dayEnergy({ bmr: bmr.value, kg: kg.value, tt, steps: stepsFor(iso), sessionKcal: burn }).target
+}
+
+/**
+ * Le calendrier ne montre que du RÉEL : les séances effectivement enregistrées et
+ * les jours de télétravail confirmés ce jour-là. Afficher aussi le prévisionnel
+ * revenait à relire son historique à travers ses intentions — et une case pleine
+ * de « prévu » ne dit rien de ce qui s'est passé.
+ */
+function makeCell(y: number, m: number, d: number, outside: -1 | 0 | 1): Cell {
+  const iso = `${y}-${p2(m + 1)}-${p2(d)}`
+  const r = dayFor(iso)
+  return {
+    iso,
+    day: d,
+    outside,
+    sessions: sessionsByDay.value[iso] || [],
+    tt: ttConfirmed(iso),
+    future: !!props.todayIso && iso > props.todayIso,
+    kcal: targetOf(iso, r.gym, r.tt),
+  }
+}
+
+/**
+ * Six semaines pleines, débordements compris.
+ *
+ * Les cases vides d'avant étaient invisibles : une grille qui commence un jeudi
+ * laissait trois trous, et on perdait le fil de la semaine. Les jours des mois
+ * voisins sont donc affichés en gris, et cliquer dessus bascule de mois.
+ */
+const calCells = computed<Cell[]>(() => {
   const { y, m } = calMonth.value
   const lead = (new Date(y, m, 1).getDay() + 6) % 7
   const days = new Date(y, m + 1, 0).getDate()
-  const cells: { iso: string | null; day: number; sessions: SessionRecord[] }[] = []
-  for (let i = 0; i < lead; i++) cells.push({ iso: null, day: 0, sessions: [] })
-  for (let d = 1; d <= days; d++) {
-    const iso = `${y}-${p2(m + 1)}-${p2(d)}`
-    cells.push({ iso, day: d, sessions: sessionsByDay.value[iso] || [] })
-  }
+  const prevDays = new Date(y, m, 0).getDate()
+  const prev = m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 }
+  const next = m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 }
+
+  const cells: Cell[] = []
+  for (let i = lead; i > 0; i--) cells.push(makeCell(prev.y, prev.m, prevDays - i + 1, -1))
+  for (let d = 1; d <= days; d++) cells.push(makeCell(y, m, d, 0))
+  // Toujours 42 cases : la hauteur du calendrier ne saute plus d'un mois à l'autre.
+  for (let d = 1; cells.length < 42; d++) cells.push(makeCell(next.y, next.m, d, 1))
   return cells
 })
 const monthLabel = computed(() => `${MONTHS[calMonth.value.m]} ${calMonth.value.y}`)
 
-// Semaine (lundi → dimanche) contenant le jour sélectionné
-function weekDaysOf(iso: string): string[] {
-  const d = new Date(iso + 'T00:00:00')
-  const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  const out: string[] = []
-  for (let i = 0; i < 7; i++) { const x = new Date(mon); x.setDate(mon.getDate() + i); out.push(`${x.getFullYear()}-${p2(x.getMonth() + 1)}-${p2(x.getDate())}`) }
-  return out
-}
-const selectedWeekDays = computed(() => (selectedDay.value ? weekDaysOf(selectedDay.value) : []))
-const weekSet = computed(() => new Set(selectedWeekDays.value))
-// Séances de la semaine sélectionnée, en ordre chronologique (lundi → dimanche)
-const weekSessions = computed(() => {
-  const days = weekSet.value
-  return sessions.value.filter(s => days.has(s.at.slice(0, 10))).slice().sort((a, b) => a.at.localeCompare(b.at))
-})
-const fmtDM = (iso: string) => { const d = new Date(iso + 'T00:00:00'); return `${d.getDate()} ${MONTHS[d.getMonth()].toLowerCase().slice(0, 4)}` }
-const weekLabel = computed(() => {
-  const d = selectedWeekDays.value
-  return d.length ? `Semaine du ${fmtDM(d[0])} au ${fmtDM(d[6])}` : 'Choisis un jour'
-})
-const dayShort = (iso: string) => { const d = new Date(iso + 'T00:00:00'); return `${DOW[(d.getDay() + 6) % 7]} ${d.getDate()}` }
+const DEFAULT_BURN = 440
+const kg = computed(() => [...bodyWeight.value].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? null)
+const age = computed(() => (profile.value.birthYear && props.todayIso
+  ? Number(props.todayIso.slice(0, 4)) - profile.value.birthYear
+  : null))
+const bmr = computed(() => bmrMifflin(kg.value, profile.value.heightCm, age.value, profile.value.sex))
+
 function calShift(delta: number) {
   let m = calMonth.value.m + delta
   let y = calMonth.value.y
-  if (m < 0) { m = 11; y-- } else if (m > 11) { m = 0; y++ }
+  if (m < 0) { m = 11; y-- }
+  else if (m > 11) { m = 0; y++ }
   calMonth.value = { y, m }
 }
-function pickDay(iso: string | null, sess: SessionRecord[]) {
-  if (!iso || !sess.length) return
-  selectedDay.value = iso
+/**
+ * Un jour du mois voisin ne fait que changer de mois : ouvrir sa feuille dans la
+ * foulée enchaînait deux actions pour un seul geste, et on se retrouvait devant
+ * une journée qu'on n'avait pas demandée.
+ */
+function pick(c: Cell) {
+  if (c.outside) { calShift(c.outside); return }
+  openIso.value = c.iso
 }
-function edit(rec: SessionRecord) {
-  sheetRecord.value = null
+function onEdit(rec: SessionRecord) {
+  openIso.value = null
   emit('edit', rec)
 }
 
 onMounted(() => {
-  const recent = sessionLog()[0]
-  if (recent) {
-    calMonth.value = { y: +recent.at.slice(0, 4), m: +recent.at.slice(5, 7) - 1 }
-    selectedDay.value = recent.at.slice(0, 10)
-  } else {
-    const now = new Date()
-    calMonth.value = { y: now.getFullYear(), m: now.getMonth() }
-    selectedDay.value = props.todayIso
-  }
+  hydrate()
+  const now = new Date()
+  // On ouvre sur le mois COURANT, pas sur la dernière séance : le planning des jours
+  // à venir compte autant que l'historique, maintenant qu'il vit dans le calendrier.
+  calMonth.value = props.todayIso
+    ? { y: +props.todayIso.slice(0, 4), m: +props.todayIso.slice(5, 7) - 1 }
+    : { y: now.getFullYear(), m: now.getMonth() }
 })
 </script>
 
 <template>
   <div class="stack">
-    <div v-if="!sessions.length" class="card empty">Aucune séance enregistrée pour l'instant.<br>Tes séances apparaîtront ici dans le calendrier.</div>
-    <template v-else>
-      <div class="card cal-card">
-        <div class="cal-head">
-          <button class="cal-nav" aria-label="Mois précédent" @click="calShift(-1)">‹</button>
-          <div class="cal-month">{{ monthLabel }}</div>
-          <button class="cal-nav" aria-label="Mois suivant" @click="calShift(1)">›</button>
-        </div>
-        <div class="cal-dow-row"><span v-for="(d, i) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']" :key="i" class="cal-dow">{{ d }}</span></div>
-        <div class="cal-grid">
-          <button
-            v-for="(c, i) in calCells" :key="i"
-            class="cal-cell"
-            :class="{ empty: !c.iso, has: c.sessions.length, today: c.iso === todayIso, sel: c.iso === selectedDay, inweek: c.iso && weekSet.has(c.iso) }"
-            :disabled="!c.iso || !c.sessions.length"
-            @click="pickDay(c.iso, c.sessions)"
-          >
-            <span v-if="c.iso" class="cal-day">{{ c.day }}</span>
-            <span v-if="c.sessions.length" class="cal-dots">
-              <span v-for="(s, k) in c.sessions.slice(0, 3)" :key="k" class="cal-dot" :style="{ background: recColor(s) }"></span>
-            </span>
-          </button>
-        </div>
+    <div class="card cal-card">
+      <div class="cal-head">
+        <button class="cal-nav" aria-label="Mois précédent" @click="calShift(-1)">‹</button>
+        <div class="cal-month">{{ monthLabel }}</div>
+        <button class="cal-nav" aria-label="Mois suivant" @click="calShift(1)">›</button>
       </div>
-
-      <div class="section-label">{{ weekLabel }}</div>
-      <div v-if="weekSessions.length" class="day-sessions">
-        <button v-for="(s, i) in weekSessions" :key="i" class="card day-session" :style="{ '--c': recColor(s) }" @click="sheetRecord = s">
-          <div class="ds-top">
-            <span class="ds-day mono">{{ dayShort(s.at.slice(0, 10)) }}</span>
-            <span class="ds-dot"></span>
-            <span class="ds-name">{{ s.name }}</span>
-            <span class="ds-time mono">{{ s.at.slice(11, 16) }}<template v-if="s.durationMin"> · {{ s.durationMin }} min</template></span>
-          </div>
-          <div class="ds-sum muted">{{ s.entries.length }} exos<template v-if="s.sprint && s.sprint.length"> · ⚡ sprint</template> · touche pour voir / modifier</div>
+      <div class="cal-dow-row"><span v-for="(d, i) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']" :key="i" class="cal-dow">{{ d }}</span></div>
+      <div class="cal-grid">
+        <!-- Chaque case dit trois choses : le jour, ce qui est prévu ou fait, et
+             combien manger. Un point de couleur seul n'expliquait rien — il fallait
+             ouvrir la journée pour savoir de quoi elle était faite. -->
+        <button
+          v-for="(c, i) in calCells" :key="i"
+          class="cal-cell"
+          :class="{
+            outside: c.outside !== 0, today: c.iso === todayIso, sel: c.iso === openIso,
+            done: c.sessions.length, tt: c.tt, future: c.future,
+          }"
+          :style="c.sessions.length ? { '--c': recColor(c.sessions[0]) } : {}"
+          @click="pick(c)"
+        >
+          <!-- Deux signaux, deux canaux distincts : la pastille dit la séance
+               réellement faite, le fond dit le télétravail confirmé. Un jour peut
+               être les deux, ils ne doivent donc pas se disputer la même ligne. -->
+          <span class="cal-pill">{{ c.day }}</span>
+          <span class="cal-kcal mono">{{ c.kcal ?? '' }}</span>
         </button>
       </div>
-      <div v-else class="card empty small">Aucune séance cette semaine. Touche un jour marqué d'un point.</div>
-    </template>
-
-    <!-- Feuille de séance (bottom sheet) -->
-    <transition name="sheet">
-      <div v-if="sheetRecord" class="sheet-overlay" @click.self="sheetRecord = null">
-        <div class="sheet">
-          <div class="sheet-handle"></div>
-          <div class="sheet-head" :style="{ '--c': recColor(sheetRecord) }">
-            <div>
-              <div class="sheet-title"><span class="sheet-dot"></span>{{ sheetRecord.name }}</div>
-              <div class="muted mono">{{ sheetRecord.at.slice(0, 10) }} · {{ sheetRecord.at.slice(11, 16) }}<template v-if="sheetRecord.durationMin"> · {{ sheetRecord.durationMin }} min</template></div>
-            </div>
-            <button class="sheet-close" aria-label="Fermer" @click="sheetRecord = null">×</button>
-          </div>
-          <div class="sheet-body">
-            <div v-for="e in sheetRecord.entries" :key="e.exId" class="history-entry">
-              <span class="history-ex">{{ exName(e.exId) }}<span v-if="effortIcon(e.effort)" class="history-effort" :title="effortLabel(e.effort)">{{ effortIcon(e.effort) }}</span></span>
-              <span class="mono muted">{{ e.sets.map(x => `${x.warm ? '🔥' : ''}${x.w}×${x.r}${x.w2 != null ? ` / ${x.w2}×${x.r2}` : ''}`).join(' · ') }}</span>
-            </div>
-            <div v-for="(sp, k) in (sheetRecord.sprint || [])" :key="'sp' + k" class="history-entry">
-              <span class="history-ex">⚡ {{ sp.kind === 'echauffement' ? 'Échauffement' : 'Sprint' }}</span>
-              <span class="mono muted">{{ sp.count }} × {{ sp.duration }}<template v-if="sp.intensity"> @ {{ sp.intensity }}</template></span>
-            </div>
-            <div v-if="sheetRecord.note" class="history-note">📝 {{ sheetRecord.note }}</div>
-            <div v-if="!sheetRecord.entries.length && !(sheetRecord.sprint || []).length" class="muted">Séance sans détail enregistré.</div>
-          </div>
-          <button class="btn-primary sheet-edit" @click="edit(sheetRecord!)">✏️ Modifier cette séance</button>
-        </div>
+      <div class="cal-legend">
+        <span><i class="lg done" /> séance faite</span>
+        <span><i class="lg tt" /> télétravail</span>
+        <span class="cal-legend-note">le chiffre = kcal à manger</span>
       </div>
+    </div>
+
+    <p class="muted cal-hint">Seul le réel est affiché : séances enregistrées, télétravail confirmé. Les jours grisés changent de mois.</p>
+
+    <transition name="sheet">
+      <SportDaySheet
+        v-if="openIso"
+        :iso="openIso"
+        :today-iso="todayIso"
+        @close="openIso = null"
+        @edit="onEdit"
+      />
     </transition>
   </div>
 </template>

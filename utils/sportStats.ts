@@ -252,7 +252,8 @@ export interface WeekStats {
   hard: number // …dont « dur » ou « échec »
 }
 
-export const HARD_SAMPLE_MIN = 5 // sous ce nombre de ressentis, le ratio n'est pas fiable
+// Sous ce nombre de ressentis, le ratio n'est pas fiable.
+export const HARD_SAMPLE_MIN = 5
 export const HARD_RATIO_ALERT = 0.5
 export const RAMP_ALERT = 3 // semaines de hausse consécutives avant alerte
 export const RECOVERY_COOLDOWN = 6 // on ne redemande pas une décharge avant N semaines

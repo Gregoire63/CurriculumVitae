@@ -411,10 +411,25 @@ export function useWorkout() {
   }
 
   function addBodyWeight(kg: number) {
-    const date = localDate()
+    setBodyWeightAt(localDate(), kg)
+  }
+
+  /**
+   * Pose ou remplace le poids d'une date donnée.
+   *
+   * Le suivi corporel complet (balance, composition) vit dans useWithings ; cette
+   * série-ci n'en est que le reflet simplifié « une date, un poids », parce que
+   * c'est ce dont ont besoin le métabolisme de base, les records au poids du corps
+   * et l'export. Le miroir est alimenté par useWithings, jamais saisi en double.
+   */
+  function setBodyWeightAt(date: string, kg: number) {
+    if (!(kg > 0) || !date) return
     const existing = bodyWeight.value.find(e => e.date === date)
-    if (existing) existing.kg = kg
-    else bodyWeight.value.push({ date, kg })
+    if (existing) {
+      if (existing.kg === kg) return // rien à réécrire : évite une persistance à chaque synchro
+      existing.kg = kg
+    }
+    else { bodyWeight.value.push({ date, kg }) }
     bodyWeight.value.sort((a, b) => a.date.localeCompare(b.date))
     persistBW()
   }
@@ -485,7 +500,7 @@ export function useWorkout() {
     lastPerf, lastEffort, bestCharge, recordsOf, bodyWeightAt,
     recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     muscleSets, muscleSetsWithGaps, weeklyStats, fatigue, stalledCount,
-    addBodyWeight, exportJSON, importJSON, seedDemo, clearAll,
+    addBodyWeight, setBodyWeightAt, exportJSON, importJSON, seedDemo, clearAll,
     daysSinceExport, restoreBackup, backupDate,
   }
 }

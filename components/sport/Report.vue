@@ -10,6 +10,7 @@ import {
 
 // Vue « Rapport » extraite de /sport (chargée à la demande). État partagé via composables.
 const props = defineProps<{ todayIso: string | null; todayDow: number | null }>()
+const emit = defineEmits<{ navigate: [view: string] }>()
 
 const { logs, bodyWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWithGaps, daysSinceExport, lastExportAt, fatigue } = useWorkout()
 const { profile } = useProfile()
@@ -19,17 +20,8 @@ const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RET
 const fmtVol = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} t` : `${Math.round(v)} kg`)
 const fmtDate = (iso: string) => (iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '')
 
+// Poids : lu seulement pour le métabolisme. L'affichage complet est dans <SportBody>.
 const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
-const bwTrend = computed(() => { const d = bodyWeight.value; return d.length >= 2 ? +(d[d.length - 1].kg - d[0].kg).toFixed(1) : 0 })
-const bmi = computed(() => { const h = profile.value.heightCm, w = latestWeight.value; return h && w ? +(w / ((h / 100) ** 2)).toFixed(1) : null })
-const bmiCat = computed(() => {
-  const b = bmi.value
-  if (b === null) return null
-  if (b < 18.5) return { label: 'Maigreur', color: '#4a6fa5' }
-  if (b < 25) return { label: 'Corpulence normale', color: '#3f7a4f' }
-  if (b < 30) return { label: 'Surpoids', color: '#a97b1e' }
-  return { label: 'Obésité', color: '#b5502f' }
-})
 const age = computed(() => { const y = profile.value.birthYear; return y && props.todayIso ? parseInt(props.todayIso.slice(0, 4), 10) - y : null })
 const bmr = computed(() => {
   const w = latestWeight.value, h = profile.value.heightCm, a = age.value, s = profile.value.sex
@@ -105,15 +97,23 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
 
 <template>
   <div class="stack">
-    <div v-if="!hasData" class="card empty">Ton rapport se construit au fil des séances.<br>Renseigne ta taille/poids dans <b>Profil</b> et enregistre une séance.</div>
+    <div v-if="!hasData" class="card empty">Ton rapport se construit au fil des séances.<br>Renseigne ta taille dans <b>Profil</b>, pèse-toi, et enregistre une séance.</div>
     <template v-else>
+      <!-- Suivi du corps : pesées, composition, pas. Le poids se saisit ICI et
+           nulle part ailleurs — il servait aux séances comme à la nutrition, il
+           avait fini par exister en trois exemplaires. -->
+      <SportBody @navigate="emit('navigate', $event)" />
+
       <div class="card">
-        <div class="section-label mb-8">Corps</div>
+        <div class="section-label mb-8">Énergie</div>
         <div class="stat-grid">
-          <div class="stat"><div class="stat-v mono">{{ latestWeight ?? '—' }}<span v-if="latestWeight" class="stat-u">kg</span></div><div class="stat-l">Poids actuel</div></div>
-          <div class="stat"><div class="stat-v mono" :style="bmiCat ? { color: bmiCat.color } : {}">{{ bmi ?? '—' }}</div><div class="stat-l">{{ bmiCat ? bmiCat.label : 'IMC (→ Profil)' }}</div></div>
-          <div class="stat"><div class="stat-v mono" :class="bwTrend < 0 ? 'pos' : bwTrend > 0 ? 'warn' : ''">{{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }}<span class="stat-u">kg</span></div><div class="stat-l">Depuis le début</div></div>
+          <div class="stat"><div class="stat-v mono">{{ bmr ?? '—' }}<span v-if="bmr" class="stat-u">kcal</span></div><div class="stat-l">Métabolisme de base</div></div>
           <div class="stat"><div class="stat-v mono">{{ maintenance ?? '—' }}<span v-if="maintenance" class="stat-u">kcal</span></div><div class="stat-l">Maintien estimé</div></div>
+        </div>
+        <div class="muted mt-6">
+          Le maintien affiché ici est une moyenne large (Mifflin-St Jeor × 1,55). La cible
+          du jour, elle, est recalculée dans le Journal à partir des pas réellement marchés
+          et de la séance réellement enregistrée : c'est elle qui fait foi.
         </div>
       </div>
       <div class="card">

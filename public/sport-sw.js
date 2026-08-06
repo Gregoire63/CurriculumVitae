@@ -1,6 +1,6 @@
 // Service worker scopé /sport — cache offline de l'outil de suivi.
 // Le reste du site n'est pas affecté (scope limité au register()).
-const CACHE = 'sport-v4'
+const CACHE = 'sport-v5'
 const SHELL = '/sport'
 const NAV_TIMEOUT_MS = 3000
 
@@ -83,9 +83,16 @@ self.addEventListener('fetch', (e) => {
     return
   }
 
-  // Assets (_nuxt, icônes, manifest) : noms hachés donc immuables → cache d'abord,
-  // réseau seulement en cas d'absence. Le changement de version du cache suffit
-  // à repartir propre.
+  // Un build produit des noms hachés, donc immuables : le cache d'abord est sûr.
+  // En développement, Vite sert les SOURCES sous leur vrai chemin
+  // (/_nuxt/utils/monFichier.ts) : les mettre en cache fige l'application sur une
+  // version morte, et un fichier renommé continue d'être servi après sa disparition.
+  // On ne met donc jamais en cache un chemin qui ressemble à un fichier source.
+  const isSource = /\.(?:ts|tsx|vue|jsx|mjs|css|scss)(?:\?|$)/.test(url.pathname + url.search)
+  if (isSource) return
+
+  // Assets (_nuxt, icônes, manifest) : cache d'abord, réseau en cas d'absence.
+  // Le changement de version du cache suffit à repartir propre.
   if (url.pathname.startsWith('/_nuxt/') || url.pathname.startsWith('/sport/')) {
     e.respondWith(
       caches.match(e.request).then((cached) => {

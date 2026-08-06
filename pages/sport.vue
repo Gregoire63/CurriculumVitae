@@ -6,14 +6,19 @@ import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
+import { useWithings } from '~/composables/useWithings'
 import { warmupLoad, EFFORT_OPTIONS, isEffort } from '~/utils/sportStats'
 import type { Effort, PrKind } from '~/utils/sportStats'
 import '~/assets/css/sport.css'
+import '~/assets/css/nutrition.css'
 
 useHead({
   title: 'Suivi Séances — Grégoire Raturat',
   meta: [
     { name: 'theme-color', content: '#fefcf8' },
+    // apple-mobile-web-app-capable est déprécié, mais reste nécessaire pour les
+    // anciennes versions d'iOS : on déclare les deux.
+    { name: 'mobile-web-app-capable', content: 'yes' },
     { name: 'apple-mobile-web-app-capable', content: 'yes' },
     { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
     { name: 'apple-mobile-web-app-title', content: 'Séances' },
@@ -88,8 +93,10 @@ const todayRecord = computed(() => {
 })
 
 // ─────────── État UI ───────────
-type View = 'home' | 'progress' | 'history' | 'rapport' | 'profil'
+type View = 'home' | 'progress' | 'history' | 'rapport' | 'nutrition' | 'profil'
 const view = ref<View>('home')
+// Message d'échec du retour OAuth Withings (affiché une fois, en haut de l'onglet).
+const withingsError = ref<string | null>(null)
 const activeSession = ref<Session | null>(null)
 const openEx = ref<string | null>(null)
 const flash = ref('')
@@ -141,14 +148,18 @@ function onViewport() {
 
 const titles: Record<View, string> = {
   home: 'Mes séances', progress: 'Progression',
-  history: 'Historique', rapport: 'Mon rapport', profil: 'Profil',
+  history: 'Historique', rapport: 'Mon rapport',
+  nutrition: 'Nutrition', profil: 'Profil',
 }
 const pageTitle = computed(() => titles[view.value])
+// Le Journal juste après l'accueil : c'est le deuxième écran ouvert dans la journée,
+// il n'a rien à faire au milieu des vues d'analyse.
 const TABS: { id: View; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Accueil' },
+  { id: 'history', icon: '🗓', label: 'Journal' },
+  { id: 'nutrition', icon: '🍽', label: 'Nutrition' },
   { id: 'rapport', icon: '📊', label: 'Rapport' },
   { id: 'progress', icon: '📈', label: 'Progrès' },
-  { id: 'history', icon: '🗓', label: 'Journal' },
   { id: 'profil', icon: '⚙️', label: 'Profil' },
 ]
 
@@ -549,10 +560,52 @@ function restoreDraft() {
   } catch { try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ } }
 }
 
+/**
+ * Retour du flux OAuth Withings : /api/withings/callback nous renvoie ici avec les
+ * jetons en query. On les range, puis on NETTOIE l'URL — laisser un jeton dans la
+ * barre d'adresse, c'est le laisser dans l'historique, les captures et le partage.
+ */
+function adoptWithings() {
+  if (!import.meta.client) return
+  const q = new URLSearchParams(window.location.search)
+  if (!q.get('withings')) return
+  if (q.get('withings') === 'ok') {
+    const { hydrate, adoptFromQuery } = useWithings()
+    hydrate()
+    adoptFromQuery(Object.fromEntries(q.entries()))
+  }
+  else {
+    withingsError.value = q.get('reason') || 'connexion refusée'
+  }
+  // La balance se branche depuis les réglages : c'est là qu'on revient après avoir
+  // autorisé Withings, à côté du bouton qu'on vient d'utiliser.
+  view.value = 'profil'
+  window.history.replaceState({}, '', '/sport')
+}
+
 onMounted(() => {
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sport-sw.js', { scope: '/sport' }).catch(() => {})
+  // Service worker : PRODUCTION UNIQUEMENT.
+  // Il met /_nuxt/* en cache d'abord, en partant du principe que ces fichiers ont un
+  // nom haché donc immuable. C'est vrai après un build ; c'est faux en `nuxt dev`, où
+  // Vite sert les sources sous leur vrai chemin. Un fichier renommé, déplacé ou
+  // supprimé continuait alors d'être servi depuis le cache — indéfiniment, même après
+  // un Ctrl+Shift+R, qui ne contourne pas le service worker pour les sous-requêtes.
+  // En dev on le désinscrit donc, et on purge son cache, sinon un SW installé une fois
+  // continue de saboter tous les rechargements suivants.
+  if ('serviceWorker' in navigator) {
+    if (import.meta.dev) {
+      navigator.serviceWorker.getRegistrations()
+        .then(rs => Promise.all(rs.map(r => r.unregister())))
+        .then(() => (typeof caches !== 'undefined' ? caches.keys() : Promise.resolve([])))
+        .then(keys => Promise.all(keys.filter(k => k.startsWith('sport-')).map(k => caches.delete(k))))
+        .catch(() => { /* rien à désinscrire */ })
+    } else {
+      navigator.serviceWorker.register('/sport-sw.js', { scope: '/sport' }).catch(() => {})
+    }
+  }
   hydrateProfile()
   restoreDraft() // rouvre la séance en cours après un refresh accidentel
+  adoptWithings()
   // Données de démo UNIQUEMENT en environnement local/test (jamais en prod) :
   // actif en `nuxt dev`, ou si NUXT_PUBLIC_SEED_TEST_DATA=true. En prod → rien.
   try {
@@ -622,30 +675,39 @@ onUnmounted(() => {
 
     <!-- ═══════════ ACCUEIL ═══════════ -->
     <div v-if="view === 'home'" class="stack">
+      <!-- La séance du jour est passée EN SLOT du bandeau nutrition : les deux
+           partagent la première ligne, et les compteurs s'étalent en dessous. -->
+      <ClientOnly>
+        <LazyNutritionHero :today-iso="todayISO">
+          <template #session>
+          <section v-if="todaySession" class="today card" :style="{ '--c': todaySession.color }">
+            <div class="today-eyebrow"><span class="today-dot"></span> Séance du jour · {{ todayEntry!.dow }}</div>
+            <h2 class="today-name">{{ todaySession.name }}</h2>
+            <div v-if="doneToday.length" class="done-badge">✓ Déjà fait aujourd'hui : {{ doneToday.map(s => s.name).join(', ') }}</div>
+            <div class="sc-muscles"><span v-for="m in sessionMuscles(todaySession)" :key="m" class="sc-chip">{{ m }}</span></div>
+            <div class="today-foot">
+              <span class="muted">{{ todaySession.exercises.length }} exercices<template v-if="todaySession.sprint"> · ⚡ sprint</template></span>
+              <button v-if="activeSession" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">{{ activeSession.id === todaySession.id ? 'Reprendre →' : 'Aperçu' }}</button>
+              <button v-else-if="todayRecord" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="editSession(todayRecord!)">✏️ Modifier la séance →</button>
+              <button v-else class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">Démarrer la séance →</button>
+            </div>
+          </section>
+
+          <section v-else-if="todayIndex !== null" class="today card rest">
+            <div class="today-eyebrow">Aujourd'hui</div>
+            <h2 class="today-name">Repos 💤</h2>
+            <p class="muted rest-txt">Récupération.<template v-if="nextSession"> Prochaine séance : <b>{{ nextSession.dow }}</b> · {{ nextSession.session!.name }}.</template></p>
+            <button v-if="nextSession" class="btn today-go" @click="startSession(nextSession.session!)">Faire {{ nextSession.session!.name }} maintenant →</button>
+          </section>
+          </template>
+        </LazyNutritionHero>
+      </ClientOnly>
+
       <!-- Décharge conseillée : l'info n'est utile qu'ici, avant de démarrer -->
       <div v-if="deloadAdvised" class="deload-banner">
         <span>🔴</span>
         <span><b>Semaine de décharge conseillée.</b> Garde les mêmes charges, coupe ~40 % des séries et stoppe 3 reps avant l'échec. <button class="link-btn" @click="view = 'rapport'">Voir pourquoi →</button></span>
       </div>
-      <section v-if="todaySession" class="today card" :style="{ '--c': todaySession.color }">
-        <div class="today-eyebrow"><span class="today-dot"></span> Séance du jour · {{ todayEntry!.dow }}</div>
-        <h2 class="today-name">{{ todaySession.name }}</h2>
-        <div v-if="doneToday.length" class="done-badge">✓ Déjà fait aujourd'hui : {{ doneToday.map(s => s.name).join(', ') }}</div>
-        <div class="sc-muscles"><span v-for="m in sessionMuscles(todaySession)" :key="m" class="sc-chip">{{ m }}</span></div>
-        <div class="today-foot">
-          <span class="muted">{{ todaySession.exercises.length }} exercices<template v-if="todaySession.sprint"> · ⚡ sprint</template></span>
-          <button v-if="activeSession" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">{{ activeSession.id === todaySession.id ? 'Reprendre →' : 'Aperçu' }}</button>
-          <button v-else-if="todayRecord" class="btn-primary today-go" :style="{ background: todaySession.color }" @click="editSession(todayRecord!)">✏️ Modifier la séance →</button>
-          <button v-else class="btn-primary today-go" :style="{ background: todaySession.color }" @click="startSession(todaySession)">Démarrer la séance →</button>
-        </div>
-      </section>
-
-      <section v-else-if="todayIndex !== null" class="today card rest">
-        <div class="today-eyebrow">Aujourd'hui</div>
-        <h2 class="today-name">Repos 💤</h2>
-        <p class="muted rest-txt">Récupération.<template v-if="nextSession"> Prochaine séance : <b>{{ nextSession.dow }}</b> · {{ nextSession.session!.name }}.</template></p>
-        <button v-if="nextSession" class="btn today-go" @click="startSession(nextSession.session!)">Faire {{ nextSession.session!.name }} maintenant →</button>
-      </section>
 
       <div class="section-label">{{ todaySession ? 'Ou commence une autre séance' : 'Toutes les séances' }}</div>
       <div class="session-grid">
@@ -868,7 +930,7 @@ onUnmounted(() => {
          sur l'accueil). Suspense affiche un squelette le temps du chunk, plutôt
          qu'un écran vide entre le clic sur l'onglet et l'arrivée du composant. -->
     <Suspense v-if="view === 'rapport'">
-      <LazySportReport :today-iso="todayISO" :today-dow="todayDow" />
+      <LazySportReport :today-iso="todayISO" :today-dow="todayDow" @navigate="go($event as View)" />
       <template #fallback><SportSkeleton :cards="4" chart /></template>
     </Suspense>
     <Suspense v-else-if="view === 'progress'">
@@ -879,8 +941,12 @@ onUnmounted(() => {
       <LazySportHistory :today-iso="todayISO" @edit="editSession" />
       <template #fallback><SportSkeleton :cards="2" /></template>
     </Suspense>
+    <Suspense v-else-if="view === 'nutrition'">
+      <LazyNutritionPanel :today-iso="todayISO" />
+      <template #fallback><SportSkeleton :cards="3" /></template>
+    </Suspense>
     <Suspense v-else-if="view === 'profil'">
-      <LazySportProfile :today-iso="todayISO" @flash="showFlash" />
+      <LazySportProfile :today-iso="todayISO" :withings-error="withingsError" @flash="showFlash" />
       <template #fallback><SportSkeleton :cards="5" chart /></template>
     </Suspense>
 

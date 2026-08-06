@@ -1,0 +1,220 @@
+import { ref } from 'vue'
+import { MAX_EDGE, QUALITY, THUMB_EDGE, THUMB_QUALITY, fitWithin, rejectReason, storageVerdict } from '../lib/photoSize'
+
+// Photos des plats, une par plat, stockées SUR LE TÉLÉPHONE.
+//
+// IndexedDB et pas localStorage, pour trois raisons :
+//  1. localStorage plafonne autour de 5 Mo. Une seule photo d'iPhone en fait 4.
+//  2. localStorage ne stocke que du texte : il faudrait passer en base64, soit
+//     +33 % de volume pour rien.
+//  3. Une QuotaExceededError sur localStorage fait échouer les écritures des AUTRES
+//     clés — le planning, les repas cochés, les courses. Une photo trop lourde ne
+//     doit pas pouvoir emporter le suivi avec elle.
+//
+// IndexedDB stocke des Blob nativement, avec un quota qui se compte en centaines de Mo.
+
+const DB_NAME = 'gr-photos'
+const DB_VERSION = 1
+const STORE = 'dishes'
+
+export interface DishPhoto {
+  id: string // identifiant du plat
+  full: Blob
+  thumb: Blob
+  w: number
+  h: number
+  bytes: number
+  at: string // ISO, pour afficher « cuisiné le … »
+}
+
+/** Métadonnées seules : ce qu'on garde en mémoire pour toute la bibliothèque. */
+export interface PhotoMeta { id: string, w: number, h: number, bytes: number, at: string }
+
+const metas = ref<Record<string, PhotoMeta>>({})
+const busy = ref<string | null>(null) // id en cours de traitement
+const error = ref<string | null>(null)
+let hydrated = false
+let dbPromise: Promise<IDBDatabase | null> | null = null
+
+// URL d'objet par plat. Sans ce cache, chaque rendu recrée une URL et l'ancienne
+// n'est jamais révoquée : le blob reste en mémoire jusqu'au rechargement de la page.
+const urls = new Map<string, string>()
+
+function openDb(): Promise<IDBDatabase | null> {
+  if (dbPromise) return dbPromise
+  dbPromise = new Promise((resolve) => {
+    if (!import.meta.client || !('indexedDB' in window)) return resolve(null)
+    let req: IDBOpenDBRequest
+    // Navigation privée sur certains navigateurs : indexedDB existe mais lève à l'ouverture.
+    try { req = indexedDB.open(DB_NAME, DB_VERSION) }
+    catch { return resolve(null) }
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: 'id' })
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => resolve(null)
+  })
+  return dbPromise
+}
+
+function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T | null> {
+  return openDb().then(db => new Promise<T | null>((resolve) => {
+    if (!db) return resolve(null)
+    try {
+      const req = run(db.transaction(STORE, mode).objectStore(STORE))
+      req.onsuccess = () => resolve(req.result)
+      req.onerror = () => resolve(null)
+    }
+    catch { resolve(null) }
+  }))
+}
+
+/**
+ * Décode le fichier en respectant l'orientation EXIF. Sans `imageOrientation`,
+ * une photo prise en portrait sur iPhone ressort couchée : le capteur enregistre
+ * toujours en paysage et note la rotation en métadonnée, que canvas ignore.
+ */
+async function decode(file: Blob): Promise<ImageBitmap | HTMLImageElement> {
+  if ('createImageBitmap' in window) {
+    try { return await createImageBitmap(file, { imageOrientation: 'from-image' }) }
+    catch { /* vieux Safari : on retombe sur <img>, qui applique l'EXIF depuis iOS 13 */ }
+  }
+  const url = URL.createObjectURL(file)
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = () => reject(new Error('Image illisible'))
+      img.src = url
+    })
+  }
+  finally { URL.revokeObjectURL(url) }
+}
+
+async function encode(src: ImageBitmap | HTMLImageElement, max: number, quality: number): Promise<Blob> {
+  const sw = 'width' in src ? src.width : 0
+  const sh = 'height' in src ? src.height : 0
+  const { w, h } = fitWithin(sw, sh, max)
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas indisponible')
+  // Rééchantillonnage de qualité : sans ça, une division par 4 crénelle le riz et le texte.
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  ctx.drawImage(src as CanvasImageSource, 0, 0, w, h)
+
+  const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/webp', quality))
+  // WebP fait ~30 % de moins que JPEG à qualité perçue égale. Si le navigateur ne
+  // sait pas l'encoder, toBlob renvoie du PNG (énorme) ou null : on force le JPEG.
+  if (blob && blob.type === 'image/webp') return blob
+  const jpeg = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/jpeg', quality))
+  if (!jpeg) throw new Error('Encodage impossible')
+  return jpeg
+}
+
+export function usePhotos() {
+  /** Charge les métadonnées (pas les blobs : on ne veut pas 20 Mo en RAM au démarrage). */
+  async function hydrate() {
+    if (hydrated || !import.meta.client) return
+    hydrated = true
+    const all = await tx<DishPhoto[]>('readonly', s => s.getAll() as IDBRequest<DishPhoto[]>)
+    const next: Record<string, PhotoMeta> = {}
+    for (const p of all ?? []) next[p.id] = { id: p.id, w: p.w, h: p.h, bytes: p.bytes, at: p.at }
+    metas.value = next
+  }
+
+  const has = (id: string) => !!metas.value[id]
+  const metaOf = (id: string) => metas.value[id] ?? null
+
+  /**
+   * Enregistre une photo pour un plat. Une seule par plat : la nouvelle remplace
+   * l'ancienne, et l'ancienne URL est révoquée pour que le blob soit libéré.
+   */
+  async function put(id: string, file: File): Promise<boolean> {
+    error.value = null
+    const reason = rejectReason(file)
+    if (reason) { error.value = reason; return false }
+    busy.value = id
+    try {
+      const src = await decode(file)
+      const [full, thumb] = await Promise.all([
+        encode(src, MAX_EDGE, QUALITY),
+        encode(src, THUMB_EDGE, THUMB_QUALITY),
+      ])
+      // Lire les dimensions AVANT de fermer le bitmap : après close(), width vaut 0.
+      const size = fitWithin(src.width, src.height, MAX_EDGE)
+      if ('close' in src) src.close() // libère le bitmap sans attendre le ramasse-miettes
+      const rec: DishPhoto = {
+        id, full, thumb, w: size.w, h: size.h,
+        bytes: full.size + thumb.size,
+        at: new Date().toISOString().slice(0, 16),
+      }
+      const ok = await tx('readwrite', s => s.put(rec))
+      if (ok === null && !(await has0(id))) { error.value = 'Écriture impossible : stockage plein ou navigation privée.'; return false }
+      revoke(id)
+      metas.value = { ...metas.value, [id]: { id, w: rec.w, h: rec.h, bytes: rec.bytes, at: rec.at } }
+      return true
+    }
+    catch (e) {
+      error.value = (e as Error).message || 'Photo illisible.'
+      return false
+    }
+    finally { busy.value = null }
+  }
+
+  // Vérifie en base qu'un enregistrement existe (le put a pu réussir malgré un null).
+  async function has0(id: string) {
+    return !!(await tx<DishPhoto>('readonly', s => s.get(id) as IDBRequest<DishPhoto>))
+  }
+
+  async function remove(id: string) {
+    await tx('readwrite', s => s.delete(id))
+    revoke(id)
+    const next = { ...metas.value }
+    delete next[id]
+    metas.value = next
+  }
+
+  /** Supprime les photos dont le plat n'existe plus — sinon elles occupent l'espace à vie. */
+  async function prune(knownIds: string[]) {
+    const known = new Set(knownIds)
+    const orphans = Object.keys(metas.value).filter(id => !known.has(id))
+    for (const id of orphans) await remove(id)
+    return orphans.length
+  }
+
+  // Les deux tailles sont indexées séparément (`id:thumb`, `id:full`) : les révoquer
+  // toutes les deux, sinon la vignette de l'ancienne photo survit au remplacement.
+  function revoke(id: string) {
+    for (const kind of ['thumb', 'full'] as const) {
+      const key = `${id}:${kind}`
+      const u = urls.get(key)
+      if (u) { URL.revokeObjectURL(u); urls.delete(key) }
+    }
+  }
+  function revokeAll() {
+    for (const u of urls.values()) URL.revokeObjectURL(u)
+    urls.clear()
+  }
+
+  /** URL affichable. `thumb` pour les listes, plein format pour l'aperçu. */
+  async function urlOf(id: string, kind: 'thumb' | 'full' = 'thumb'): Promise<string | null> {
+    const key = `${id}:${kind}`
+    const cached = urls.get(key)
+    if (cached) return cached
+    const rec = await tx<DishPhoto>('readonly', s => s.get(id) as IDBRequest<DishPhoto>)
+    if (!rec) return null
+    const url = URL.createObjectURL(kind === 'full' ? rec.full : rec.thumb)
+    urls.set(key, url)
+    return url
+  }
+
+  const usage = () => {
+    const list = Object.values(metas.value)
+    return storageVerdict(list.reduce((n, p) => n + p.bytes, 0), list.length)
+  }
+
+  return { hydrate, has, metaOf, metas, put, remove, prune, urlOf, revoke, revokeAll, usage, busy, error }
+}

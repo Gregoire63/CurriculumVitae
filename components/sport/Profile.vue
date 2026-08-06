@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useWorkout } from '~/composables/useWorkout'
+import { useNutrition } from '~/composables/useNutrition'
+import { useWithings } from '~/composables/useWithings'
 import { useProfile } from '~/composables/useProfile'
 import { useRestTimer } from '~/composables/useRestTimer'
+import { DAY_NAMES } from '~/lib/nutritionStats'
 
 // Vue « Profil » extraite de /sport (chargée à la demande). État partagé via composables.
-const props = defineProps<{ todayIso: string | null }>()
+const props = defineProps<{ todayIso: string | null, withingsError?: string | null }>()
 const emit = defineEmits<{ flash: [msg: string] }>()
 
-const { bodyWeight, addBodyWeight, exportJSON, importJSON, lastExportAt, daysSinceExport, backupDate, restoreBackup } = useWorkout()
+const { bodyWeight, exportJSON, importJSON, lastExportAt, daysSinceExport, backupDate, restoreBackup } = useWorkout()
 
 // Sauvegarde : tout vit dans le navigateur, donc on affiche l'âge du dernier export
 // et on propose l'instantané de secours écrit automatiquement (1×/jour).
@@ -23,6 +26,15 @@ function onRestore() {
 }
 
 const { profile, weekPlan, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
+// Le module nutrition part dans la même sauvegarde : une seule sauvegarde à gérer.
+const { exportData: nutritionData, restore: restoreNutrition, week, setWeekDay, resetWeek, hydrate: hydrateNutrition } = useNutrition()
+hydrateNutrition()
+// Les pesées Withings partent dans la même sauvegarde : c'est le même suivi.
+const {
+  snapshot: withingsData, restore: restoreWithings, hydrate: hydrateWithings,
+  connected: withingsOn, connect: connectWithings, disconnect: disconnectWithings, entries: weighIns,
+} = useWithings()
+hydrateWithings()
 const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS, watchNotify, watchStatus, setWatchNotify, testWatch } = useRestTimer()
 
 // Relais montre : la fin de repos part en notification téléphone même app ouverte,
@@ -42,8 +54,6 @@ const volPct = computed({
 })
 
 const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
-const bwData = computed(() => bodyWeight.value.map(e => ({ date: e.date.slice(5), kg: e.kg })))
-const bwTrend = computed(() => { const d = bodyWeight.value; return d.length >= 2 ? +(d[d.length - 1].kg - d[0].kg).toFixed(1) : 0 })
 const bmi = computed(() => { const h = profile.value.heightCm, w = latestWeight.value; return h && w ? +(w / ((h / 100) ** 2)).toFixed(1) : null })
 const bmiCat = computed(() => {
   const b = bmi.value
@@ -62,21 +72,15 @@ const bmr = computed(() => {
 })
 const maintenance = computed(() => (bmr.value ? Math.round(bmr.value * 1.55) : null))
 
-// Nouvelle pesée : enregistre le poids à la date du jour (addBodyWeight garde
-// un point par jour, l'historique se construit au fil des jours pour le graphe).
-const newWeight = ref<number | null>(null)
-function saveWeighIn() {
-  const kg = Number(newWeight.value)
-  if (!kg || kg < 30 || kg > 250) { emit('flash', 'Poids invalide (30–250 kg)'); return }
-  addBodyWeight(kg)
-  newWeight.value = null
-  emit('flash', 'Pesée enregistrée ✓')
-}
 async function onImport(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
   if (!file) return
   try {
-    await importJSON(file, data => restoreProfile(data as { profile?: typeof profile.value; weekPlan?: typeof weekPlan.value }))
+    await importJSON(file, (data) => {
+      restoreProfile(data as { profile?: typeof profile.value; weekPlan?: typeof weekPlan.value })
+      restoreNutrition(data as Parameters<typeof restoreNutrition>[0])
+      restoreWithings(data)
+    })
     emit('flash', 'Données importées ✓')
   } catch { emit('flash', 'Fichier invalide') }
 }
@@ -105,20 +109,28 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         <span v-if="bmr" class="ps-item">Métabolisme de base <b>{{ bmr }} kcal</b></span>
         <span v-if="maintenance" class="ps-item">Maintien ≈ <b>{{ maintenance }} kcal</b></span>
       </div>
-      <div v-else class="muted">Renseigne taille + poids pour l'IMC, + sexe et année de naissance pour les calories. Tout est calculé à partir de ces données.</div>
+      <div v-else class="muted">Renseigne taille, sexe et année de naissance : tout le reste en découle. La pesée, elle, se fait dans <b>Rapport</b>.</div>
     </div>
 
+    <!-- Ma semaine type : c'est un réglage, pas un suivi. Il pilote le calendrier du
+         Journal (jours de salle, jours de télétravail) sans qu'on ait à le retoucher. -->
     <div class="card">
       <div class="row-between mb-8">
-        <div class="section-label">Suivi du poids</div>
-        <div v-if="latestWeight" class="mono weight-now">{{ latestWeight }} kg<span v-if="bwTrend !== 0" class="bmi-inline" :class="bwTrend < 0 ? 'trend-down' : 'trend-up'"> · {{ bwTrend > 0 ? '+' : '' }}{{ bwTrend }} kg</span></div>
+        <div class="section-label">Ma semaine type</div>
+        <button class="btn" @click="resetWeek()">↺ Défaut</button>
       </div>
-      <div class="weigh-row">
-        <input v-model.number="newWeight" type="number" inputmode="decimal" step="0.1" placeholder="Ton poids (kg)" @keyup.enter="saveWeighIn">
-        <button class="btn-primary" @click="saveWeighIn">＋ Nouvelle pesée</button>
+      <div class="nu-weekgrid">
+        <div v-for="(n, i) in DAY_NAMES" :key="i" class="nu-weekday">
+          <div class="nu-weekday-name mono">{{ n.slice(0, 3) }}</div>
+          <button class="nu-chip" :class="{ on: week.gym[i] }" @click="setWeekDay(i, 'gym', !week.gym[i])">🏋️</button>
+          <button class="nu-chip tt" :class="{ on: week.tt[i] }" @click="setWeekDay(i, 'tt', !week.tt[i])">🏠</button>
+        </div>
       </div>
-      <div class="muted mt-6">Chaque pesée est datée du jour → l'historique se construit au fil des jours. Si tu repèses aujourd'hui, la valeur du jour est mise à jour.</div>
-      <div v-if="bwData.length" class="chart-wrap mt-6"><LazySportSvgChart :data="bwData" y-key="kg" color="#b07d2e" :height="170" /></div>
+      <div class="muted mt-6">
+        🏋️ salle, 🏠 télétravail — les deux sont indépendants, un mardi peut être les deux.
+        Pour corriger un jour en particulier, touche-le dans le calendrier du Journal :
+        ça ne change que ce jour-là.
+      </div>
     </div>
 
     <!-- Son & vibration de fin de repos -->
@@ -147,6 +159,36 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
       <div class="muted mt-6">Le téléphone ne permet pas de régler la <em>force</em> exacte de la vibration : « Légère / Moyenne / Forte » jouent des vibrations de plus en plus longues et répétées.<template v-if="!soundEnabled"> Son coupé — la vibration reste active.</template></div>
     </div>
 
+    <!-- Appareils : la balance se branche ici, avec la montre. C'est un réglage
+         d'appareil, pas une donnée de suivi — le Rapport affiche les mesures et
+         renvoie vers cet écran quand rien n'est connecté. -->
+    <div class="card">
+      <div class="row-between mb-8">
+        <div class="section-label">Balance Withings</div>
+        <span class="muted" :class="{ 'export-warn': !withingsOn }">{{ withingsOn ? 'Connectée' : 'Non connectée' }}</span>
+      </div>
+      <p v-if="props.withingsError" class="muted export-warn">
+        ⚠️ La dernière tentative a échoué ({{ props.withingsError }}). Réessaie : le code
+        d'autorisation n'est valable que quelques secondes.
+      </p>
+      <div v-if="!withingsOn" class="muted">
+        Une seule autorisation, puis l'appli récupère chaque pesée toute seule : poids,
+        masse grasse, muscle, eau, os — et les pas si l'appli Withings est reliée à
+        Samsung Health (Profil → Apps). Les jetons restent sur ce téléphone.
+      </div>
+      <div v-else class="muted">
+        {{ weighIns.length }} pesée(s) récupérée(s). Les mesures et les statistiques sont
+        dans <b>Rapport</b>.
+      </div>
+      <div class="nav-row mt-6">
+        <button v-if="!withingsOn" class="btn-primary flex-1" @click="connectWithings()">⚖️ Connecter la balance</button>
+        <button v-else class="btn flex-1" @click="disconnectWithings()">Déconnecter</button>
+      </div>
+      <div v-if="withingsOn" class="muted mt-6">
+        Se déconnecter ne supprime rien : les pesées déjà récupérées sont à toi, elles restent.
+      </div>
+    </div>
+
     <!-- Relais vers la montre connectée (via les notifications du téléphone) -->
     <div class="card">
       <div class="row-between mb-8">
@@ -165,7 +207,7 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
     <div class="card">
       <div class="section-label mb-8">Données</div>
       <div class="nav-row">
-        <button class="btn flex-1" @click="exportJSON({ profile, weekPlan })">⬇ Exporter</button>
+        <button class="btn flex-1" @click="exportJSON({ profile, weekPlan, nutrition: nutritionData(), ...withingsData() })">⬇ Exporter</button>
         <label class="btn flex-1 center">⬆ Importer<input type="file" accept=".json" class="hidden-input" @change="onImport"></label>
         <button class="btn flex-1" @click="resetPlan()">↺ Réinit. planning</button>
       </div>
