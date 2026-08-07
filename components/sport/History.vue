@@ -5,7 +5,7 @@ import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { useNutrition } from '~/composables/useNutrition'
 import { useProfile } from '~/composables/useProfile'
-import { bmrMifflin, dayBurn, dayEnergy, sessionsOn } from '~/lib/nutritionStats'
+import { bmrMifflin, dayBurn, dayEnergy } from '~/lib/nutritionStats'
 
 // Vue « Journal » : UN calendrier, rien d'autre. Le détail d'une journée s'ouvre en
 // feuille au clic.
@@ -44,10 +44,17 @@ interface Cell {
   kcal: number | null
 }
 
-/** Cible calorique du jour, telle que la feuille l'affichera. */
+/**
+ * Cible calorique du jour, telle que la feuille l'affichera.
+ *
+ * Lit `sessionsByDay`, l'index déjà construit pour les pastilles, au lieu de
+ * rappeler `sessionsOn(sessionLog(), …)`. Avec 42 cases, cela faisait 42 tris
+ * complets de l'historique à chaque rendu du calendrier — et le calendrier se
+ * réévalue au moindre changement réactif.
+ */
 function targetOf(iso: string, gym: boolean, tt: boolean): number | null {
   if (bmr.value === null || !kg.value) return null
-  const rec = sessionsOn(sessionLog(), iso)
+  const rec = sessionsByDay.value[iso] ?? []
   const burn = rec.length ? dayBurn(rec, kg.value, bmr.value) : (gym ? DEFAULT_BURN : 0)
   return dayEnergy({ bmr: bmr.value, kg: kg.value, tt, steps: stepsFor(iso), sessionKcal: burn }).target
 }

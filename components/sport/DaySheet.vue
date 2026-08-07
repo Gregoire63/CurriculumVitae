@@ -26,7 +26,7 @@ const props = defineProps<{ iso: string, todayIso: string | null }>()
 const emit = defineEmits<{ close: [], edit: [rec: SessionRecord] }>()
 
 const { sessionLog, bodyWeight } = useWorkout()
-const { dayFor, setOverride, indexFor, stepsFor, eatenSlots, library } = useNutrition()
+const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots } = useNutrition()
 const { profile } = useProfile()
 const { entries: bodyEntries, suspectAts } = useWithings()
 
@@ -67,10 +67,7 @@ const energy = computed(() => (bmr.value !== null && kg.value
   ? dayEnergy({ bmr: bmr.value, kg: kg.value, tt: resolved.value.tt, steps: stepsFor(props.iso), sessionKcal: burn.value })
   : null))
 
-const plan = computed(() => {
-  const i = indexFor(props.iso)
-  return i === null ? null : buildDay(i, burn.value > 0, library.value, resolved.value.menu)
-})
+const plan = computed(() => dayPlanFor(props.iso, burn.value > 0))
 const planTotal = computed(() => (plan.value ? roundMacros(plan.value.total) : null))
 const done = computed(() => new Set(eatenSlots(props.iso)))
 const doneCount = computed(() => plan.value?.meals.filter(m => done.value.has(m.slot)).length ?? 0)

@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ALL_EXERCISES, PROGRAM, topOfRange, suggestedIncrement } from '~/data/sportProgram'
 import type { Exercise } from '~/data/sportProgram'
 import {
@@ -351,8 +351,17 @@ export function useWorkout() {
   }
 
   // Journal des séances (le plus récent d'abord), avec heure
+  /**
+   * Historique trié, du plus récent au plus ancien.
+   *
+   * Mémorisé : c'était une fonction qui reconstruisait et retriait le tableau à
+   * CHAQUE appel. Les vues qui l'interrogent en boucle — une case de calendrier,
+   * un jour de la semaine — payaient donc un tri complet par itération. Le
+   * `computed` ne retrie que lorsque l'historique change réellement.
+   */
+  const sortedLog = computed(() => [...sessionHistory.value].sort((a, b) => b.at.localeCompare(a.at)))
   function sessionLog() {
-    return [...sessionHistory.value].sort((a, b) => b.at.localeCompare(a.at))
+    return sortedLog.value
   }
 
   // ─── Données de démo (pour tester rapidement l'app) ───────────────────────

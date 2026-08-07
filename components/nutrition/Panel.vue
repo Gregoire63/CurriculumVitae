@@ -10,9 +10,9 @@ import { isoOf } from '~/utils/sportStats'
 // ne répondaient pourtant qu'à trois besoins, à trois rythmes différents :
 //  - tous les jours, manger → parti sur l'accueil, en feuille : c'est une action,
 //    pas une destination, exactement comme démarrer une séance ;
-//  - toutes les semaines, acheter puis cuisiner → « Cuisine », dans cet ordre,
-//    parce que c'est une séquence et non deux sujets ;
-//  - de temps en temps, régler les plats → « Plats ».
+//  - avant la semaine, décider ce qu'on cuisine → « Préparer », en trois étapes
+//    (plats et portions → courses → conseils de préparation) ;
+//  - de temps en temps, régler la bibliothèque → « Plats ».
 // Le suivi du corps, lui, est parti dans Rapport.
 const props = defineProps<{ todayIso: string | null }>()
 
@@ -23,7 +23,7 @@ const { hydrate: hydratePhotos } = usePhotos()
 
 type Sub = 'cuisine' | 'plats'
 const SUBS: { id: Sub, icon: string, label: string, hint: string }[] = [
-  { id: 'cuisine', icon: '🛒', label: 'Cuisine', hint: 'Courses puis préparation' },
+  { id: 'cuisine', icon: '🛒', label: 'Préparer', hint: 'Plats à cuisiner, courses, préparation' },
   { id: 'plats', icon: '📖', label: 'Plats', hint: 'Recettes, aliments, micros' },
 ]
 const sub = ref<Sub>('cuisine')
@@ -50,13 +50,7 @@ onMounted(() => {
       </button>
     </nav>
 
-    <!-- Courses puis préparation, empilés dans l'ordre où on les fait : on achète
-         samedi, on cuisine dimanche. Deux sous-onglets auraient coupé en deux un
-         geste qui n'en est qu'un. -->
-    <template v-if="sub === 'cuisine'">
-      <NutritionShopping :today-iso="iso" />
-      <NutritionBatch :today-iso="iso" />
-    </template>
+    <NutritionPrep v-if="sub === 'cuisine'" :today-iso="iso" />
     <NutritionLibrary v-else />
   </div>
 </template>

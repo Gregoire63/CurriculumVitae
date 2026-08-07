@@ -177,21 +177,6 @@ describe('prix et panier', () => {
     expect(n.prices.value.saumon).toBeUndefined()
   })
 
-  it('calcule le total de la fenêtre de courses à partir des prix saisis', async () => {
-    const n = await load()
-    const list = n.shoppingWindow('2026-08-03', 7)
-    expect(list.length).toBeGreaterThan(0)
-
-    const { total: empty, missing } = n.cost(list)
-    expect(empty).toBe(0)
-    expect(missing.length).toBeGreaterThan(0)
-
-    for (const s of list) for (const l of s.lines) n.setPrice(l.food.id, 10)
-    const { total, missing: none } = n.cost(list)
-    expect(none).toHaveLength(0)
-    expect(total).toBeGreaterThan(0)
-  })
-
   it('archive un panier et le relit', async () => {
     const n = await load()
     n.addBasket(87.4, 7, '2026-08-03')
@@ -211,19 +196,7 @@ describe('prix et panier', () => {
   })
 })
 
-describe('batch cooking', () => {
-  it('coche et réinitialise les tâches d\'une session sans toucher à l\'autre', async () => {
-    const n = await load()
-    n.toggleBatch('2026-08-03:dim:0')
-    n.toggleBatch('2026-08-03:dim:1')
-    n.toggleBatch('2026-08-03:mer:0')
-    expect(n.isBatchDone('2026-08-03:dim:0')).toBe(true)
-
-    n.resetBatch('2026-08-03:dim:')
-    expect(n.isBatchDone('2026-08-03:dim:0')).toBe(false)
-    expect(n.isBatchDone('2026-08-03:mer:0')).toBe(true)
-  })
-})
+describe('batch cooking', () => {})
 
 describe('mode de préparation', () => {
   it('part sur les féculents à part, le mode le plus souple', async () => {
@@ -287,5 +260,62 @@ describe('sauvegarde', () => {
     const n = await load()
     n.restore({ nutrition: { skipped: ['2026-08-03'] } })
     expect(n.dayFor('2026-08-03').gym).toBe(false)
+  })
+})
+
+describe('sélection : ce que je cuisine', () => {
+  it('coche des portions, les relit après rechargement, et en tire les courses', async () => {
+    const n = await load()
+    n.setPortions('boite-a', 4)
+    n.bumpPortions('boite-a', 1)
+    expect(n.portionsOf('boite-a')).toBe(5)
+    expect(n.selectionSummary.value.portions).toBe(5)
+    expect(n.selectionShopping.value.length).toBeGreaterThan(0)
+
+    vi.resetModules()
+    const again = await load()
+    expect(again.portionsOf('boite-a')).toBe(5)
+  })
+
+  it('zéro portion retire le plat de la sélection', async () => {
+    const n = await load()
+    n.setPortions('boite-a', 3)
+    n.setPortions('boite-a', 0)
+    expect(n.selectionSummary.value.portions).toBe(0)
+    expect(n.selectionShopping.value).toEqual([])
+  })
+
+  it('« j\'ai pris autre chose » décrémente le stock du plat réellement mangé', async () => {
+    const n = await load()
+    n.setPortions('boite-a', 3)
+    n.setPortions('boite-b', 2)
+    expect(n.stock.value['boite-b']).toBe(2)
+
+    n.setPicked('2026-08-10', 'lunch', 'boite-b')
+    expect(n.stock.value['boite-b']).toBe(1)
+    expect(n.stock.value['boite-a']).toBe(3)
+
+    n.setPicked('2026-08-10', 'lunch', null)
+    expect(n.stock.value['boite-b']).toBe(2)
+  })
+
+  it('hors des 14 jours livrés, le plan pioche dans la sélection', async () => {
+    const n = await load()
+    n.setStart('2026-08-09')
+    // Dans la fenêtre : c'est le menu pré-calculé.
+    expect(n.indexFor('2026-08-12')).toBe(3)
+    // Au-delà : plus d'index, mais un plan reste servi à partir des plats retenus.
+    expect(n.indexFor('2026-09-15')).toBeNull()
+    n.setPortions('boite-c', 4)
+    const plan = n.dayPlanFor('2026-09-15', true)
+    expect(plan.meals.find((m: { slot: string }) => m.slot === 'lunch')?.recipeId).toBe('boite-c')
+  })
+
+  it('un plat explicitement pris l\'emporte sur celui proposé', async () => {
+    const n = await load()
+    n.setStart('2026-08-09')
+    n.setPicked('2026-08-12', 'dinner', 'din-saumon')
+    const plan = n.dayPlanFor('2026-08-12', true)
+    expect(plan.meals.find((m: { slot: string }) => m.slot === 'dinner')?.recipeId).toBe('din-saumon')
   })
 })

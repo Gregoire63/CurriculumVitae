@@ -1,9 +1,11 @@
 import { computed, ref } from 'vue'
 import type { Food, Recipe } from '~/data/nutritionProgram'
-import type { DayOverride, Extra, Library, PrepMode, PriceMap, WeekTemplate } from '~/lib/nutritionStats'
+import type { DayOverride, Extra, Library, PrepMode, PriceMap, ShoppingList, WeekTemplate } from '~/lib/nutritionStats'
 import {
-  DEFAULT_WEEK, basketTotal, cycleIndexOf, mergeFoods, mergeRecipes, resolveDay, shoppingFor, slugify,
+  DEFAULT_WEEK, basketTotal, buildDay, cycleIndexFrom, dowIndex, mergeFoods, mergeRecipes, prepGroups, resolveDay,
+  seedSelection, selectionTotals, shoppingFromSelection, slugify, stockOf,
 } from '~/lib/nutritionStats'
+import type { Selection } from '~/lib/nutritionStats'
 import { isoOf, shiftIso } from '~/utils/sportStats'
 
 // État du module nutrition, persisté en localStorage — même pattern que useWorkout :
@@ -11,7 +13,6 @@ import { isoOf, shiftIso } from '~/utils/sportStats'
 // hydratation unique gardée par un flag.
 const PRICES_KEY = 'gr-nutri-prices-v1' // prix saisis, en € / kg
 const CHECKED_KEY = 'gr-nutri-shopping-v1' // aliments déjà dans le caddie
-const BATCH_KEY = 'gr-nutri-batch-v1' // tâches de batch cooking cochées
 const EATEN_KEY = 'gr-nutri-eaten-v1' // repas du plan validés, par date
 const BASKETS_KEY = 'gr-nutri-baskets-v1' // historique des courses payées
 const PREP_KEY = 'gr-nutri-prep-v1' // boîtes assemblées à l'avance, ou féculents à part
@@ -23,15 +24,23 @@ const FOODPATCH_KEY = 'gr-nutri-foodpatch-v1' // aliments livrés, modifiés
 const RECIPES_KEY = 'gr-nutri-recipes-v1' // plats créés
 const RECIPEPATCH_KEY = 'gr-nutri-recipepatch-v1' // plats livrés, modifiés
 const OFF_KEY = 'gr-nutri-off-v1' // plats mis de côté
+const SEL_KEY = 'gr-nutri-selection-v1' // ce que je cuisine : plat → portions
+const START_KEY = 'gr-nutri-start-v1' // premier jour du plan livré
+const PICKED_KEY = 'gr-nutri-picked-v1' // plat réellement pris, quand il diffère
 export interface Basket { date: string, total: number, days: number }
 const prices = ref<PriceMap>({})
 const checked = ref<Record<string, boolean>>({})
-const batchDone = ref<Record<string, boolean>>({})
 const eaten = ref<Record<string, string[]>>({})
 const baskets = ref<Basket[]>([])
 const prepMode = ref<PrepMode>('separate')
 const week = ref<WeekTemplate>({ gym: [...DEFAULT_WEEK.gym], tt: [...DEFAULT_WEEK.tt] })
 const overrides = ref<Record<string, DayOverride>>({})
+// Ce que je cuisine (plat → portions) et le jour où le plan démarre. C'est cette
+// sélection qui pilote les courses et la préparation, pas le cycle livré.
+const selection = ref<Selection>({})
+const startDate = ref<string | null>(null)
+// Plat réellement pris quand il diffère de celui proposé — « j'ai pris autre chose ».
+const picked = ref<Record<string, Record<string, string>>>({})
 const extras = ref<Record<string, Extra[]>>({})
 const userFoods = ref<Food[]>([])
 const foodPatches = ref<Record<string, Partial<Food>>>({})
@@ -63,10 +72,12 @@ export function useNutrition() {
     if (hydrated || !import.meta.client) return
     prices.value = safeParse(localStorage.getItem(PRICES_KEY), {})
     checked.value = safeParse(localStorage.getItem(CHECKED_KEY), {})
-    batchDone.value = safeParse(localStorage.getItem(BATCH_KEY), {})
     eaten.value = safeParse(localStorage.getItem(EATEN_KEY), {})
     baskets.value = safeParse(localStorage.getItem(BASKETS_KEY), [])
     overrides.value = safeParse(localStorage.getItem(OVER_KEY), {})
+    selection.value = safeParse(localStorage.getItem(SEL_KEY), {})
+    startDate.value = safeParse<string | null>(localStorage.getItem(START_KEY), null)
+    picked.value = safeParse(localStorage.getItem(PICKED_KEY), {})
     extras.value = safeParse(localStorage.getItem(EXTRA_KEY), {})
     userFoods.value = safeParse(localStorage.getItem(FOODS_KEY), [])
     foodPatches.value = safeParse(localStorage.getItem(FOODPATCH_KEY), {})
@@ -187,13 +198,108 @@ export function useNutrition() {
    * l'historique.
    */
   const ttConfirmed = (iso: string) => overrides.value[iso]?.tt === true
+
+  // ─── Sélection ────────────────────────────────────────────────────────────
+  const portionsOf = (id: string) => selection.value[id] ?? 0
+  function setPortions(id: string, n: number) {
+    const next = { ...selection.value }
+    if (n > 0) next[id] = Math.min(30, Math.round(n))
+    else delete next[id]
+    selection.value = next
+    write(SEL_KEY, selection.value)
+  }
+  const bumpPortions = (id: string, d: number) => setPortions(id, portionsOf(id) + d)
+  function clearSelection() { selection.value = {}; write(SEL_KEY, selection.value) }
+  /** Repart des 14 jours livrés. Écrase la sélection en cours, d'où la confirmation côté vue. */
+  function seedFromPlan() {
+    selection.value = seedSelection(library.value)
+    write(SEL_KEY, selection.value)
+  }
+  function setStart(iso: string | null) {
+    startDate.value = iso
+    write(START_KEY, startDate.value)
+  }
+
+  const selectionSummary = computed(() => selectionTotals(selection.value, library.value))
+  /**
+   * Jours couverts par la sélection : deux repas principaux par jour. Sert à doser
+   * les petits-déjeuners et collations, qui ne sont pas dans la sélection mais
+   * doivent bien finir dans le caddie.
+   */
+  const daysCovered = computed(() => Math.round(selectionSummary.value.portions / 2))
+  const selectionShopping = computed(() =>
+    shoppingFromSelection(selection.value, library.value, daysCovered.value))
+  const selectionPrep = computed(() => prepGroups(selection.value, library.value))
+
+  /** Portions déjà consommées, par plat : sert à savoir ce qu'il reste au frigo. */
+  const consumed = computed(() => {
+    const out: Record<string, number> = {}
+    for (const bySlot of Object.values(picked.value)) {
+      for (const id of Object.values(bySlot)) out[id] = (out[id] ?? 0) + 1
+    }
+    return out
+  })
+  const stock = computed(() => stockOf(selection.value, consumed.value))
+
+  // ─── Plat réellement pris ─────────────────────────────────────────────────
+  const pickedFor = (iso: string, slot: string) => picked.value[iso]?.[slot] ?? null
+  function setPicked(iso: string, slot: string, recipeId: string | null) {
+    const day = { ...(picked.value[iso] ?? {}) }
+    if (recipeId) day[slot] = recipeId
+    else delete day[slot]
+    const next = { ...picked.value }
+    if (Object.keys(day).length) next[iso] = day
+    else delete next[iso]
+    picked.value = next
+    write(PICKED_KEY, picked.value)
+  }
   /** Pas du jour. `null` = non saisis, on retombe sur l'estimation télétravail / sur site. */
   const stepsFor = (iso: string) => overrides.value[iso]?.steps ?? null
   const setSteps = (iso: string, steps: number | null) =>
     setOverride(iso, { steps: steps === null || !Number.isFinite(steps as number) ? undefined : Math.max(0, Math.round(steps as number)) })
   // ─── Cycle de recettes ────────────────────────────────────────────────────
   /** Position dans le cycle de 14 jours. Déduite de la date : rien à démarrer. */
-  const indexFor = (iso: string) => cycleIndexOf(iso)
+  /**
+   * Position dans le plan livré, comptée depuis le jour de démarrage — et `null`
+   * passé les 14 jours. L'appli ne propose alors plus rien d'elle-même : c'est la
+   * sélection qui pilote. Le cycle n'est plus une horloge perpétuelle, juste un
+   * pré-remplissage de deux semaines.
+   */
+  const indexFor = (iso: string) => cycleIndexFrom(startDate.value, iso)
+
+  /**
+   * Le plan d'une journée, où qu'on soit dans le temps.
+   *
+   * Dans les 14 jours livrés, c'est le menu pré-calculé. Au-delà, il n'y a plus de
+   * menu : on pioche dans la SÉLECTION, en tournant sur les plats retenus, pour
+   * qu'il reste quelque chose à cocher sans que l'appli invente un programme
+   * qu'on ne lui a pas demandé.
+   *
+   * Et dans tous les cas, un plat explicitement choisi pour un créneau — « j'ai pris
+   * autre chose » — l'emporte : ce qui a été mangé prime sur ce qui était proposé.
+   */
+  function dayPlanFor(iso: string, trained: boolean) {
+    const i = indexFor(iso)
+    const menu: Partial<{ lunch: string, dinner: string }> = { ...dayFor(iso).menu }
+
+    if (i === null) {
+      const rotate = (kind: 'boite' | 'diner') => {
+        const ids = Object.keys(selection.value)
+          .filter(id => selection.value[id] > 0 && library.value.recipes[id]?.kind === kind)
+          .sort()
+        return ids.length ? ids[dowIndex(iso) % ids.length] : undefined
+      }
+      menu.lunch = menu.lunch ?? rotate('boite')
+      menu.dinner = menu.dinner ?? rotate('diner')
+    }
+    // Le créneau explicitement remplacé écrase le reste.
+    const day = picked.value[iso] ?? {}
+    if (day.lunch) menu.lunch = day.lunch
+    if (day.dinner) menu.dinner = day.dinner
+
+    // Hors fenêtre, l'index ne sert plus qu'à faire tourner les collations.
+    return buildDay(i ?? dowIndex(iso), trained, library.value, menu)
+  }
   // ─── Repas mangés ─────────────────────────────────────────────────────────
   const isEaten = (iso: string, slot: string) => (eaten.value[iso] ?? []).includes(slot)
   function toggleEaten(iso: string, slot: string) {
@@ -232,37 +338,14 @@ export function useNutrition() {
     checked.value = {}
     write(CHECKED_KEY, checked.value)
   }
-  const isBatchDone = (key: string) => !!batchDone.value[key]
-  function toggleBatch(key: string) {
-    batchDone.value = { ...batchDone.value, [key]: !batchDone.value[key] }
-    write(BATCH_KEY, batchDone.value)
-  }
-  function resetBatch(prefix: string) {
-    const next = { ...batchDone.value }
-    for (const k of Object.keys(next)) { if (k.startsWith(prefix)) delete next[k] }
-    batchDone.value = next
-    write(BATCH_KEY, batchDone.value)
-  }
   function setPrepMode(mode: PrepMode) {
     prepMode.value = mode
     writeRaw(PREP_KEY, mode)
   }
-  /**
-   * Liste de courses sur une fenêtre de jours, d'après le planning réel :
-   * un jour sans séance consomme moins de féculents, donc on en achète moins.
-   */
-  function shoppingWindow(fromIso: string, days: number) {
-    const indices: number[] = []
-    const flags = new Map<number, boolean>()
-    for (let d = 0; d < days; d++) {
-      const iso = shiftIso(fromIso, d)
-      const i = indexFor(iso)
-      indices.push(i)
-      flags.set(i, dayFor(iso).gym)
-    }
-    return shoppingFor(indices, i => flags.get(i) ?? true, library.value.foods)
-  }
-  const cost = (list: ReturnType<typeof shoppingFor>) => basketTotal(list, prices.value)
+  // La liste de courses ne se déduit plus d'une fenêtre de jours du cycle : elle
+  // sort de la SÉLECTION (voir `selectionShopping`). Il fallait sinon accepter le
+  // menu livré tel quel pour obtenir une liste juste.
+  const cost = (list: ShoppingList) => basketTotal(list, prices.value)
   function addBasket(total: number, days: number, iso = isoOf(new Date())) {
     if (!(total > 0)) return
     baskets.value = [{ date: iso, total: Math.round(total * 100) / 100, days }, ...baskets.value].slice(0, 24)
@@ -277,7 +360,8 @@ export function useNutrition() {
   function exportData() {
     return {
       prices: prices.value, checked: checked.value,
-      batchDone: batchDone.value, eaten: eaten.value, baskets: baskets.value,
+      eaten: eaten.value, baskets: baskets.value,
+      selection: selection.value, start: startDate.value, picked: picked.value,
       prepMode: prepMode.value, week: week.value, overrides: overrides.value,
       extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
@@ -290,7 +374,9 @@ export function useNutrition() {
     if (!n || typeof n !== 'object') return
     if (n.prices) { prices.value = n.prices; write(PRICES_KEY, prices.value) }
     if (n.checked) { checked.value = n.checked; write(CHECKED_KEY, checked.value) }
-    if (n.batchDone) { batchDone.value = n.batchDone; write(BATCH_KEY, batchDone.value) }
+    if (n.selection) { selection.value = n.selection; write(SEL_KEY, selection.value) }
+    if (typeof n.start === 'string' || n.start === null) { startDate.value = n.start; write(START_KEY, startDate.value) }
+    if (n.picked) { picked.value = n.picked; write(PICKED_KEY, picked.value) }
     if (n.eaten) { eaten.value = n.eaten; write(EATEN_KEY, eaten.value) }
     if (Array.isArray(n.baskets)) { baskets.value = n.baskets; write(BASKETS_KEY, baskets.value) }
     if (n.prepMode === 'assembled' || n.prepMode === 'separate') setPrepMode(n.prepMode)
@@ -308,17 +394,18 @@ export function useNutrition() {
     }
   }
   return {
-    prices, checked, batchDone, eaten, baskets, pricedCount, prepMode,
+    prices, checked, eaten, baskets, pricedCount, prepMode, picked,
     week, overrides, extras, userFoods, userRecipes, disabledRecipes, library,
-    hydrate, indexFor,
+    hydrate, indexFor, dayPlanFor,
     setWeekDay, resetWeek, dayFor, setOverride, clearOverride, hasOverride, ttConfirmed, stepsFor, setSteps,
+    selection, startDate, portionsOf, setPortions, bumpPortions, clearSelection, seedFromPlan, setStart,
+    selectionSummary, selectionShopping, selectionPrep, daysCovered, stock, pickedFor, setPicked,
     isEaten, toggleEaten, eatenSlots, eatenCount, extrasFor, addExtra, removeExtra,
     addFood, patchFood, removeFood, resetFood, isCustomFood,
     addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,
     toggleRecipeActive, isRecipeActive,
     setPrice, isChecked, toggleChecked, clearChecked, setPrepMode,
-    isBatchDone, toggleBatch, resetBatch,
-    shoppingWindow, cost, addBasket, removeBasket,
+    cost, addBasket, removeBasket,
     exportData, restore,
   }
 }

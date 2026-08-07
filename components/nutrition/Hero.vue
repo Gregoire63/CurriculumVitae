@@ -17,7 +17,7 @@ import { shiftIso } from '~/utils/sportStats'
 const props = defineProps<{ todayIso: string }>()
 
 const {
-  hydrate, indexFor, dayFor, stepsFor, toggleEaten, eatenSlots, extrasFor, addExtra,
+  hydrate, dayPlanFor, dayFor, stepsFor, toggleEaten, eatenSlots, extrasFor, addExtra,
   removeExtra, prepMode, library,
 } = useNutrition()
 
@@ -50,8 +50,7 @@ function energyOf(iso: string) {
   return { r, burn, energy: dayEnergy({ bmr: bmr.value, kg: kg.value, tt: r.tt, steps: stepsFor(iso), sessionKcal: burn }) }
 }
 
-const planOf = (iso: string, trained: boolean) =>
-  buildDay(indexFor(iso), trained, library.value, dayFor(iso).menu)
+const planOf = (iso: string, trained: boolean) => dayPlanFor(iso, trained)
 
 const today = computed(() => energyOf(props.todayIso))
 
@@ -216,7 +215,7 @@ function addNow() {
     <div class="nu-hero-sep" />
 
     <div class="nu-hero-right">
-      <div class="section-label duo-title">🏋️ Séance</div>
+      <div class="section-label duo-title">🏋️ Séance du jour</div>
       <slot name="session" />
     </div>
 

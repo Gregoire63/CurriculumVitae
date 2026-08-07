@@ -93,7 +93,7 @@ const todayRecord = computed(() => {
 })
 
 // ─────────── État UI ───────────
-type View = 'home' | 'progress' | 'history' | 'rapport' | 'nutrition' | 'profil'
+type View = 'home' | 'history' | 'rapport' | 'nutrition' | 'profil'
 const view = ref<View>('home')
 // Message d'échec du retour OAuth Withings (affiché une fois, en haut de l'onglet).
 const withingsError = ref<string | null>(null)
@@ -147,8 +147,8 @@ function onViewport() {
 }
 
 const titles: Record<View, string> = {
-  home: 'Mes séances', progress: 'Progression',
-  history: 'Historique', rapport: 'Mon rapport',
+  home: 'Mes séances',
+  history: 'Historique', rapport: 'Ma progression',
   nutrition: 'Nutrition', profil: 'Profil',
 }
 const pageTitle = computed(() => titles[view.value])
@@ -158,8 +158,7 @@ const TABS: { id: View; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: 'Accueil' },
   { id: 'history', icon: '🗓', label: 'Journal' },
   { id: 'nutrition', icon: '🍽', label: 'Nutrition' },
-  { id: 'rapport', icon: '📊', label: 'Rapport' },
-  { id: 'progress', icon: '📈', label: 'Progrès' },
+  { id: 'rapport', icon: '📈', label: 'Progrès' },
   { id: 'profil', icon: '⚙️', label: 'Profil' },
 ]
 
@@ -681,7 +680,7 @@ onUnmounted(() => {
         <LazyNutritionHero :today-iso="todayISO">
           <template #session>
           <section v-if="todaySession" class="today card" :style="{ '--c': todaySession.color }">
-            <div class="today-eyebrow"><span class="today-dot"></span> Séance du jour · {{ todayEntry!.dow }}</div>
+            <div class="today-eyebrow"><span class="today-dot"></span> {{ todayEntry!.dow }}</div>
             <h2 class="today-name">{{ todaySession.name }}</h2>
             <div v-if="doneToday.length" class="done-badge">✓ Déjà fait aujourd'hui : {{ doneToday.map(s => s.name).join(', ') }}</div>
             <div class="sc-muscles"><span v-for="m in sessionMuscles(todaySession)" :key="m" class="sc-chip">{{ m }}</span></div>
@@ -694,7 +693,6 @@ onUnmounted(() => {
           </section>
 
           <section v-else-if="todayIndex !== null" class="today card rest">
-            <div class="today-eyebrow">Aujourd'hui</div>
             <h2 class="today-name">Repos 💤</h2>
             <p class="muted rest-txt">Récupération.<template v-if="nextSession"> Prochaine séance : <b>{{ nextSession.dow }}</b> · {{ nextSession.session!.name }}.</template></p>
             <button v-if="nextSession" class="btn today-go" @click="startSession(nextSession.session!)">Faire {{ nextSession.session!.name }} maintenant →</button>
@@ -932,10 +930,6 @@ onUnmounted(() => {
     <Suspense v-if="view === 'rapport'">
       <LazySportReport :today-iso="todayISO" :today-dow="todayDow" @navigate="go($event as View)" />
       <template #fallback><SportSkeleton :cards="4" chart /></template>
-    </Suspense>
-    <Suspense v-else-if="view === 'progress'">
-      <LazySportProgress />
-      <template #fallback><SportSkeleton :cards="3" chart /></template>
     </Suspense>
     <Suspense v-else-if="view === 'history'">
       <LazySportHistory :today-iso="todayISO" @edit="editSession" />

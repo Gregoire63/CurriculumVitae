@@ -12,6 +12,18 @@ import {
 const props = defineProps<{ todayIso: string | null; todayDow: number | null }>()
 const emit = defineEmits<{ navigate: [view: string] }>()
 
+// « Rapport » et « Progrès » répondaient à la même question — est-ce que ça avance —
+// pour trois objets différents : le corps, le volume d'entraînement, et la charge par
+// exercice. Deux onglets voisins obligeaient à comparer de tête ce qui appartient au
+// même bilan. Un seul onglet, trois sections, et la barre du bas passe de six à cinq.
+type Part = 'corps' | 'seances' | 'exos'
+const PARTS: { id: Part, label: string }[] = [
+  { id: 'corps', label: 'Corps' },
+  { id: 'seances', label: 'Séances' },
+  { id: 'exos', label: 'Exercices' },
+]
+const part = ref<Part>('corps')
+
 const { logs, bodyWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWithGaps, daysSinceExport, lastExportAt, fatigue } = useWorkout()
 const { profile } = useProfile()
 
@@ -97,14 +109,21 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
 
 <template>
   <div class="stack">
-    <div v-if="!hasData" class="card empty">Ton rapport se construit au fil des séances.<br>Renseigne ta taille dans <b>Profil</b>, pèse-toi, et enregistre une séance.</div>
+    <div v-if="!hasData" class="card empty">Ta progression se construit au fil des séances.<br>Renseigne ta taille dans <b>Profil</b>, pèse-toi, et enregistre une séance.</div>
     <template v-else>
+      <nav class="nav-row rp-nav">
+        <button
+          v-for="pt in PARTS" :key="pt.id"
+          class="btn flex-1" :class="{ sel: part === pt.id }"
+          @click="part = pt.id"
+        >{{ pt.label }}</button>
+      </nav>
       <!-- Suivi du corps : pesées, composition, pas. Le poids se saisit ICI et
            nulle part ailleurs — il servait aux séances comme à la nutrition, il
            avait fini par exister en trois exemplaires. -->
-      <SportBody @navigate="emit('navigate', $event)" />
+      <SportBody v-if="part === 'corps'" @navigate="emit('navigate', $event)" />
 
-      <div class="card">
+      <div v-if="part === 'corps'" class="card">
         <div class="section-label mb-8">Énergie</div>
         <div class="stat-grid">
           <div class="stat"><div class="stat-v mono">{{ bmr ?? '—' }}<span v-if="bmr" class="stat-u">kcal</span></div><div class="stat-l">Métabolisme de base</div></div>
@@ -116,7 +135,7 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
           et de la séance réellement enregistrée : c'est elle qui fait foi.
         </div>
       </div>
-      <div class="card">
+      <div v-if="part === 'seances'" class="card">
         <div class="section-label mb-8">Activité</div>
         <div class="stat-grid">
           <div class="stat"><div class="stat-v mono">{{ totalSessions }}</div><div class="stat-l">Séances totales</div></div>
@@ -126,7 +145,7 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
         </div>
         <div class="muted mt-6">Volume cette semaine : <b>{{ fmtVol(volumeThisWeek) }}</b></div>
       </div>
-      <div v-if="muscleVolume.length" class="card">
+      <div v-if="part === 'seances' && muscleVolume.length" class="card">
         <div class="row-between mb-8">
           <div class="section-label">Séries par muscle</div>
           <div class="mv-toggle">
@@ -151,7 +170,7 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
         </div>
         <div v-else class="muted mt-6">Cumul depuis le début — utile pour l'équilibre global, mais c'est la vue « cette semaine » qui révèle un manque.</div>
       </div>
-      <div v-if="records.length" class="card">
+      <div v-if="part === 'seances' && records.length" class="card">
         <div class="section-label mb-8">Records</div>
         <div class="rec-list">
           <div v-for="r in records" :key="r.id" class="rec-row rec-row-wide">
@@ -168,7 +187,7 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
           </div>
         </div>
       </div>
-      <div v-if="fat" class="card" :class="'fat-' + fat.level">
+      <div v-if="part === 'seances' && fat" class="card" :class="'fat-' + fat.level">
         <div class="row-between mb-8">
           <div class="section-label">Fatigue &amp; récupération</div>
           <span class="fat-badge" :class="fat.level">{{ FATIGUE_ICON[fat.level] }} {{ FATIGUE_LABELS[fat.level] }}</span>
@@ -192,6 +211,10 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
           <br><span class="fat-caveat">Indicateur composite construit sur ton volume, ton ressenti et ta stagnation — un repère pour décider, pas une mesure physiologique.</span>
         </div>
       </div>
+      <!-- Les courbes de charge, ex-onglet « Progrès ». Chargées à la demande :
+           elles ne servent qu'ici, et elles tirent le composant de graphique. -->
+      <LazySportProgress v-if="part === 'exos'" />
+
       <div class="card" :class="{ 'backup-warn': exportStale }">
         <div class="section-label mb-8">Sauvegarde</div>
         <div v-if="exportAge === null" class="muted">

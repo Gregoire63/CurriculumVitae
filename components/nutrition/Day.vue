@@ -17,7 +17,7 @@ import {
 const props = defineProps<{ todayIso: string }>()
 
 const {
-  indexFor, dayFor, stepsFor, isEaten, toggleEaten, eatenSlots,
+  dayPlanFor, dayFor, stepsFor, isEaten, toggleEaten, eatenSlots, pickedFor, setPicked, stock,
   extrasFor, addExtra, removeExtra, prepMode, library,
 } = useNutrition()
 const { profile } = useProfile()
@@ -29,7 +29,6 @@ const quickLabel = ref('')
 const quickKcal = ref('')
 const nowHour = new Date().getHours()
 
-const index = computed(() => indexFor(props.todayIso))
 const resolved = computed(() => dayFor(props.todayIso))
 
 // ─── Profil ──────────────────────────────────────────────────────────────────
@@ -70,7 +69,7 @@ const energy = computed(() => {
 })
 
 const trained = computed(() => burn.value > 0)
-const base = computed(() => buildDay(index.value, trained.value, library.value, resolved.value.menu))
+const base = computed(() => dayPlanFor(props.todayIso, trained.value))
 
 /**
  * Ce qui a déjà été avalé : repas validés + extras notés. L'ajustement ne porte que
@@ -102,7 +101,9 @@ const intake = computed(() => (energy.value
 const split = computed(() => (intake.value ? macroSplit(intake.value.eaten) : null))
 const pTarget = computed(() => (kg.value ? proteinTarget(kg.value) : null))
 
-const dayLabel = computed(() => `${DAY_NAMES[dowIndex(props.todayIso)]} · semaine ${index.value < 7 ? 'A' : 'B'}`)
+// Plus de « semaine A / B » : le cycle de 14 jours n'est qu'un pré-remplissage,
+// l'afficher revenait à mettre en scène une mécanique interne.
+const dayLabel = computed(() => DAY_NAMES[dowIndex(props.todayIso)])
 const statusIcon: Record<DayStatus, string> = {
   rest: '🛋️', pending: '⏳', done: '✅', bonus: '⭐', missed: '⚠️', skipped: '✕',
 }
@@ -129,6 +130,27 @@ function addQuick() {
   quickLabel.value = ''
   quickKcal.value = ''
   adding.value = false
+}
+
+const swapping = ref<string | null>(null)
+
+/**
+ * Les plats encore disponibles pour un créneau : ceux de la sélection dont il reste
+ * des portions, du bon type de repas. On propose aussi celui déjà servi, sinon on ne
+ * pourrait pas revenir en arrière une fois la dernière portion « consommée ».
+ */
+function swapable(slot: string) {
+  const kind = slot === 'lunch' ? 'boite' : slot === 'dinner' ? 'diner' : null
+  if (!kind) return []
+  const current = pickedFor(props.todayIso, slot)
+  return Object.entries(stock.value)
+    .filter(([id, left]) => library.value.recipes[id]?.kind === kind && (left > 0 || id === current))
+    .map(([id, left]) => ({ id, left, name: library.value.recipes[id].name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+function swap(slot: string, id: string | null) {
+  setPicked(props.todayIso, slot, id)
+  swapping.value = null
 }
 
 const foodName = (id: string) => library.value.foods[id]?.name ?? id
@@ -218,12 +240,35 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
                bibliothèque. La prise de vue se fait dans Nutrition → Plats, une
                seule fois, puisqu'une photo appartient à la recette et pas au jour. -->
           <NutritionThumb :id="m.recipeId" :label="m.name" />
+          <!-- Le plat est PROPOSÉ, pas imposé : quand on cuisine sept boîtes à
+               l'avance, on prend celle dont on a envie. Un geste pour corriger,
+               et c'est ce qui a été mangé qui compte ensuite dans le stock. -->
+          <button
+            v-if="swapable(m.slot).length" class="nu-swap"
+            :aria-label="`Changer le plat de ${m.label}`"
+            @click="swapping = swapping === m.slot ? null : m.slot"
+          >⇄</button>
           <button
             class="check" :class="{ ok: isEaten(props.todayIso, m.slot) }"
             :aria-label="isEaten(props.todayIso, m.slot) ? 'Marquer comme non pris' : 'Marquer comme pris'"
             @click="toggleEaten(props.todayIso, m.slot)"
           >
             {{ isEaten(props.todayIso, m.slot) ? '✓' : '○' }}
+          </button>
+        </div>
+
+        <!-- Le frigo : ce qu'il reste de la sélection, moins ce qui a déjà été pris. -->
+        <div v-if="swapping === m.slot" class="nu-swap-list">
+          <button
+            v-for="alt in swapable(m.slot)" :key="alt.id"
+            class="nu-swap-opt" :class="{ on: alt.id === m.recipeId }"
+            @click="swap(m.slot, alt.id)"
+          >
+            <span class="flex-1">{{ alt.name }}</span>
+            <span class="mono muted">reste {{ alt.left }}</span>
+          </button>
+          <button v-if="pickedFor(props.todayIso, m.slot)" class="nu-swap-opt" @click="swap(m.slot, null)">
+            ↺ Reprendre le plat proposé
           </button>
         </div>
       </div>

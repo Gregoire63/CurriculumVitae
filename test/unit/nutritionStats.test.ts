@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CYCLE_LENGTH, FOOD_BY_ID, MICRO_REFS, RATIO_DINNER_GYM, RATIO_REST, RECIPE_BY_ID, STARCHY_IDS,
+  CAT_ORDER, CYCLE_LENGTH, FOOD_BY_ID, MICRO_REFS, RATIO_DINNER_GYM, RATIO_REST, RECIPE_BY_ID, STARCHY_IDS,
   SLOTS_GYM, SLOTS_REST,
 } from '../../data/nutritionProgram'
 import {
@@ -12,6 +12,8 @@ import {
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   adjustPlanFor, applySteps, LEAVE_MAX, removalSteps, adjustRemaining, upcomingPlan, ADJUST_MAX,
   FAT_PER_KG, KCAL_L, KCAL_P, MACRO_BAND, donutArcs, macroGaps, macroTargets,
+  PRECONFIG_DAYS, cycleIndexFrom, prepGroups, seedSelection, selectionTotals,
+  shoppingFromSelection, staplesFor, stockOf,
   sessionBurn, sessionsOn, shoppingFor, targetFor, targetOf, tdeeOf, usableDuration,
   workSetCount,
 } from '../../lib/nutritionStats'
@@ -899,5 +901,155 @@ describe('donutArcs', () => {
 
   it('renvoie une liste vide sans cible', () => {
     expect(donutArcs({ kcal: 0, p: 100, g: 100, l: 30 }, 0)).toEqual([])
+  })
+})
+
+// ─── Sélection, courses et préparation ───────────────────────────────────────
+describe('sélection', () => {
+  const sel = seedSelection()
+
+  it('retient les repas principaux, y compris ceux cuisinés le soir même', () => {
+    for (const id of Object.keys(sel)) expect(['boite', 'diner']).toContain(RECIPE_BY_ID[id].kind)
+    // Un dîner minute s'achète quand même : ne garder que les plats « batch »
+    // donnait une liste de courses amputée de la moitié des dîners.
+    expect(Object.keys(sel).some(id => !RECIPE_BY_ID[id].batch)).toBe(true)
+  })
+
+  it('il couvre bien 14 midis et 14 dîners', () => {
+    expect(Object.values(sel).reduce((a, b) => a + b, 0)).toBe(28)
+  })
+
+  it('les collations restent dehors : elles s\'achètent au paquet, pas à la portion', () => {
+    expect(Object.keys(sel)).not.toContain('col-post')
+    expect(Object.keys(sel)).not.toContain('pdj')
+  })
+
+  it('les totaux suivent le nombre de portions', () => {
+    const one = selectionTotals({ 'boite-a': 1 })
+    const three = selectionTotals({ 'boite-a': 3 })
+    expect(three.kcal).toBeCloseTo(one.kcal * 3, 0)
+    expect(three.portions).toBe(3)
+    expect(three.dishes).toBe(1)
+  })
+
+  it('ignore les plats à zéro portion et les identifiants inconnus', () => {
+    const t = selectionTotals({ 'boite-a': 0, 'plat-fantome': 5 })
+    expect(t.portions).toBe(0)
+    expect(t.kcal).toBe(0)
+  })
+})
+
+describe('shoppingFromSelection', () => {
+  it('multiplie les ingrédients par les portions', () => {
+    const one = shoppingFromSelection({ 'boite-a': 1 })
+    const four = shoppingFromSelection({ 'boite-a': 4 })
+    const gramsOf = (l: ReturnType<typeof shoppingFromSelection>) =>
+      l.flatMap(c => c.lines).reduce((n, x) => n + x.grams, 0)
+    expect(gramsOf(four)).toBeCloseTo(gramsOf(one) * 4, 0)
+  })
+
+  it('additionne un ingrédient partagé par deux plats sur une seule ligne', () => {
+    const list = shoppingFromSelection({ 'boite-a': 2, 'boite-b': 2 })
+    const ids = list.flatMap(c => c.lines).map(l => l.food.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('suit l\'ordre des rayons, pas l\'ordre alphabétique', () => {
+    const cats = shoppingFromSelection(seedSelection()).map(c => c.cat)
+    const ranks = cats.map(c => CAT_ORDER.indexOf(c))
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b))
+  })
+
+  it('rend une liste vide sur une sélection vide', () => {
+    expect(shoppingFromSelection({})).toEqual([])
+  })
+})
+
+describe('prepGroups', () => {
+  const groups = prepGroups(seedSelection())
+
+  it('regroupe par geste, et sépare l\'avance du minute', () => {
+    const ids = groups.map(g => g.id)
+    expect(ids).toContain('boites')
+    expect(ids).toContain('minute')
+    expect(ids.indexOf('boites')).toBeLessThan(ids.indexOf('minute'))
+  })
+
+  it('dit explicitement que les plats minute sont quand même dans les courses', () => {
+    expect(groups.find(g => g.id === 'minute')!.hint).toMatch(/liste de courses/)
+  })
+
+  it('rappelle de ne PAS portionner les féculents', () => {
+    const f = groups.find(g => g.id === 'feculents')!
+    expect(f.hint).toMatch(/SANS portionner/)
+  })
+
+  it('ne propose rien sur une sélection vide', () => {
+    expect(prepGroups({})).toEqual([])
+  })
+})
+
+describe('cycleIndexFrom', () => {
+  it('compte les jours depuis le démarrage', () => {
+    expect(cycleIndexFrom('2026-08-09', '2026-08-09')).toBe(0)
+    expect(cycleIndexFrom('2026-08-09', '2026-08-12')).toBe(3)
+  })
+
+  it('ne propose plus rien passé les quatorze jours', () => {
+    expect(cycleIndexFrom('2026-08-09', '2026-08-23')).toBeNull()
+  })
+
+  it('ne propose rien avant le démarrage ni sans démarrage', () => {
+    expect(cycleIndexFrom('2026-08-09', '2026-08-08')).toBeNull()
+    expect(cycleIndexFrom(null, '2026-08-12')).toBeNull()
+  })
+})
+
+describe('stockOf', () => {
+  it('retranche ce qui a été mangé', () => {
+    expect(stockOf({ 'boite-a': 4 }, { 'boite-a': 3 })).toEqual({ 'boite-a': 1 })
+  })
+
+  it('ne descend jamais sous zéro', () => {
+    expect(stockOf({ 'boite-a': 2 }, { 'boite-a': 5 })).toEqual({ 'boite-a': 0 })
+  })
+})
+
+describe('le quotidien dans les courses', () => {
+  it('la liste couvre TOUS les aliments des 14 jours, pas seulement les plats choisis', () => {
+    // Le vrai test de la liste : partir du plan livré et vérifier qu'on ne rentre
+    // pas du magasin sans petit-déjeuner. Huit aliments manquaient — flocons
+    // d'avoine, fromage blanc, whey, fruits rouges, banane, créatine, pomme,
+    // amandes — parce qu'ils n'étaient dans aucun plat « choisi ».
+    const requis = new Set<string>()
+    for (let i = 0; i < 14; i++) {
+      for (const m of buildDay(i, DEFAULT_TRAINED(i)).meals) {
+        for (const it of m.items) requis.add(it.food)
+      }
+    }
+    const achetes = new Set(
+      shoppingFromSelection(seedSelection(), undefined, 14).flatMap(c => c.lines).map(l => l.food.id),
+    )
+    expect([...requis].filter(f => !achetes.has(f))).toEqual([])
+  })
+
+  it('staplesFor grandit avec le nombre de jours', () => {
+    const sept = staplesFor(7)
+    const quatorze = staplesFor(14)
+    expect(quatorze['flocons-d-avoine']).toBeCloseTo(sept['flocons-d-avoine'] * 2, 0)
+  })
+
+  it('n\'achète ni banane ni shaker pour les jours sans séance', () => {
+    // 14 jours = 8 jours avec séance dans la semaine type : la banane suit ce compte,
+    // pas le nombre de jours. En acheter 14 reviendrait à en jeter 6.
+    const jours = 14
+    const bananes = staplesFor(jours)['banane'] / 120
+    expect(bananes).toBeLessThan(jours)
+    expect(bananes).toBeGreaterThan(0)
+  })
+
+  it('ne rajoute rien quand on ne demande aucun jour', () => {
+    expect(staplesFor(0)).toEqual({})
+    expect(staplesFor(-3)).toEqual({})
   })
 })

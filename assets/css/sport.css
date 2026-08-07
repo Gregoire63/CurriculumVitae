@@ -457,6 +457,9 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   .nu-hero-sep { height: auto; width: 1px; }
 }
 
+/* Progrès — sous-navigation entre corps, séances et exercices */
+.rp-nav { position: sticky; top: 0; z-index: 5; background: var(--bg-primary); padding: 4px 0; }
+
 /* Rapport *//* Rapport *//* Rapport */
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .stat { background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 12px; padding: 12px; }

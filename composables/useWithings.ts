@@ -11,7 +11,7 @@ import { composition, dailySeries, mergeEntries, parseActivity, parseGroup, susp
 
 const TOK_KEY = 'gr-withings-tok-v1'
 const BODY_KEY = 'gr-withings-body-v1'
-const ACT_KEY = 'gr-withings-act-v1'
+// Pas de clé pour l'activité : voir `activity` plus bas.
 const SYNC_KEY = 'gr-withings-sync-v1'
 // Clé de l'ancien suivi de poids du module séances, absorbée une fois pour toutes.
 const LEGACY_BW_KEY = 'gr-bodyweight-v1'
@@ -26,6 +26,13 @@ export interface WithingsTokens {
 
 const tokens = ref<WithingsTokens | null>(null)
 const entries = ref<BodyEntry[]>([])
+/**
+ * Pas rapportés par la dernière synchronisation. Volontairement NON persistés et
+ * NON exportés : la valeur qui fait foi est `overrides[jour].steps` côté nutrition,
+ * où `pushToJournal` la reverse. Les garder aussi ici revenait à stocker le même
+ * nombre sous deux clés, exporté deux fois — et à laisser les deux diverger au
+ * premier import d'une sauvegarde partielle.
+ */
 const activity = ref<ActivityDay[]>([])
 const lastSync = ref<number>(0) // epoch (s) du dernier `updatetime` Withings
 const syncing = ref(false)
@@ -48,7 +55,6 @@ export function useWithings() {
     if (hydrated || !import.meta.client) return
     tokens.value = safeParse<WithingsTokens | null>(localStorage.getItem(TOK_KEY), null)
     entries.value = safeParse<BodyEntry[]>(localStorage.getItem(BODY_KEY), [])
-    activity.value = safeParse<ActivityDay[]>(localStorage.getItem(ACT_KEY), [])
     lastSync.value = safeParse<number>(localStorage.getItem(SYNC_KEY), 0)
     absorbLegacy()
     hydrated = true
@@ -199,7 +205,6 @@ export function useWithings() {
         const byDate = new Map(activity.value.map(a => [a.date, a]))
         for (const a of acts) byDate.set(a.date, a)
         activity.value = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date))
-        write(ACT_KEY, activity.value)
       }
 
       lastSync.value = res.updatetime || Math.floor(Date.now() / 1000)
@@ -228,11 +233,6 @@ export function useWithings() {
   const weightSeries = computed(() => dailySeries(entries.value, 'kg'))
   const slope = computed(() => weeklySlope(weightSeries.value))
   const comp = computed(() => composition(entries.value))
-  const stepsByDate = computed(() => Object.fromEntries(activity.value.map(a => [a.date, a.steps])))
-  const stepsFor = (iso: string): number | null => {
-    const s = stepsByDate.value[iso]
-    return typeof s === 'number' ? s : null
-  }
   /**
    * Poids connu le plus proche (avant ou égal) d'une date : sert aux calculs d'énergie.
    * Les pesées en quarantaine sont ignorées — elles fausseraient le métabolisme de base,
@@ -247,7 +247,9 @@ export function useWithings() {
 
   /** Sauvegarde/restauration, branchées sur l'export JSON existant. */
   function snapshot() {
-    return { withingsBody: entries.value, withingsActivity: activity.value }
+    // Les pas ne sont pas ici : ils partent déjà dans la sauvegarde nutrition,
+    // sous `overrides`. Une donnée, un endroit.
+    return { withingsBody: entries.value }
   }
   function restore(data: Record<string, unknown>) {
     if (Array.isArray(data.withingsBody)) {
@@ -255,17 +257,13 @@ export function useWithings() {
       write(BODY_KEY, entries.value)
       mirror()
     }
-    if (Array.isArray(data.withingsActivity)) {
-      activity.value = data.withingsActivity as ActivityDay[]
-      write(ACT_KEY, activity.value)
-    }
   }
 
   return {
     hydrate, connected, tokens, connect, disconnect, adoptFromQuery,
     entries, activity, latest, syncing, syncError, lastSync,
     sync, addManual, removeEntry, confirmEntry, suspects, suspectAts, mirror,
-    weightSeries, slope, comp, stepsFor, weightAt,
+    weightSeries, slope, comp, weightAt,
     snapshot, restore,
   }
 }

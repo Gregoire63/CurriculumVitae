@@ -20,9 +20,11 @@ import { isoOf, shiftIso } from '~/utils/sportStats'
 const {
   hydrate, connected, entries, activity, latest,
   syncing, syncError, lastSync, sync, addManual, removeEntry, confirmEntry,
-  weightSeries, slope, comp, stepsFor, suspects, suspectAts,
+  weightSeries, slope, comp, suspects, suspectAts,
 } = useWithings()
-const { setSteps, dayFor } = useNutrition()
+// stepsFor vient de la NUTRITION, pas de Withings : c'est la copie persistée.
+// Celle de Withings lit le tampon de synchronisation, vide après un rechargement.
+const { setSteps, dayFor, overrides, stepsFor } = useNutrition()
 const { addBodyWeight } = useWorkout()
 const { profile } = useProfile()
 
@@ -132,6 +134,17 @@ const chart = computed(() => {
 })
 
 const stepsToday = computed(() => stepsFor(today))
+
+/**
+ * Historique des pas, lu depuis la nutrition — la seule copie qui persiste.
+ * Il venait du tampon de synchronisation, ce qui affichait un historique vide
+ * après un simple rechargement tant qu'aucune synchro n'avait eu lieu.
+ */
+const stepsHistory = computed(() => Object.entries(overrides.value)
+  .filter(([, o]) => typeof o.steps === 'number' && o.steps > 0)
+  .map(([date, o]) => ({ date, steps: o.steps as number }))
+  .sort((a, b) => a.date.localeCompare(b.date))
+  .slice(-14))
 // Estimation par défaut du planning, pour montrer l'écart avec la réalité mesurée.
 const plannedSteps = computed(() => (dayFor(today).tt ? STEPS_TT : STEPS_ONSITE))
 
@@ -275,7 +288,7 @@ const fmt = (n: number, d = 1) => (n > 0 ? '+' : '') + n.toFixed(d)
     </section>
 
     <!-- Pas -->
-    <section v-if="activity.length" class="card">
+    <section v-if="stepsHistory.length" class="card">
       <h3 class="nu-mode">Pas</h3>
       <p class="nu-note">
         <template v-if="stepsToday !== null">
@@ -290,7 +303,7 @@ const fmt = (n: number, d = 1) => (n > 0 ? '+' : '') + n.toFixed(d)
         </template>
       </p>
       <div class="nu-wi-steps">
-        <div v-for="a in activity.slice(-14)" :key="a.date" class="nu-wi-step">
+        <div v-for="a in stepsHistory" :key="a.date" class="nu-wi-step">
           <span class="mono">{{ a.date.slice(5) }}</span>
           <span class="nu-wi-step-bar" :style="{ width: `${Math.min(100, a.steps / 120)}%` }" />
           <b>{{ a.steps.toLocaleString('fr-FR') }}</b>
