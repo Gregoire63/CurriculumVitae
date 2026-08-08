@@ -3,12 +3,24 @@
 # ============================================================
 
 [build]
-  command = "npm run generate"
+  # `nuxt build` et NON `nuxt generate`.
+  #
+  # `generate` prérend tout le site en fichiers statiques : il n'y a alors aucun
+  # serveur, et server/api/withings/* n'existe tout simplement pas — d'où le 404
+  # sur /api/withings/authorize. Avec `build`, Nitro détecte Netlify et déploie
+  # ces routes en fonctions, sur le même domaine. Les pages listées dans
+  # nitro.prerender restent prérendues : on ne perd rien du statique.
+  command = "npm run build"
   publish = "dist/"
 
 [build.environment]
-  NODE_VERSION = "24"
-  NPM_FLAGS = "--legacy-peer-deps"
+  # Nuxt 4.4 exige ^22.12 || ^24.11 || >=26. « 24 » tout court résout vers la
+  # dernière 24.x, ce qui passe aujourd'hui mais ne le garantit pas : on épingle.
+  NODE_VERSION = "22.12.0"
+  # Plus de --legacy-peer-deps : il masquait le conflit eslint 9/10 et laissait
+  # npm accepter une résolution incorrecte. Le conflit est corrigé dans
+  # package.json ; si l'installation échoue désormais, c'est un vrai problème
+  # qu'il faut voir, pas contourner.
 
 # ============================================================
 # REDIRECTS
