@@ -61,10 +61,18 @@ function reseed() {
   seedFromPlan()
 }
 
-/** Le dimanche à venir : le jour de démarrage naturel, puisqu'on cuisine ce jour-là. */
-const nextSunday = computed(() => {
+/**
+ * Le lundi à venir — et non le dimanche où l'on cuisine.
+ *
+ * Le CYCLE livré a son index 0 sur un LUNDI : c'est ce jour-là que commence le
+ * plan. Démarrer un dimanche décalerait tous les menus d'un jour, et les plats
+ * tomberaient à côté des jours de salle. Cuisiner la veille ne change pas le
+ * premier jour du suivi : on prépare le dimanche, le plan démarre le lundi.
+ */
+const nextMonday = computed(() => {
   const d = new Date(props.todayIso + 'T00:00:00')
-  return shiftIso(props.todayIso, (7 - d.getDay()) % 7 || 7)
+  const dow = (d.getDay() + 6) % 7 // 0 = lundi
+  return dow === 0 ? props.todayIso : shiftIso(props.todayIso, 7 - dow)
 })
 const startLabel = computed(() => {
   if (!startDate.value) return 'Pas encore démarré'
@@ -121,10 +129,13 @@ const startLabel = computed(() => {
         <p class="muted mt-6">
           Les 14 premiers jours sont pré-remplis avec le menu calculé pour toi. Au-delà,
           l'appli ne propose plus rien d'elle-même — tu choisis.
+          <br>
+          Le plan commence un <b>lundi</b> : c'est le premier jour où tu manges, pas le
+          jour où tu cuisines. Démarrer la veille décalerait tous les menus d'un jour.
         </p>
         <div class="nav-row mt-6">
-          <button class="btn" :class="{ sel: startDate === nextSunday }" @click="setStart(nextSunday)">
-            Dimanche {{ nextSunday.slice(8) }}/{{ nextSunday.slice(5, 7) }}
+          <button class="btn" :class="{ sel: startDate === nextMonday }" @click="setStart(nextMonday)">
+            Lundi {{ nextMonday.slice(8) }}/{{ nextMonday.slice(5, 7) }}
           </button>
           <button class="btn" :class="{ sel: startDate === props.todayIso }" @click="setStart(props.todayIso)">Aujourd'hui</button>
           <button v-if="startDate" class="btn" @click="setStart(null)">Effacer</button>
