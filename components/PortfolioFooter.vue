@@ -284,20 +284,6 @@ const socialLinks = [
         animation: heartbeat 1.5s ease-in-out infinite;
     }
 
-    @keyframes heartbeat {
-        0%,
-        100% {
-            transform: scale(1);
-        }
-        10%,
-        30% {
-            transform: scale(1.1);
-        }
-        20%,
-        40% {
-            transform: scale(1);
-        }
-    }
 }
 
 /* Responsive */
@@ -339,4 +325,23 @@ const socialLinks = [
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Sorti du sélecteur parent : le nom d'un @keyframes est toujours global, donc
+   l'imbriquer n'apportait aucune portée — et lightningcss (minifieur de Vite 8)
+   rejette toute at-rule autre que @media/@supports/@container à l'intérieur
+   d'une règle. Vue continue de préfixer les noms en <style scoped>. */
+@keyframes heartbeat {
+        0%,
+        100% {
+            transform: scale(1);
+        }
+        10%,
+        30% {
+            transform: scale(1.1);
+        }
+        20%,
+        40% {
+            transform: scale(1);
+        }
+    }
 </style>

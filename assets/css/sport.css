@@ -673,7 +673,6 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   transform: translateZ(0);
   animation: boot-spin 0.7s linear infinite;
 }
-@keyframes boot-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .boot-spinner { animation-duration: 1.6s; }
 }
@@ -769,7 +768,6 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 }
 .mini-grab { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 34px; height: 4px; border-radius: 999px; background: rgba(254, 252, 248, 0.5); }
 .mini-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bg-primary); flex: 0 0 auto; animation: mini-pulse 1.4s ease-in-out infinite; }
-@keyframes mini-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .mini-main { display: flex; flex-direction: column; min-width: 0; }
 .mini-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-sub { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -800,3 +798,9 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 
 }
 
+/* Animations sorties du bloc .sport-app : le nom d'un @keyframes est TOUJOURS
+   global, l'imbriquer n'apportait aucune portée — et lightningcss, utilisé par
+   Vite 8 pour minifier, rejette une at-rule autre que @media/@supports/@container
+   à l'intérieur d'une règle (« Unknown at rule: @keyframes »). */
+@keyframes boot-spin { to { transform: rotate(360deg); } }
+@keyframes mini-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }

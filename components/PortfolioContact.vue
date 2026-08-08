@@ -546,18 +546,6 @@ const handleSubmit = async (e: Event) => {
         animation-delay: -0.16s;
     }
 
-    @keyframes loading-bounce {
-        0%,
-        80%,
-        100% {
-            transform: scale(0);
-            opacity: 0.5;
-        }
-        40% {
-            transform: scale(1);
-            opacity: 1;
-        }
-    }
 }
 
 .success {
@@ -616,4 +604,21 @@ const handleSubmit = async (e: Event) => {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Sorti du sélecteur parent : le nom d'un @keyframes est toujours global, donc
+   l'imbriquer n'apportait aucune portée — et lightningcss (minifieur de Vite 8)
+   rejette toute at-rule autre que @media/@supports/@container à l'intérieur
+   d'une règle. Vue continue de préfixer les noms en <style scoped>. */
+@keyframes loading-bounce {
+        0%,
+        80%,
+        100% {
+            transform: scale(0);
+            opacity: 0.5;
+        }
+        40% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
 </style>

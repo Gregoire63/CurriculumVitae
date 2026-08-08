@@ -741,7 +741,6 @@
   display: flex; align-items: center; justify-content: center; padding: 16px;
   animation: nu-fade 0.15s ease-out;
 }
-@keyframes nu-fade { from { opacity: 0; } to { opacity: 1; } }
 .nu-photo-box {
   background: var(--bg-primary); border-radius: 16px; overflow: hidden;
   max-width: 560px; width: 100%; max-height: 92vh; display: flex; flex-direction: column;
@@ -776,3 +775,9 @@
 /* Les cartes du module respirent un peu plus que celles de l'app séances. */
 .nu-panel .stack { padding-top: 12px; }
 }
+
+/* Animations sorties du bloc .sport-app : le nom d'un @keyframes est TOUJOURS
+   global, l'imbriquer n'apportait aucune portée — et lightningcss, utilisé par
+   Vite 8 pour minifier, rejette une at-rule autre que @media/@supports/@container
+   à l'intérieur d'une règle (« Unknown at rule: @keyframes »). */
+@keyframes nu-fade { from { opacity: 0; } to { opacity: 1; } }

@@ -413,14 +413,6 @@ const handleNavigate = (section: SectionName) => {
         animation: rotate-slow 25s linear infinite reverse;
     }
 
-    @keyframes rotate-slow {
-        from {
-            transform: rotate(0deg);
-        }
-        to {
-            transform: rotate(360deg);
-        }
-    }
 }
 
 .decoration-line {
@@ -555,4 +547,17 @@ const handleNavigate = (section: SectionName) => {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Sorti du sélecteur parent : le nom d'un @keyframes est toujours global, donc
+   l'imbriquer n'apportait aucune portée — et lightningcss (minifieur de Vite 8)
+   rejette toute at-rule autre que @media/@supports/@container à l'intérieur
+   d'une règle. Vue continue de préfixer les noms en <style scoped>. */
+@keyframes rotate-slow {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
 </style>
