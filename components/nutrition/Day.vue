@@ -239,13 +239,18 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
             <span class="nu-kcal mono">{{ Math.round(m.macros.kcal) }} kcal</span>
           </div>
           <div class="nu-meal-name">{{ m.name }}</div>
-          <div class="muted">{{ m.items.map(i => `${foodName(i.food)} ${i.g} g`).join(' · ') }}</div>
+          <!-- Les grammages ne sont plus ici : ils tiennent sur trois lignes tassées
+               pour une information qu'on ne lit pas en cochant un repas, et qui est
+               de toute façon dans la fiche, à un clic. Reste ce qui identifie le
+               plat — son nom et sa photo. -->
+          <div class="muted nu-meal-more">Voir la recette →</div>
         </button>
         <div class="nu-meal-side">
-          <!-- Photo en lecture seule : ici on coche des repas, on ne gère pas la
-               bibliothèque. La prise de vue se fait dans Nutrition → Plats, une
-               seule fois, puisqu'une photo appartient à la recette et pas au jour. -->
-          <NutritionThumb :id="m.recipeId" :label="m.name" />
+          <!-- Photo en lecture seule, et en grand : c'est elle qu'on reconnaît d'un
+               coup d'œil quand on ouvre la liste, bien avant de lire un nom. La
+               prise de vue se fait dans la fiche du plat, une seule fois, puisqu'une
+               photo appartient à la recette et pas au jour. -->
+          <NutritionThumb :id="m.recipeId" :label="m.name" variant="card" class="nu-meal-photo" />
           <!-- Le plat est PROPOSÉ, pas imposé : quand on cuisine sept boîtes à
                l'avance, on prend celle dont on a envie. Un geste pour corriger,
                et c'est ce qui a été mangé qui compte ensuite dans le stock. -->

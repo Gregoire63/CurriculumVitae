@@ -113,6 +113,10 @@
 .nu-kcal { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 .nu-meal-name { font-family: var(--font-display); font-size: 15px; font-weight: 700; }
 .nu-meal .muted { font-size: 11.5px; line-height: 1.5; }
+.nu-meal-more { font-size: 11px !important; font-weight: 600; color: var(--accent-primary); }
+/* La photo prend enfin de la place : une vignette de 38 px ne se reconnaît pas, et
+   c'est pourtant le repère le plus rapide de toute la liste. */
+.nu-meal-photo { width: 84px; height: 84px; border-radius: 12px; }
 
 /* ─── Feuille recette ───────────────────────────────────────────────────── */
 .nu-ing {
@@ -606,7 +610,7 @@
 .nu-wi-item.quar b { text-decoration: line-through; }
 
 /* ─── Onglet Préparer : trois étapes ────────────────────────────────────── */
-.nu-steps { display: flex; gap: 6px; }
+.nu-wizard { display: flex; gap: 6px; }
 .nu-step {
   flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px;
   padding: 9px 10px; border-radius: 12px; cursor: pointer; font-size: 11.5px; font-weight: 600;
@@ -649,7 +653,7 @@
 }
 .nu-week-lock { font-size: 9.5px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.7; }
 
-.nu-week { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.nu-wk { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .nu-day { display: flex; flex-direction: column; gap: 8px; }
 /* Un jour d'absence reste lisible : il ne disparaît pas, il s'efface. */
 .nu-day.off { opacity: 0.55; }
@@ -751,19 +755,19 @@
   background: var(--bg-primary); color: var(--text-primary); border: 1.5px solid var(--bg-accent);
 }
 .nu-search:focus { outline: none; border-color: var(--accent-primary); }
-.nu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.nu-chip {
+.nu-filt-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.nu-filt {
   display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
   padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
   background: var(--bg-secondary); border: 1.5px solid var(--bg-accent); color: var(--text-muted);
 }
-.nu-chip:hover { border-color: var(--accent-secondary); }
-.nu-chip.on {
+.nu-filt:hover { border-color: var(--accent-secondary); }
+.nu-filt.on {
   border-color: var(--accent-primary); color: var(--accent-primary);
   background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-primary));
 }
-.nu-chip-n { font-size: 10px; opacity: 0.7; }
-.nu-chip.clear { border-style: dashed; }
+.nu-filt-n { font-size: 10px; opacity: 0.7; }
+.nu-filt.clear { border-style: dashed; }
 
 /* Le corps de la carte est un bouton : lire une recette ne doit pas demander
    d'ouvrir son formulaire d'édition. */
@@ -774,9 +778,19 @@
 .nu-plat-more { font-size: 11px; font-weight: 600; color: var(--accent-primary); }
 .nu-plat-open:hover .nu-plat-more { text-decoration: underline; }
 
+/* Pas de photo : une place franche et deux boutons, plutôt qu'un décor flou. */
+.nu-photo-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; aspect-ratio: 16 / 10; padding: 16px;
+  background: var(--bg-secondary); border: 1.5px dashed var(--bg-accent);
+}
+.nu-photo-empty-ico { font-size: 30px; opacity: 0.35; }
+.nu-photo-empty-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.nu-photo-empty-acts .btn { font-size: 12px; padding: 8px 12px; }
+
 /* La fiche d'un plat, ouverte depuis n'importe quelle carte. */
 .rs { padding-top: 0 !important; }
-.rs-cover { position: relative; margin: 0 -16px; }
+.rs-cover { position: relative; margin: 0 -18px; }
 .rs-cover .nu-photo { display: block; width: 100%; }
 .rs-cover .nu-photo-thumb, .rs-cover .nu-photo-add {
   width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; border: none;
@@ -794,9 +808,12 @@
 .rs-n .muted { font-size: 10.5px; }
 .rs-raw { font-size: 11px; margin: 2px 0 0; }
 .rs-steps { margin: 0; }
+/* Un second bouton de fermeture en bas : celui de la photo est parti hors champ
+   dès qu'on a fait défiler, et on se retrouvait à chercher comment sortir. */
+.rs-done { margin-top: 6px; }
 
 /* La recette guidée : des étapes numérotées, dans l'ordre où on les fait. */
-.nu-recipe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--bg-accent); padding-top: 12px; }
+.nu-cook-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--bg-accent); padding-top: 12px; }
 .nu-rstep { display: flex; gap: 10px; align-items: flex-start; }
 .nu-rstep-n {
   width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%;
@@ -844,7 +861,6 @@
 }
 .nu-stepper-l { font-size: 10px; }
 
-.nu-prep { display: flex; flex-direction: column; gap: 8px; }
 .nu-prep-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; margin: 0; }
 .nu-prep-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
 .nu-prep-recipe { border-top: 1px solid var(--bg-accent); padding-top: 8px; }
@@ -902,7 +918,6 @@
 .nu-photo-thumb img { transition: transform 0.35s var(--ease-out); }
 /* L'illustration livrée est légèrement en retrait : elle ne doit pas se faire
    passer pour une photo du plat réellement cuisiné. */
-.nu-photo-thumb.demo img { opacity: 0.82; filter: saturate(0.9); }
 .nu-photo-badge {
   position: absolute; right: 6px; bottom: 6px; width: 24px; height: 24px;
   display: flex; align-items: center; justify-content: center;

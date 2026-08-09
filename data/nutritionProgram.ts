@@ -945,10 +945,9 @@ export const RECIPES: Recipe[] = [
     name: 'Shaker d\'après-séance',
     kind: 'collation',
     batch: false,
-    steps: 'Shaker préparé le matin, poudre à sec dedans, eau ajoutée sur place. Bu au vestiaire, dès la fin de la séance. La créatine part dans le même shaker : un seul geste, donc jamais oubliée.',
+    steps: 'Shaker préparé le matin, poudre à sec dedans, eau ajoutée sur place. Bu au vestiaire, dès la fin de la séance. La créatine n\'est plus ici : elle est passée au petit-déjeuner, tous les jours au même moment — une habitude vaut mieux que deux.',
     items: [
       { food: 'whey-poudre', g: 30 },
-      { food: 'creatine-monohydrate', g: 5 },
     ],
   },
   {
@@ -956,7 +955,7 @@ export const RECIPES: Recipe[] = [
     name: 'Créatine',
     kind: 'collation',
     batch: false,
-    steps: '5 g de monohydrate, tous les jours, y compris sans séance : ce qui compte est la saturation du muscle, pas le timing. Mélangée au porridge, elle ne se sent pas.',
+    steps: '5 g de monohydrate dans le petit-déjeuner, tous les jours, séance ou pas : ce qui compte est la saturation du muscle, pas le moment de la prise. Elle se dissout mal dans l\'eau mais disparaît dans un porridge ou un fromage blanc. À VERSER AU MOMENT DE MANGER, jamais la veille : en milieu acide — et un fromage blanc l\'est — la créatine se dégrade lentement en créatinine, qui ne sert plus à rien. Au frigo la perte reste faible sur trois jours, mais le geste ne coûte rien.',
     items: [
       { food: 'creatine-monohydrate', g: 5 },
     ],
@@ -1016,7 +1015,7 @@ export const RECIPES: Recipe[] = [
     name: 'Overnight oats fruits rouges',
     kind: 'pdj',
     batch: true,
-    steps: 'La veille au soir, ou trois pots d\'un coup le dimanche : avoine, fromage blanc, whey, chia et cannelle dans un bocal, fruits rouges surgelés par-dessus (ils décongèlent pendant la nuit et colorent tout). Rien à faire le matin, ça se mange froid, à la cuillère, au bureau. Se garde 3 jours au frigo.',
+    steps: 'La veille au soir, ou trois pots d\'un coup le dimanche : avoine, fromage blanc, whey, chia et cannelle dans un bocal, fruits rouges surgelés par-dessus (ils décongèlent pendant la nuit et colorent tout). Rien à faire le matin, ça se mange froid, à la cuillère, au bureau. Se garde 3 jours au frigo. La créatine se verse au moment de manger, pas dans le bocal : elle se dégrade lentement dans un mélange acide.',
     items: [
       { food: 'flocons-d-avoine', g: 60 },
       { food: 'fromage-blanc-0', g: 250 },
@@ -1325,6 +1324,7 @@ export interface Slot {
 // Les calories, elles, sont inchangées : c'est la même banane, une heure plus tôt.
 export const SLOTS_GYM: Slot[] = [
   { id: 'pdj', time: '10 h', label: 'Petit-déjeuner', recipe: 'pdj' },
+  { id: 'creatine', time: '10 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
   { id: 'pre', time: '10 h 05', label: 'Banane (avec le petit-déjeuner)', recipe: 'col-pre' },
   { id: 'post', time: '13 h 20', label: 'Après séance', recipe: 'col-post' },
   { id: 'lunch', time: '13 h 40', label: 'Déjeuner (boîte)', from: 'lunch' },
@@ -1338,7 +1338,7 @@ export const SLOTS_GYM: Slot[] = [
 // d'avoir faim à contretemps le lendemain d'un changement.
 export const SLOTS_REST: Slot[] = [
   { id: 'pdj', time: '10 h', label: 'Petit-déjeuner', recipe: 'pdj' },
-  { id: 'creatine', time: '10 h 05', label: 'Créatine', recipe: 'creatine' },
+  { id: 'creatine', time: '10 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
   { id: 'lunch', time: '13 h 40', label: 'Déjeuner (boîte)', from: 'lunch', ratio: 'rest' },
   { id: 'snack', time: '17 h', label: 'Collation', recipe: 'col-aprem-repos' },
   { id: 'dinner', time: '20 h 30', label: 'Dîner', from: 'dinner', ratio: 'rest' },

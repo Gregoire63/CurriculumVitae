@@ -422,7 +422,18 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* La feuille ne défile PAS elle-même : son ascenseur se dessinait par-dessus le
    coin arrondi et débordait visuellement de la carte. C'est le corps qui défile,
    ce qui garde en prime le titre et la croix de fermeture toujours visibles. */
-.sheet { width: 100%; max-width: 560px; max-height: 86vh; overflow: hidden; background: var(--bg-primary); border-radius: 20px 20px 0 0; padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; gap: 12px; }
+/* La feuille défile ENTIÈREMENT : titre, photo, corps. Seul le corps défilait, si
+   bien qu'un en-tête un peu haut — une photo pleine largeur, par exemple — mangeait
+   l'écran sans jamais pouvoir sortir du champ. */
+.sheet {
+  width: 100%; max-width: 560px; max-height: 90vh;
+  background: var(--bg-primary); border-radius: 20px 20px 0 0;
+  padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25);
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
 .sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--bg-accent); margin: 4px auto 2px; flex: 0 0 auto; }
 .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .sheet-title { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
@@ -431,12 +442,11 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .sheet-body {
   display: flex; flex-direction: column; gap: 2px;
   border-top: 1px solid var(--bg-accent); padding-top: 10px;
-  overflow-y: auto; min-height: 0;
-  /* Le défilement ne se propage pas à la page derrière la feuille. */
-  overscroll-behavior: contain;
-  /* Réserve la gouttière : sans ça, le contenu saute de 15 px à l'apparition de l'ascenseur. */
-  scrollbar-gutter: stable;
+  /* Plus de défilement propre : c'est la feuille entière qui défile désormais. Deux
+     zones défilantes imbriquées produisaient un ascenseur interne minuscule sous un
+     en-tête figé, et le geste se perdait de l'une à l'autre. */
 }
+
 .sheet-edit { padding: 13px; font-size: 15px; margin-top: 2px; }
 .sheet-enter-active, .sheet-leave-active { transition: opacity 0.25s; }
 .sheet-enter-active .sheet, .sheet-leave-active .sheet { transition: transform 0.28s var(--ease-out); }

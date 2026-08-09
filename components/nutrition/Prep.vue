@@ -167,7 +167,7 @@ function useMakeAhead() {
       </ol>
     </div>
 
-    <nav class="nu-steps">
+    <nav class="nu-wizard">
       <button class="nu-step" :class="{ on: step === 'semaine' }" @click="step = 'semaine'">
         <span class="nu-step-n">1</span><span>Ma semaine</span>
       </button>
@@ -231,7 +231,7 @@ function useMakeAhead() {
         </p>
       </div>
 
-      <div class="nu-week">
+      <div class="nu-wk">
         <article v-for="d in days" :key="d.dow" class="card nu-day" :class="{ off: d.off }">
           <header class="nu-day-head">
             <span class="nu-day-name">{{ d.name }}</span>
@@ -460,7 +460,7 @@ function useMakeAhead() {
 
         <!-- La préparation. -->
         <div v-if="s.steps.length" class="section-label nu-rec-head">Préparation</div>
-        <ol v-if="s.steps.length" class="nu-recipe">
+        <ol v-if="s.steps.length" class="nu-cook-steps">
           <li v-for="st in s.steps" :key="st.n" class="nu-rstep">
             <span class="nu-rstep-n mono">{{ st.n }}</span>
             <div class="nu-rstep-body">

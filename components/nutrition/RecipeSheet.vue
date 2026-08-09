@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
 import { expandItems, keepsOf, macrosOf, roundMacros } from '~/lib/nutritionStats'
+import { useScrollLock } from '~/composables/useScrollLock'
 
 // LA fiche d'un plat : photo, ingrédients, recette. Une seule, ouverte depuis
 // n'importe quelle carte de l'application.
@@ -39,6 +40,11 @@ const sauceMacros = computed(() => (sauce.value
   ? roundMacros(macrosOf(sauce.value.items, library.value.foods))
   : null))
 const keeps = computed(() => (recipe.value ? keepsOf(recipe.value, library.value) : null))
+
+// La page derrière ne doit pas bouger pendant qu'on lit cette feuille.
+const { lock, unlock } = useScrollLock()
+onMounted(lock)
+onUnmounted(unlock)
 </script>
 
 <template>
@@ -100,6 +106,8 @@ const keeps = computed(() => (recipe.value ? keepsOf(recipe.value, library.value
 
         <div class="section-label">La recette</div>
         <p class="nu-steps rs-steps">{{ recipe.steps }}</p>
+
+        <button class="btn rs-done" @click="emit('close')">Fermer</button>
       </div>
     </div>
   </div>

@@ -14,10 +14,10 @@ const {
   toggleRecipeActive, isRecipeActive, addFood, isCustomFood,
 } = useNutrition()
 
-// Place occupée par les photos, et ménage des photos dont le plat a disparu :
-// sans ça, supprimer un plat laisse son image en base pour toujours.
-const { usage, prune, metas } = usePhotos()
-const photoUsage = computed(() => usage()) // usage() lit metas.value : la dépendance est suivie
+// Ménage des photos dont le plat a disparu : sans ça, supprimer un plat laisse son
+// image en base pour toujours. Le total occupé, lui, ne s'affiche plus — le poids
+// des fichiers n'aide personne à cuisiner.
+const { prune, metas } = usePhotos()
 const orphans = computed(() => Object.keys(metas.value).filter(id => !library.value.recipes[id]))
 const pruning = ref(false)
 async function cleanPhotos() {
@@ -189,38 +189,37 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
         Un plat mis de côté reste consultable mais ne tombe plus dans le planning.
       </p>
 
-      <!-- Les photos sont redimensionnées à 1024 px avant d'être stockées : une photo
-           d'iPhone passe de ~4 Mo à ~90 Ko, et rien ne part sur un serveur. -->
-      <div class="nu-photo-usage" :class="{ warn: photoUsage.warn }">
-        <span class="flex-1">📷 {{ photoUsage.note }}</span>
-        <button v-if="orphans.length" class="btn" :disabled="pruning" @click="cleanPhotos">
-          Nettoyer {{ orphans.length }} orpheline(s)
-        </button>
+      <!-- Ne reste que ce sur quoi on peut agir. Le total occupé s'affichait ici :
+           un chiffre qu'on ne peut ni changer ni utiliser, à côté de photos de
+           gamelles. Les orphelines, elles, se nettoient d'un bouton. -->
+      <div v-if="orphans.length" class="nu-photo-usage">
+        <span class="flex-1">📷 {{ orphans.length }} photo(s) de plats supprimés occupent encore de la place.</span>
+        <button class="btn" :disabled="pruning" @click="cleanPhotos">Nettoyer</button>
       </div>
 
       <!-- Deux axes de filtre : le moment de la journée, et ce qu'il y a dedans.
            Ce sont les deux seules questions qu'on se pose devant trente-cinq plats. -->
       <div class="card nu-filters">
         <input v-model="search" class="nu-search" type="search" placeholder="Chercher un plat ou un ingrédient…">
-        <div class="nu-chips">
-          <button class="nu-chip" :class="{ on: !kindFilter }" @click="kindFilter = null">Tout</button>
+        <div class="nu-filt-row">
+          <button class="nu-filt" :class="{ on: !kindFilter }" @click="kindFilter = null">Tout</button>
           <button
             v-for="k in KINDS" :key="k.id"
-            class="nu-chip" :class="{ on: kindFilter === k.id }"
+            class="nu-filt" :class="{ on: kindFilter === k.id }"
             @click="kindFilter = kindFilter === k.id ? null : k.id"
           >
-            {{ k.label }} <span class="nu-chip-n mono">{{ countOfKind(k.id) }}</span>
+            {{ k.label }} <span class="nu-filt-n mono">{{ countOfKind(k.id) }}</span>
           </button>
         </div>
-        <div class="nu-chips">
+        <div class="nu-filt-row">
           <button
             v-for="b in BASES" :key="b.id"
-            class="nu-chip" :class="{ on: baseFilter === b.id }"
+            class="nu-filt" :class="{ on: baseFilter === b.id }"
             @click="baseFilter = baseFilter === b.id ? null : b.id"
           >
             {{ b.label }}
           </button>
-          <button v-if="kindFilter || baseFilter || search" class="nu-chip clear" @click="clearFilters()">✕ Effacer</button>
+          <button v-if="kindFilter || baseFilter || search" class="nu-filt clear" @click="clearFilters()">✕ Effacer</button>
         </div>
       </div>
 

@@ -31,17 +31,11 @@ const open = ref(false)
 const meta = computed(() => metaOf(props.id))
 const loading = computed(() => busy.value === props.id)
 
-/**
- * Illustration de repli, livrée avec l'appli : un plat sans photo affichait un
- * carré vide, et une bibliothèque de seize carrés vides ne donne envie de rien.
- * Ce sont des visuels flous et volontairement abstraits — ils situent le plat sans
- * prétendre le montrer. Ils disparaissent dès qu'une vraie photo est prise, et les
- * plats créés à la main n'en ont pas (le @error masque l'image manquante).
- */
-const demo = ref<string | null>(`/plats-demo/${props.id}.webp`)
-watch(() => props.id, (id) => { demo.value = `/plats-demo/${id}.webp` })
-const shown = computed(() => thumb.value ?? demo.value)
-const isDemo = computed(() => !thumb.value && !!demo.value)
+// Plus d'illustration de repli. Elles étaient volontairement floues et abstraites
+// pour « situer » le plat, mais une image floue reste une image : on la lit comme
+// une photo ratée, pas comme un placeholder. Mieux vaut une place vide et un bouton
+// clair que du décor qui ment.
+const shown = computed(() => thumb.value)
 
 // Une couverture de carte réclame la taille intermédiaire ; une pastille de 38 px
 // se contente de la vignette. Servir la vignette partout était la cause du flou.
@@ -91,13 +85,23 @@ onUnmounted(() => { open.value = false })
     <button
       v-if="shown"
       class="nu-photo-thumb" :class="{ demo: isDemo }"
-      :title="isDemo ? `Illustration — touche pour photographier ${label}` : `Photo — ${meta?.at.replace('T', ' à ')}`"
-      @click="isDemo ? shoot() : preview()"
+      :title="`Photo — ${meta?.at.replace('T', ' à ')}`"
+      @click="preview()"
     >
-      <img :src="shown" alt="" loading="lazy" @error="demo = null">
-      <span v-if="isDemo" class="nu-photo-badge">📷</span>
+      <img :src="shown" alt="" loading="lazy">
       <span v-if="loading" class="nu-photo-badge">…</span>
     </button>
+
+    <!-- Sans photo : DEUX boutons, pas un. Photographier maintenant et choisir une
+         image existante sont deux gestes différents, et un seul bouton obligeait à
+         deviner lequel il déclenchait. -->
+    <div v-else-if="size === 'cover'" class="nu-photo-empty">
+      <span class="nu-photo-empty-ico">🍽</span>
+      <div class="nu-photo-empty-acts">
+        <button class="btn" :disabled="loading" @click="shoot">📷 Prendre une photo</button>
+        <button class="btn" :disabled="loading" @click="pick">🖼 Choisir une image</button>
+      </div>
+    </div>
     <button v-else class="nu-photo-add" :disabled="loading" :title="`Photographier${label ? ` — ${label}` : ''}`" @click="shoot">
       {{ loading ? '…' : '📷' }}
     </button>

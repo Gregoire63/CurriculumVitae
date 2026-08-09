@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import type { Macros, MacroTargets } from '~/lib/nutritionStats'
 import { KCAL_G, KCAL_L, KCAL_P, macroGaps } from '~/lib/nutritionStats'
+import { useScrollLock } from '~/composables/useScrollLock'
 
 // Détail des écarts par macronutriment. Ouvert en touchant le camembert : le cercle
 // dit « de quoi c'est fait », cette feuille dit « ce qu'il manque, et quoi en faire ».
@@ -13,6 +14,11 @@ const eatenKcal = computed(() =>
   Math.round(props.eaten.p * KCAL_P + props.eaten.g * KCAL_G + props.eaten.l * KCAL_L))
 
 const TONE_LABEL = { ok: 'dans la cible', low: 'il en manque', high: 'au-dessus' } as const
+
+// La page derrière ne doit pas bouger pendant qu'on lit cette feuille.
+const { lock, unlock } = useScrollLock()
+onMounted(lock)
+onUnmounted(unlock)
 </script>
 
 <template>

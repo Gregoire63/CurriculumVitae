@@ -19,20 +19,19 @@ const props = withDefaults(defineProps<{ id: string, label?: string, variant?: P
 const { has, urlOf } = usePhotos()
 
 const url = ref<string | null>(null)
-const demo = ref<string | null>(null)
 
-// Même repli que dans la bibliothèque : une illustration livrée plutôt qu'un carré vide.
+// Aucune illustration de repli : une image floue « qui situe le plat » se lit comme
+// une photo ratée. Une place vide dit la vérité — il n'y a pas encore de photo.
 watch(() => [props.id, props.variant] as const, async ([id, variant]) => {
-  demo.value = `/plats-demo/${id}.webp`
   url.value = has(id) ? await urlOf(id, variant) : null
 }, { immediate: true })
 
-const shown = computed(() => url.value ?? demo.value)
+const shown = computed(() => url.value)
 </script>
 
 <template>
   <div class="nu-thumb">
-    <img v-if="shown" :src="shown" :alt="label ?? ''" loading="lazy" @error="demo = null">
+    <img v-if="shown" :src="shown" :alt="label ?? ''" loading="lazy">
     <span v-else class="nu-thumb-empty">🍽</span>
   </div>
 </template>

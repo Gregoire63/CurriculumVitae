@@ -1,57 +1,58 @@
 {
-    "name": "nuxt-app",
-    "type": "module",
-    "private": true,
-    "scripts": {
-        "build": "nuxt build",
-        "dev": "nuxt dev",
-        "generate": "nuxt generate",
-        "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
-        "start": "node .output/server/index.mjs",
-        "test": "vitest",
-        "test:watch": "vitest --watch",
-        "test:nuxt": "vitest --project nuxt"
-    },
-    "dependencies": {
-        "@nuxt/fonts": "^0.13.0",
-        "@nuxt/icon": "1.10.3",
-        "@nuxt/image": "^2.0.0",
-        "@pinia/nuxt": "^0.11.3",
-        "@vueuse/core": "^12.8.2",
-        "@vueuse/motion": "^3.0.3",
-        "@vueuse/nuxt": "^12.2.0",
-        "nuxt": "^4.5.2",
-        "nuxt-gtag": "^4.1.0",
-        "pinia": "^3.0.4",
-        "vue": "^3.5.27",
-        "vue-router": "^4.6.4"
-    },
-    "devDependencies": {
-        "@antfu/eslint-config": "^9.3.0",
-        "@iconify-json/heroicons": "^1.2.3",
-        "@iconify-json/lucide": "^1.2.88",
-        "@nuxt/test-utils": "^3.23.0",
-        "@nuxtjs/robots": "^5.7.0",
-        "@nuxtjs/sitemap": "^7.6.0",
-        "@types/node": "^25.2.1",
-        "@vue/test-utils": "^2.4.6",
-        "eslint": "^10.0.0",
-        "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-prettier": "^5.2.1",
-        "happy-dom": "^20.9.0",
-        "lint-staged": "^15.3.0",
-        "prettier": "^3.4.2",
-        "typescript": "^5.7.2",
-        "vitest": "^3.2.4"
-    },
-    "overrides": {
-        "esbuild": "^0.28.1",
-        "sharp": "^0.35.3",
-        "postcss": "^8.5.26",
-        "@nuxt/devtools": "^3.4.1"
-    },
-    "engines": {
-        "node": ">=22.12.0"
-    }
+  "name": "nuxt-app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "start": "node .output/server/index.mjs",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:nuxt": "vitest --project nuxt",
+    "check:css": "node scripts/check-css-dupes.mjs"
+  },
+  "dependencies": {
+    "@nuxt/fonts": "^0.13.0",
+    "@nuxt/icon": "1.10.3",
+    "@nuxt/image": "^2.0.0",
+    "@pinia/nuxt": "^0.11.3",
+    "@vueuse/core": "^12.8.2",
+    "@vueuse/motion": "^3.0.3",
+    "@vueuse/nuxt": "^12.2.0",
+    "nuxt": "^4.5.2",
+    "nuxt-gtag": "^4.1.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.27",
+    "vue-router": "^4.6.4"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^9.3.0",
+    "@iconify-json/heroicons": "^1.2.3",
+    "@iconify-json/lucide": "^1.2.88",
+    "@nuxt/test-utils": "^3.23.0",
+    "@nuxtjs/robots": "^5.7.0",
+    "@nuxtjs/sitemap": "^7.6.0",
+    "@types/node": "^25.2.1",
+    "@vue/test-utils": "^2.4.6",
+    "eslint": "^10.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.2.1",
+    "happy-dom": "^20.9.0",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "sharp": "^0.35.3",
+    "postcss": "^8.5.26",
+    "@nuxt/devtools": "^3.4.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

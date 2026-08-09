@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
@@ -10,6 +10,7 @@ import { EFFORT_OPTIONS } from '~/utils/sportStats'
 import {
   bmrMifflin, buildDay, dayBurn, dayEnergy, roundMacros, sessionsOn,
 } from '~/lib/nutritionStats'
+import { useScrollLock } from '~/composables/useScrollLock'
 
 // Ce qui s'est passé une journée donnée — et deux façons d'y revenir : rouvrir la
 // séance, ou rouvrir les repas.
@@ -75,6 +76,11 @@ const doneCount = computed(() => plan.value?.meals.filter(m => done.value.has(m.
 // Pesées du jour, hors quarantaine — l'onglet Rapport gère les cas litigieux.
 const weighIns = computed(() =>
   bodyEntries.value.filter(e => e.date === props.iso && !suspectAts.value.has(e.at)))
+
+// La page derrière ne doit pas bouger pendant qu'on lit cette feuille.
+const { lock, unlock } = useScrollLock()
+onMounted(lock)
+onUnmounted(unlock)
 </script>
 
 <template>
