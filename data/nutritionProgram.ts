@@ -20,7 +20,19 @@ export interface Food {
   buy?: string // repère d'achat / de pesée affiché dans la liste de courses
   custom?: boolean // ajouté par l'utilisateur depuis l'emballage
   micro?: Partial<Record<MicroKey, number>> // micronutriments pour 100 g (voir MICRO_REFS)
+  /**
+   * Jours de conservation au réfrigérateur UNE FOIS CUISINÉ, à 4 °C.
+   *
+   * C'est ce qui décide si un plat peut être préparé le dimanche pour toute la
+   * semaine ou s'il faut le refaire en milieu de semaine. Sans ce chiffre, « je
+   * cuisine tout dimanche » revient à manger du poulet de six jours le samedi.
+   * Absent = KEEPS_DEFAULT, le cas des féculents et des légumes cuits.
+   */
+  keeps?: number
 }
+
+/** Conservation par défaut d'un aliment cuisiné, en jours au frigo. */
+export const KEEPS_DEFAULT = 4
 
 export const CAT_LABELS: Record<FoodCat, string> = {
   viandes: 'Viandes / poissons',
@@ -88,6 +100,7 @@ export const FOODS: Food[] = [
     p: 23,
     g: 0,
     l: 1.8,
+    keeps: 3,
     micro: { ca: 8, fe: 0.5, mg: 28, zn: 0.9, k: 350, vd: 0.1, o3: 30, b9: 5 },
   },
   {
@@ -98,6 +111,7 @@ export const FOODS: Food[] = [
     p: 22,
     g: 0,
     l: 1.5,
+    keeps: 3,
     micro: { ca: 10, fe: 0.7, mg: 28, zn: 1.5, k: 330, vd: 0.1, o3: 25, b9: 8 },
   },
   {
@@ -108,6 +122,7 @@ export const FOODS: Food[] = [
     p: 21,
     g: 0,
     l: 5,
+    keeps: 3,
     micro: { ca: 8, fe: 2.6, mg: 22, zn: 4.5, k: 330, vd: 0.2, o3: 30, b9: 8 },
   },
   {
@@ -118,6 +133,7 @@ export const FOODS: Food[] = [
     p: 18,
     g: 0,
     l: 0.8,
+    keeps: 2,
     micro: { ca: 20, fe: 0.2, mg: 25, zn: 0.4, k: 380, vc: 1, vd: 1, o3: 200, b9: 8 },
   },
   {
@@ -128,6 +144,7 @@ export const FOODS: Food[] = [
     p: 20,
     g: 0,
     l: 13,
+    keeps: 2,
     micro: { ca: 12, fe: 0.4, mg: 28, zn: 0.5, k: 380, vd: 8, o3: 2200, b9: 26 },
   },
   {
@@ -138,6 +155,7 @@ export const FOODS: Food[] = [
     p: 26,
     g: 0,
     l: 1,
+    keeps: 3,
     micro: { ca: 15, fe: 1, mg: 30, zn: 0.7, k: 240, vd: 2, o3: 250, b9: 4 },
   },
   {
@@ -149,6 +167,7 @@ export const FOODS: Food[] = [
     g: 0.7,
     l: 10,
     buy: '1 œuf ≈ 55 g',
+    keeps: 3,
     micro: { ca: 55, fe: 1.8, mg: 12, zn: 1.3, k: 130, vd: 2, o3: 90, b9: 50 },
   },
   {
@@ -223,6 +242,7 @@ export const FOODS: Food[] = [
     g: 4,
     l: 0.4,
     buy: 'frais ou surgelés',
+    keeps: 4,
     micro: { fib: 3, ca: 47, fe: 0.7, mg: 21, zn: 0.4, k: 320, vc: 90, b9: 63 },
   },
   {
@@ -264,6 +284,7 @@ export const FOODS: Food[] = [
     p: 1.2,
     g: 4,
     l: 0.2,
+    keeps: 4,
     micro: { fib: 1.2, ca: 12, fe: 0.6, mg: 11, zn: 0.2, k: 250, vc: 10, b9: 15 },
   },
   {
@@ -284,6 +305,7 @@ export const FOODS: Food[] = [
     p: 3,
     g: 1,
     l: 0.3,
+    keeps: 3,
     micro: { fib: 2, ca: 4, fe: 0.5, mg: 10, zn: 0.5, k: 350, vc: 2, vd: 0.2, b9: 25 },
   },
   {
@@ -295,6 +317,7 @@ export const FOODS: Food[] = [
     g: 1.5,
     l: 0.4,
     buy: 'surgelés ou frais',
+    keeps: 2,
     micro: { fib: 2.5, ca: 100, fe: 2.7, mg: 55, zn: 0.5, k: 500, vc: 30, b9: 150 },
   },
   {
@@ -305,6 +328,7 @@ export const FOODS: Food[] = [
     p: 1.4,
     g: 1.5,
     l: 0.2,
+    keeps: 1,
     micro: { fib: 1.3, ca: 35, fe: 0.7, mg: 11, zn: 0.2, k: 220, vc: 8, b9: 55 },
   },
   {
@@ -653,44 +677,11 @@ export const SLOTS_REST: Slot[] = [
   { id: 'night', time: '22 h 30', label: 'Avant de dormir', recipe: 'col-soir-repos' },
 ]
 
-export interface BatchSession {
-  id: string
-  when: string
-  duration: string
-  covers: string
-  tasks: string[]
-}
-
-// Deux sessions par semaine. Règle qui rend le batch cooking compatible avec un
-// déficit : le féculent est cuit EN VRAC et pesé au moment de remplir la boîte —
-// c'est ce qui permet de moduler les portions sans cuisiner deux versions.
-export const BATCH_SESSIONS: BatchSession[] = [
-  {
-    id: 'dim',
-    when: 'Dimanche, 17 h',
-    duration: '≈ 1 h 15',
-    covers: 'Lundi → mercredi',
-    tasks: [
-      '3 portions de la boîte du début de semaine',
-      'Le féculent de la semaine cuit en vrac (riz ou pommes de terre), non portionné',
-      'Les lentilles si la semaine en contient',
-      'Laver et couper les légumes du dîner pour les 3 jours',
-      'Préparer les 3 shakers à sec (poudre dans le shaker, prêts à partir)',
-    ],
-  },
-  {
-    id: 'mer',
-    when: 'Mercredi soir, 20 h',
-    duration: '≈ 1 h 15',
-    covers: 'Jeudi → dimanche',
-    tasks: [
-      '4 portions de la deuxième boîte',
-      'Le féculent de fin de semaine cuit en vrac',
-      'Laver et couper les légumes des dîners restants',
-      'Préparer les shakers à sec de la fin de semaine',
-    ],
-  },
-]
+// Les sessions de cuisine ne sont plus une liste écrite à la main : elles sont
+// CALCULÉES d'après la semaine choisie et la conservation de chaque plat (voir
+// `cookPlan` dans lib/nutritionStats.ts). Deux textes figés ne pouvaient pas dire
+// ce qu'il faut cuisiner quand la semaine change — et c'est précisément ce qui
+// change toutes les semaines.
 
 // Trois choses à emporter chaque matin de séance. Si l'une manque, la journée se
 // décale — et un déjeuner improvisé après une séance, c'est ~300 kcal de plus.

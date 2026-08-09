@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CAT_ORDER, CYCLE_LENGTH, FOOD_BY_ID, MICRO_REFS, RATIO_DINNER_GYM, RATIO_REST, RECIPE_BY_ID, STARCHY_IDS,
-  SLOTS_GYM, SLOTS_REST,
+  CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, MICRO_REFS, RATIO_DINNER_GYM, RATIO_REST,
+  RECIPE_BY_ID, STARCHY_IDS, SLOTS_GYM, SLOTS_REST,
 } from '../../data/nutritionProgram'
 import {
   ADJUST_THRESHOLD, CARRY_MAX_PER_DAY, DEFAULT_WEEK, DEFICIT_MAX, DEFICIT_MIN, STEPS_TT,
@@ -12,9 +12,9 @@ import {
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   adjustPlanFor, applySteps, LEAVE_MAX, removalSteps, adjustRemaining, upcomingPlan, ADJUST_MAX,
   FAT_PER_KG, KCAL_L, KCAL_P, MACRO_BAND, donutArcs, macroGaps, macroTargets,
-  PRECONFIG_DAYS, cycleIndexFrom, prepGroups, seedSelection, selectionTotals,
-  shoppingFromSelection, staplesFor, stockOf,
-  sessionBurn, sessionsOn, shoppingFor, targetFor, targetOf, tdeeOf, usableDuration,
+  builtinWeeks, cookPlan, cookSelection, cookSlotFor, keepsOf, listDays, normalizeWeek,
+  selectionTotals, shoppingFrom, shoppingFromWeek, stockOf, weekDayPlans, weekDaysOn, weekGrams,
+  sessionBurn, sessionsOn, targetFor, targetOf, tdeeOf, usableDuration,
   workSetCount,
 } from '../../lib/nutritionStats'
 import type { TrainingLike } from '../../lib/nutritionStats'
@@ -189,6 +189,20 @@ describe('position dans le cycle', () => {
 })
 
 // ─── Liste de courses et budget ──────────────────────────────────────────────
+/**
+ * Les courses d'une suite de jours du cycle. `shoppingFrom` ne prend que des
+ * grammes : agréger les jours est le travail de l'appelant, et ce petit helper
+ * évite de garder dans la bibliothèque une deuxième façon de bâtir une liste.
+ */
+function shoppingFor(indices: number[], trainedFor: (i: number) => boolean) {
+  const grams: Record<string, number> = {}
+  for (const i of indices) {
+    for (const meal of buildDay(i, trainedFor(i)).meals) {
+      for (const it of meal.items) grams[it.food] = (grams[it.food] ?? 0) + it.g
+    }
+  }
+  return shoppingFrom(grams)
+}
 describe('liste de courses', () => {
   const all = Array.from({ length: CYCLE_LENGTH }, (_, i) => i)
 
@@ -904,26 +918,219 @@ describe('donutArcs', () => {
   })
 })
 
-// ─── Sélection, courses et préparation ───────────────────────────────────────
-describe('sélection', () => {
-  const sel = seedSelection()
+// ─── Semaine type, courses et cuisine ────────────────────────────────────────
+const GYM_WEEK = [true, true, false, true, true, false, false]
+const NO_GYM = [false, false, false, false, false, false, false]
+const A = () => builtinWeeks()[0]
 
-  it('retient les repas principaux, y compris ceux cuisinés le soir même', () => {
+describe('semaines livrées', () => {
+  it('découpe le cycle de quatorze jours en deux semaines de sept', () => {
+    const [a, b] = builtinWeeks()
+    expect(a.days).toHaveLength(7)
+    expect(b.days).toHaveLength(7)
+    expect(a.days[0].slots.lunch).toBe(CYCLE[0].lunch)
+    expect(b.days[0].slots.lunch).toBe(CYCLE[7].lunch)
+  })
+
+  it('les marque comme livrées : elles se réinitialisent, elles ne se perdent pas', () => {
+    for (const w of builtinWeeks()) expect(w.builtin).toBe(true)
+  })
+
+  it('normalise une semaine tronquée sans lever d\'erreur', () => {
+    const w = normalizeWeek({ id: 'x', days: [{ slots: { lunch: 'boite-a' } }] })!
+    expect(w.days).toHaveLength(7)
+    expect(w.days[6]).toEqual({ off: false, slots: {} })
+    expect(w.name).toBe('Ma semaine')
+  })
+
+  it('refuse ce qui n\'est pas une semaine', () => {
+    expect(normalizeWeek(null)).toBeNull()
+    expect(normalizeWeek({ id: 'x' })).toBeNull()
+  })
+})
+
+describe('ce que la semaine impose', () => {
+  it('compte une portion par repas principal réellement prévu', () => {
+    const sel = cookSelection(A(), GYM_WEEK)
+    expect(Object.values(sel).reduce((a, b) => a + b, 0)).toBe(14)
     for (const id of Object.keys(sel)) expect(['boite', 'diner']).toContain(RECIPE_BY_ID[id].kind)
-    // Un dîner minute s'achète quand même : ne garder que les plats « batch »
-    // donnait une liste de courses amputée de la moitié des dîners.
+  })
+
+  it('un dîner minute compte quand même : il s\'achète et se cuisine', () => {
+    const sel = cookSelection(A(), GYM_WEEK)
     expect(Object.keys(sel).some(id => !RECIPE_BY_ID[id].batch)).toBe(true)
   })
 
-  it('il couvre bien 14 midis et 14 dîners', () => {
-    expect(Object.values(sel).reduce((a, b) => a + b, 0)).toBe(28)
-  })
-
-  it('les collations restent dehors : elles s\'achètent au paquet, pas à la portion', () => {
-    expect(Object.keys(sel)).not.toContain('col-post')
+  it('les collations restent hors sélection : on ne choisit pas son porridge', () => {
+    const sel = cookSelection(A(), GYM_WEEK)
     expect(Object.keys(sel)).not.toContain('pdj')
+    expect(Object.keys(sel)).not.toContain('col-post')
   })
 
+  it('un jour d\'absence ne coûte ni portion ni course', () => {
+    const week = A()
+    week.days[5].off = true
+    week.days[6].off = true
+    expect(weekDaysOn(week)).toBe(5)
+    const sel = cookSelection(week, GYM_WEEK)
+    expect(Object.values(sel).reduce((a, b) => a + b, 0)).toBe(10)
+    const grams = weekGrams(week, GYM_WEEK)
+    const plein = weekGrams(A(), GYM_WEEK)
+    expect(grams['flocons-d-avoine']).toBeLessThan(plein['flocons-d-avoine'])
+  })
+
+  it('une surcharge de créneau change le plat servi', () => {
+    const week = A()
+    week.days[0].slots.pdj = 'col-aprem-repos'
+    const plan = weekDayPlans(week, GYM_WEEK)[0]!
+    expect(plan.meals.find(m => m.slot === 'pdj')!.recipeId).toBe('col-aprem-repos')
+  })
+})
+
+describe('les courses de la semaine', () => {
+  it('couvre TOUS les aliments de la semaine, petit-déjeuner compris', () => {
+    // Le vrai test de la liste : ne pas rentrer du magasin sans petit-déjeuner.
+    // Huit aliments manquaient jadis — avoine, fromage blanc, whey, fruits rouges,
+    // banane, créatine, pomme, amandes — parce qu'ils n'étaient dans aucun plat.
+    const requis = new Set<string>()
+    for (const plan of weekDayPlans(A(), GYM_WEEK)) {
+      for (const m of plan!.meals) for (const it of m.items) requis.add(it.food)
+    }
+    const achetes = new Set(shoppingFromWeek(A(), GYM_WEEK).flatMap(c => c.lines).map(l => l.food.id))
+    expect([...requis].filter(f => !achetes.has(f))).toEqual([])
+  })
+
+  it('n\'achète ni banane ni shaker pour les jours sans séance', () => {
+    const avec = weekGrams(A(), GYM_WEEK)
+    const sans = weekGrams(A(), NO_GYM)
+    expect(sans['banane']).toBeUndefined()
+    expect(avec['banane']).toBe(4 * 120)
+  })
+
+  it('achète moins de féculents quand les séances sautent', () => {
+    expect(weekGrams(A(), NO_GYM)['riz-basmati']).toBeLessThan(weekGrams(A(), GYM_WEEK)['riz-basmati'])
+  })
+
+  it('additionne un ingrédient partagé sur une seule ligne', () => {
+    const ids = shoppingFromWeek(A(), GYM_WEEK).flatMap(c => c.lines).map(l => l.food.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('suit l\'ordre des rayons, pas l\'ordre alphabétique', () => {
+    const ranks = shoppingFromWeek(A(), GYM_WEEK).map(c => CAT_ORDER.indexOf(c.cat))
+    expect(ranks).toEqual([...ranks].sort((a, b) => a - b))
+  })
+
+  it('trie chaque rayon du plus lourd au plus léger', () => {
+    for (const { lines } of shoppingFromWeek(A(), GYM_WEEK)) {
+      for (let i = 1; i < lines.length; i++) expect(lines[i - 1].grams).toBeGreaterThanOrEqual(lines[i].grams)
+    }
+  })
+
+  it('rend une liste vide quand la semaine entière est vide', () => {
+    expect(shoppingFrom({})).toEqual([])
+  })
+
+  it('formate les quantités en kg au-delà du kilo', () => {
+    expect(fmtQty(850)).toBe('850 g')
+    expect(fmtQty(1500)).toBe('1,5 kg')
+  })
+})
+
+describe('conservation', () => {
+  it('prend la durée la plus courte des ingrédients', () => {
+    // Boîte A = poulet (3 j) + riz et légumes (4 j par défaut) → 3 jours.
+    expect(keepsOf(RECIPE_BY_ID['boite-a'])).toBe(3)
+    // Le poisson tombe à 2 jours et tire tout le plat avec lui.
+    expect(keepsOf(RECIPE_BY_ID['din-poisson'])).toBe(2)
+  })
+
+  it('retombe sur la valeur par défaut sans information', () => {
+    expect(keepsOf({ id: 'x', name: 'x', kind: 'boite', batch: true, steps: '', items: [] })).toBe(KEEPS_DEFAULT)
+  })
+})
+
+describe('répartition des sessions de cuisine', () => {
+  it('le dimanche couvre tout ce qui tient depuis la veille du lundi', () => {
+    expect(cookSlotFor(0, 3, true)).toBe('dim')
+    expect(cookSlotFor(2, 3, true)).toBe('dim')
+  })
+
+  it('bascule au mercredi soir ce qui n\'aurait pas tenu', () => {
+    // Un plat de 3 jours mangé jeudi : 5 jours après le dimanche, impossible.
+    expect(cookSlotFor(3, 3, true)).toBe('mer')
+    expect(cookSlotFor(5, 3, true)).toBe('mer')
+  })
+
+  it('laisse au jour même ce que même le mercredi ne couvre pas', () => {
+    expect(cookSlotFor(6, 3, true)).toBe('minute')
+    expect(cookSlotFor(5, 2, true)).toBe('minute')
+  })
+
+  it('un plat qui tient toute la semaine se fait entièrement le dimanche', () => {
+    for (let d = 0; d < 7; d++) expect(cookSlotFor(d, 8, true)).toBe('dim')
+  })
+
+  it('un plat qui ne se prépare pas à l\'avance reste au soir même', () => {
+    expect(cookSlotFor(0, 9, false)).toBe('minute')
+  })
+})
+
+describe('cookPlan', () => {
+  const sessions = cookPlan(A(), GYM_WEEK)
+  const byId = Object.fromEntries(sessions.map(s => [s.id, s]))
+
+  it('ouvre par le dimanche et ne remonte jamais une session vide', () => {
+    expect(sessions[0].id).toBe('dim')
+    for (const s of sessions) expect(s.dishes.length).toBeGreaterThan(0)
+  })
+
+  it('ne cuisine deux fois aucune portion', () => {
+    const total = sessions.reduce((n, s) => n + s.dishes.reduce((m, d) => m + d.n, 0), 0)
+    expect(total).toBe(14)
+  })
+
+  it('range chaque portion dans la session que sa conservation autorise', () => {
+    for (const s of sessions) {
+      for (const d of s.dishes) {
+        for (const dow of d.days) {
+          expect(cookSlotFor(dow, d.keeps, !!RECIPE_BY_ID[d.recipeId].batch)).toBe(s.id)
+        }
+      }
+    }
+  })
+
+  it('nomme les jours concernés en toutes lettres', () => {
+    expect(listDays([0, 1, 3])).toBe('lundi, mardi et jeudi')
+    expect(listDays([2])).toBe('mercredi')
+  })
+
+  it('estime une durée pour les sessions, pas pour le soir même', () => {
+    expect(byId.dim.minutes).toBeGreaterThan(0)
+    expect(byId.minute?.minutes ?? 0).toBe(0)
+  })
+
+  it('regroupe la préparation par geste, sauf pour le soir même', () => {
+    expect(byId.dim.groups.map(g => g.id)).toContain('feculents')
+    expect(byId.minute?.groups ?? []).toEqual([])
+  })
+
+  it('rappelle de ne PAS portionner les féculents', () => {
+    expect(byId.dim.groups.find(g => g.id === 'feculents')!.hint).toMatch(/SANS portionner/)
+  })
+
+  it('dit que les plats du soir même sont quand même dans les courses', () => {
+    expect(byId.minute.hint).toMatch(/liste de courses/)
+  })
+
+  it('ne propose aucune session sur une semaine entièrement absente', () => {
+    const week = A()
+    week.days.forEach((d) => { d.off = true })
+    expect(cookPlan(week, GYM_WEEK)).toEqual([])
+  })
+})
+
+describe('totaux et stock', () => {
   it('les totaux suivent le nombre de portions', () => {
     const one = selectionTotals({ 'boite-a': 1 })
     const three = selectionTotals({ 'boite-a': 3 })
@@ -937,119 +1144,9 @@ describe('sélection', () => {
     expect(t.portions).toBe(0)
     expect(t.kcal).toBe(0)
   })
-})
 
-describe('shoppingFromSelection', () => {
-  it('multiplie les ingrédients par les portions', () => {
-    const one = shoppingFromSelection({ 'boite-a': 1 })
-    const four = shoppingFromSelection({ 'boite-a': 4 })
-    const gramsOf = (l: ReturnType<typeof shoppingFromSelection>) =>
-      l.flatMap(c => c.lines).reduce((n, x) => n + x.grams, 0)
-    expect(gramsOf(four)).toBeCloseTo(gramsOf(one) * 4, 0)
-  })
-
-  it('additionne un ingrédient partagé par deux plats sur une seule ligne', () => {
-    const list = shoppingFromSelection({ 'boite-a': 2, 'boite-b': 2 })
-    const ids = list.flatMap(c => c.lines).map(l => l.food.id)
-    expect(new Set(ids).size).toBe(ids.length)
-  })
-
-  it('suit l\'ordre des rayons, pas l\'ordre alphabétique', () => {
-    const cats = shoppingFromSelection(seedSelection()).map(c => c.cat)
-    const ranks = cats.map(c => CAT_ORDER.indexOf(c))
-    expect(ranks).toEqual([...ranks].sort((a, b) => a - b))
-  })
-
-  it('rend une liste vide sur une sélection vide', () => {
-    expect(shoppingFromSelection({})).toEqual([])
-  })
-})
-
-describe('prepGroups', () => {
-  const groups = prepGroups(seedSelection())
-
-  it('regroupe par geste, et sépare l\'avance du minute', () => {
-    const ids = groups.map(g => g.id)
-    expect(ids).toContain('boites')
-    expect(ids).toContain('minute')
-    expect(ids.indexOf('boites')).toBeLessThan(ids.indexOf('minute'))
-  })
-
-  it('dit explicitement que les plats minute sont quand même dans les courses', () => {
-    expect(groups.find(g => g.id === 'minute')!.hint).toMatch(/liste de courses/)
-  })
-
-  it('rappelle de ne PAS portionner les féculents', () => {
-    const f = groups.find(g => g.id === 'feculents')!
-    expect(f.hint).toMatch(/SANS portionner/)
-  })
-
-  it('ne propose rien sur une sélection vide', () => {
-    expect(prepGroups({})).toEqual([])
-  })
-})
-
-describe('cycleIndexFrom', () => {
-  it('compte les jours depuis le démarrage', () => {
-    expect(cycleIndexFrom('2026-08-09', '2026-08-09')).toBe(0)
-    expect(cycleIndexFrom('2026-08-09', '2026-08-12')).toBe(3)
-  })
-
-  it('ne propose plus rien passé les quatorze jours', () => {
-    expect(cycleIndexFrom('2026-08-09', '2026-08-23')).toBeNull()
-  })
-
-  it('ne propose rien avant le démarrage ni sans démarrage', () => {
-    expect(cycleIndexFrom('2026-08-09', '2026-08-08')).toBeNull()
-    expect(cycleIndexFrom(null, '2026-08-12')).toBeNull()
-  })
-})
-
-describe('stockOf', () => {
-  it('retranche ce qui a été mangé', () => {
+  it('retranche ce qui a été mangé, sans jamais descendre sous zéro', () => {
     expect(stockOf({ 'boite-a': 4 }, { 'boite-a': 3 })).toEqual({ 'boite-a': 1 })
-  })
-
-  it('ne descend jamais sous zéro', () => {
     expect(stockOf({ 'boite-a': 2 }, { 'boite-a': 5 })).toEqual({ 'boite-a': 0 })
-  })
-})
-
-describe('le quotidien dans les courses', () => {
-  it('la liste couvre TOUS les aliments des 14 jours, pas seulement les plats choisis', () => {
-    // Le vrai test de la liste : partir du plan livré et vérifier qu'on ne rentre
-    // pas du magasin sans petit-déjeuner. Huit aliments manquaient — flocons
-    // d'avoine, fromage blanc, whey, fruits rouges, banane, créatine, pomme,
-    // amandes — parce qu'ils n'étaient dans aucun plat « choisi ».
-    const requis = new Set<string>()
-    for (let i = 0; i < 14; i++) {
-      for (const m of buildDay(i, DEFAULT_TRAINED(i)).meals) {
-        for (const it of m.items) requis.add(it.food)
-      }
-    }
-    const achetes = new Set(
-      shoppingFromSelection(seedSelection(), undefined, 14).flatMap(c => c.lines).map(l => l.food.id),
-    )
-    expect([...requis].filter(f => !achetes.has(f))).toEqual([])
-  })
-
-  it('staplesFor grandit avec le nombre de jours', () => {
-    const sept = staplesFor(7)
-    const quatorze = staplesFor(14)
-    expect(quatorze['flocons-d-avoine']).toBeCloseTo(sept['flocons-d-avoine'] * 2, 0)
-  })
-
-  it('n\'achète ni banane ni shaker pour les jours sans séance', () => {
-    // 14 jours = 8 jours avec séance dans la semaine type : la banane suit ce compte,
-    // pas le nombre de jours. En acheter 14 reviendrait à en jeter 6.
-    const jours = 14
-    const bananes = staplesFor(jours)['banane'] / 120
-    expect(bananes).toBeLessThan(jours)
-    expect(bananes).toBeGreaterThan(0)
-  })
-
-  it('ne rajoute rien quand on ne demande aucun jour', () => {
-    expect(staplesFor(0)).toEqual({})
-    expect(staplesFor(-3)).toEqual({})
   })
 })

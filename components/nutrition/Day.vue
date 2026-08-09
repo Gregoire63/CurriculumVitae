@@ -223,6 +223,12 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
 
     <!-- Les repas à valider -->
     <div class="section-label">Les repas — coche au fur et à mesure</div>
+    <!-- Journée marquée absente dans la semaine type : rien n'a été acheté ni
+         cuisiné pour elle. Le dire explicitement évite de croire à un bug. -->
+    <p v-if="day.off" class="nu-note">
+      Tu as marqué ce jour comme une absence dans ta semaine type : aucun repas n'est
+      prévu, et rien n'a été acheté pour lui. Note ce que tu manges en repas hors plan.
+    </p>
     <div class="nu-meals">
       <div v-for="m in day.meals" :key="m.slot" class="card nu-meal" :class="{ done: isEaten(props.todayIso, m.slot) }">
         <button class="nu-meal-main" @click="sheet = m">

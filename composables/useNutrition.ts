@@ -1,12 +1,12 @@
 import { computed, ref } from 'vue'
 import type { Food, Recipe } from '~/data/nutritionProgram'
-import type { DayOverride, Extra, Library, PrepMode, PriceMap, ShoppingList, WeekTemplate } from '~/lib/nutritionStats'
+import type { DayOverride, DayPlan, Extra, Library, MenuWeek, PrepMode, PriceMap, ShoppingList, WeekTemplate } from '~/lib/nutritionStats'
 import {
-  DEFAULT_WEEK, basketTotal, buildDay, cycleIndexFrom, dowIndex, mergeFoods, mergeRecipes, prepGroups, resolveDay,
-  seedSelection, selectionTotals, shoppingFromSelection, slugify, stockOf,
+  DEFAULT_WEEK, basketTotal, blankWeekDays, buildDay, builtinWeeks, cookPlan, cookSelection,
+  dowIndex, emptyDay, mergeFoods, mergeRecipes, mondayOf, normalizeWeek, resolveDay, selectionTotals,
+  shoppingFromWeek, slugify, stockOf, weekDaysOn,
 } from '~/lib/nutritionStats'
-import type { Selection } from '~/lib/nutritionStats'
-import { isoOf, shiftIso } from '~/utils/sportStats'
+import { isoOf } from '~/utils/sportStats'
 
 // État du module nutrition, persisté en localStorage — même pattern que useWorkout :
 // des refs au niveau module (donc partagées entre tous les appelants) et une
@@ -24,9 +24,14 @@ const FOODPATCH_KEY = 'gr-nutri-foodpatch-v1' // aliments livrés, modifiés
 const RECIPES_KEY = 'gr-nutri-recipes-v1' // plats créés
 const RECIPEPATCH_KEY = 'gr-nutri-recipepatch-v1' // plats livrés, modifiés
 const OFF_KEY = 'gr-nutri-off-v1' // plats mis de côté
-const SEL_KEY = 'gr-nutri-selection-v1' // ce que je cuisine : plat → portions
-const START_KEY = 'gr-nutri-start-v1' // premier jour du plan livré
+const MENUS_KEY = 'gr-nutri-menus-v1' // semaines types : les menus de sept jours
+const ACTIVE_KEY = 'gr-nutri-menu-active-v1' // semaine type en cours
+const ASSIGN_KEY = 'gr-nutri-menu-map-v1' // semaine appliquée, par lundi
 const PICKED_KEY = 'gr-nutri-picked-v1' // plat réellement pris, quand il diffère
+// Clé de l'ancienne sélection « plat → portions », remplacée par la semaine type.
+// Les portions ne se saisissent plus à la main : elles se comptent dans la semaine.
+const LEGACY_SEL_KEY = 'gr-nutri-selection-v1'
+const LEGACY_START_KEY = 'gr-nutri-start-v1'
 export interface Basket { date: string, total: number, days: number }
 const prices = ref<PriceMap>({})
 const checked = ref<Record<string, boolean>>({})
@@ -35,10 +40,18 @@ const baskets = ref<Basket[]>([])
 const prepMode = ref<PrepMode>('separate')
 const week = ref<WeekTemplate>({ gym: [...DEFAULT_WEEK.gym], tt: [...DEFAULT_WEEK.tt] })
 const overrides = ref<Record<string, DayOverride>>({})
-// Ce que je cuisine (plat → portions) et le jour où le plan démarre. C'est cette
-// sélection qui pilote les courses et la préparation, pas le cycle livré.
-const selection = ref<Selection>({})
-const startDate = ref<string | null>(null)
+/**
+ * Les semaines types de menus, celle en cours, et la trace de celle appliquée à
+ * chaque lundi.
+ *
+ * `assign` existe pour que changer de semaine ne réécrive pas le passé : sans elle,
+ * relire un mardi d'il y a trois semaines afficherait les plats d'aujourd'hui. Elle
+ * ne stocke qu'un identifiant par lundi — quelques octets pour un historique qui
+ * reste vrai.
+ */
+const menus = ref<MenuWeek[]>([])
+const activeMenu = ref<string | null>(null)
+const menuAssign = ref<Record<string, string>>({})
 // Plat réellement pris quand il diffère de celui proposé — « j'ai pris autre chose ».
 const picked = ref<Record<string, Record<string, string>>>({})
 const extras = ref<Record<string, Extra[]>>({})
@@ -75,8 +88,7 @@ export function useNutrition() {
     eaten.value = safeParse(localStorage.getItem(EATEN_KEY), {})
     baskets.value = safeParse(localStorage.getItem(BASKETS_KEY), [])
     overrides.value = safeParse(localStorage.getItem(OVER_KEY), {})
-    selection.value = safeParse(localStorage.getItem(SEL_KEY), {})
-    startDate.value = safeParse<string | null>(localStorage.getItem(START_KEY), null)
+    loadMenus()
     picked.value = safeParse(localStorage.getItem(PICKED_KEY), {})
     extras.value = safeParse(localStorage.getItem(EXTRA_KEY), {})
     userFoods.value = safeParse(localStorage.getItem(FOODS_KEY), [])
@@ -90,6 +102,33 @@ export function useNutrition() {
     if (pm === 'assembled' || pm === 'separate') prepMode.value = pm
     hydrated = true
   }
+
+  /**
+   * Charge les semaines types, en garantissant que les deux semaines livrées sont
+   * toujours présentes. Elles sont recalculées depuis le plan, jamais lues du
+   * stockage : c'est ce qui permet de les corriger dans le code sans laisser une
+   * version périmée coincée dans un navigateur.
+   */
+  function loadMenus() {
+    const saved = safeParse<unknown[]>(localStorage.getItem(MENUS_KEY), [])
+    const mine = (Array.isArray(saved) ? saved : [])
+      .map(normalizeWeek)
+      .filter((w): w is MenuWeek => !!w && !w.builtin)
+    menus.value = [...builtinWeeks(), ...mine]
+    const act = localStorage.getItem(ACTIVE_KEY)
+    activeMenu.value = act && menus.value.some(m => m.id === act) ? act : menus.value[0]?.id ?? null
+    menuAssign.value = safeParse(localStorage.getItem(ASSIGN_KEY), {})
+    // Ménage : la sélection manuelle et la date de démarrage n'ont plus de sens.
+    // Les laisser traîner ferait réapparaître de vieilles portions à la première
+    // restauration de sauvegarde.
+    try {
+      localStorage.removeItem(LEGACY_SEL_KEY)
+      localStorage.removeItem(LEGACY_START_KEY)
+    }
+    catch { /* stockage indisponible */ }
+  }
+  /** N'écrit QUE les semaines perso : les livrées viennent du code. */
+  const saveMenus = () => write(MENUS_KEY, menus.value.filter(m => !m.builtin))
   // ─── Bibliothèque ─────────────────────────────────────────────────────────
   /** Aliments et plats effectivement disponibles : livrés + créés + modifiés. */
   const library = computed<Library>(() => ({
@@ -199,37 +238,110 @@ export function useNutrition() {
    */
   const ttConfirmed = (iso: string) => overrides.value[iso]?.tt === true
 
-  // ─── Sélection ────────────────────────────────────────────────────────────
-  const portionsOf = (id: string) => selection.value[id] ?? 0
-  function setPortions(id: string, n: number) {
-    const next = { ...selection.value }
-    if (n > 0) next[id] = Math.min(30, Math.round(n))
-    else delete next[id]
-    selection.value = next
-    write(SEL_KEY, selection.value)
+  // ─── Semaines types de menus ──────────────────────────────────────────────
+  const menuById = (id: string | null) => (id ? menus.value.find(m => m.id === id) ?? null : null)
+  /** La semaine en cours d'édition et de préparation. */
+  const activeWeek = computed<MenuWeek | null>(() => menuById(activeMenu.value) ?? menus.value[0] ?? null)
+
+  function setActiveMenu(id: string) {
+    if (!menus.value.some(m => m.id === id)) return
+    activeMenu.value = id
+    writeRaw(ACTIVE_KEY, id)
   }
-  const bumpPortions = (id: string, d: number) => setPortions(id, portionsOf(id) + d)
-  function clearSelection() { selection.value = {}; write(SEL_KEY, selection.value) }
-  /** Repart des 14 jours livrés. Écrase la sélection en cours, d'où la confirmation côté vue. */
-  function seedFromPlan() {
-    selection.value = seedSelection(library.value)
-    write(SEL_KEY, selection.value)
+  /**
+   * Applique une semaine à partir d'un lundi donné. C'est ce geste-là qui « démarre »
+   * un plan : il n'y a plus de date de démarrage à régler à part, puisque choisir sa
+   * semaine et la lancer sont la même décision.
+   */
+  function applyMenuFrom(iso: string, id = activeMenu.value) {
+    if (!id || !menus.value.some(m => m.id === id)) return
+    menuAssign.value = { ...menuAssign.value, [mondayOf(iso)]: id }
+    write(ASSIGN_KEY, menuAssign.value)
+    setActiveMenu(id)
   }
-  function setStart(iso: string | null) {
-    startDate.value = iso
-    write(START_KEY, startDate.value)
+  /** Semaine appliquée à une date : la dernière assignée avant elle, sinon celle en cours. */
+  function menuFor(iso: string): MenuWeek | null {
+    const monday = mondayOf(iso)
+    const past = Object.keys(menuAssign.value).filter(m => m <= monday).sort()
+    const id = past.length ? menuAssign.value[past.at(-1)!] : null
+    return menuById(id) ?? activeWeek.value
+  }
+  const appliedFrom = computed(() => Object.keys(menuAssign.value).sort().at(-1) ?? null)
+
+  function patchMenu(id: string, fn: (w: MenuWeek) => MenuWeek) {
+    menus.value = menus.value.map(m => (m.id === id ? fn(m) : m))
+    saveMenus()
+  }
+  /**
+   * Change la recette d'un créneau. Une semaine LIVRÉE est d'abord recopiée : les
+   * deux semaines du plan doivent rester ce qu'elles sont, sinon on ne peut plus
+   * revenir au point de départ après avoir bricolé.
+   */
+  function setMenuSlot(dow: number, slotId: string, recipeId: string) {
+    const id = forkIfBuiltin()
+    if (!id) return
+    patchMenu(id, (w) => {
+      const days = w.days.map((d, i) => (i === dow ? { ...d, slots: { ...d.slots, [slotId]: recipeId } } : d))
+      return { ...w, days }
+    })
+  }
+  /** « Je ne suis pas là ce jour-là » : plus de repas prévus, ni de courses, ni de cuisine. */
+  function toggleMenuDayOff(dow: number) {
+    const id = forkIfBuiltin()
+    if (!id) return
+    patchMenu(id, w => ({ ...w, days: w.days.map((d, i) => (i === dow ? { ...d, off: !d.off } : d)) }))
+  }
+  /** Duplique la semaine active sous un nouveau nom et bascule dessus. */
+  function duplicateMenu(name?: string): string | null {
+    const src = activeWeek.value
+    if (!src) return null
+    const id = nextId('week')
+    const copy: MenuWeek = {
+      id,
+      name: name || `${src.name.replace(/ \(copie.*\)$/, '')} (copie)`,
+      days: src.days.map(d => ({ off: d.off, slots: { ...d.slots } })),
+    }
+    menus.value = [...menus.value, copy]
+    saveMenus()
+    setActiveMenu(id)
+    return id
+  }
+  /** Une semaine livrée n'est pas modifiable : la première retouche en fait une copie. */
+  function forkIfBuiltin(): string | null {
+    return activeWeek.value?.builtin ? duplicateMenu(`${activeWeek.value.name} modifiée`) : activeWeek.value?.id ?? null
+  }
+  function renameMenu(id: string, name: string) {
+    if (name.trim()) patchMenu(id, w => ({ ...w, name: name.trim() }))
+  }
+  function removeMenu(id: string) {
+    const target = menuById(id)
+    if (!target || target.builtin) return
+    menus.value = menus.value.filter(m => m.id !== id)
+    saveMenus()
+    if (activeMenu.value === id) setActiveMenu(menus.value[0]!.id)
+  }
+  /** Semaine vierge : sept jours sans rien, à remplir de zéro. */
+  function blankMenu(name = 'Ma semaine'): string {
+    const id = nextId('week')
+    menus.value = [...menus.value, { id, name, days: blankWeekDays() }]
+    saveMenus()
+    setActiveMenu(id)
+    return id
   }
 
+  // ─── Ce qui découle de la semaine ─────────────────────────────────────────
+  // Une donnée, un endroit : portions, courses et cuisine ne sont plus saisies ni
+  // stockées séparément, elles se COMPTENT dans la semaine choisie. Une portion
+  // saisie à la main à côté du menu finissait toujours par le contredire.
+  const gymDays = computed(() => week.value.gym)
+  const selection = computed(() => (activeWeek.value ? cookSelection(activeWeek.value, gymDays.value, library.value) : {}))
   const selectionSummary = computed(() => selectionTotals(selection.value, library.value))
-  /**
-   * Jours couverts par la sélection : deux repas principaux par jour. Sert à doser
-   * les petits-déjeuners et collations, qui ne sont pas dans la sélection mais
-   * doivent bien finir dans le caddie.
-   */
-  const daysCovered = computed(() => Math.round(selectionSummary.value.portions / 2))
+  const daysCovered = computed(() => (activeWeek.value ? weekDaysOn(activeWeek.value) : 0))
   const selectionShopping = computed(() =>
-    shoppingFromSelection(selection.value, library.value, daysCovered.value))
-  const selectionPrep = computed(() => prepGroups(selection.value, library.value))
+    (activeWeek.value ? shoppingFromWeek(activeWeek.value, gymDays.value, library.value) : []))
+  /** Les sessions de cuisine : dimanche, mercredi si besoin, et le soir même. */
+  const cookSessions = computed(() =>
+    (activeWeek.value ? cookPlan(activeWeek.value, gymDays.value, library.value) : []))
 
   /** Portions déjà consommées, par plat : sert à savoir ce qu'il reste au frigo. */
   const consumed = computed(() => {
@@ -257,48 +369,45 @@ export function useNutrition() {
   const stepsFor = (iso: string) => overrides.value[iso]?.steps ?? null
   const setSteps = (iso: string, steps: number | null) =>
     setOverride(iso, { steps: steps === null || !Number.isFinite(steps as number) ? undefined : Math.max(0, Math.round(steps as number)) })
-  // ─── Cycle de recettes ────────────────────────────────────────────────────
-  /** Position dans le cycle de 14 jours. Déduite de la date : rien à démarrer. */
-  /**
-   * Position dans le plan livré, comptée depuis le jour de démarrage — et `null`
-   * passé les 14 jours. L'appli ne propose alors plus rien d'elle-même : c'est la
-   * sélection qui pilote. Le cycle n'est plus une horloge perpétuelle, juste un
-   * pré-remplissage de deux semaines.
-   */
-  const indexFor = (iso: string) => cycleIndexFrom(startDate.value, iso)
-
+  // ─── Le menu d'une journée ────────────────────────────────────────────────
   /**
    * Le plan d'une journée, où qu'on soit dans le temps.
    *
-   * Dans les 14 jours livrés, c'est le menu pré-calculé. Au-delà, il n'y a plus de
-   * menu : on pioche dans la SÉLECTION, en tournant sur les plats retenus, pour
-   * qu'il reste quelque chose à cocher sans que l'appli invente un programme
-   * qu'on ne lui a pas demandé.
+   * La semaine type se répète : un jeudi ressemble au jeudi de la semaine choisie,
+   * indéfiniment. C'est tout l'intérêt d'un modèle de sept jours — il n'y a plus de
+   * date de démarrage à surveiller ni de fenêtre de quatorze jours au-delà de
+   * laquelle l'appli ne propose plus rien.
    *
-   * Et dans tous les cas, un plat explicitement choisi pour un créneau — « j'ai pris
-   * autre chose » — l'emporte : ce qui a été mangé prime sur ce qui était proposé.
+   * Trois couches, de la plus générale à la plus précise :
+   *   1. la semaine appliquée à ce lundi-là (l'historique reste vrai) ;
+   *   2. l'exception de planning posée sur cette date ;
+   *   3. le plat réellement pris — « j'ai mangé autre chose » —, qui l'emporte
+   *      toujours, parce que ce qui a été mangé prime sur ce qui était proposé.
+   *
+   * Un jour marqué absent ne propose rien — mais renvoie quand même une journée,
+   * vide et signalée comme telle : la date existe toujours, et un `null` obligerait
+   * chaque écran à se protéger d'un cas rare.
    */
-  function dayPlanFor(iso: string, trained: boolean) {
-    const i = indexFor(iso)
-    const menu: Partial<{ lunch: string, dinner: string }> = { ...dayFor(iso).menu }
+  function dayPlanFor(iso: string, trained: boolean): DayPlan {
+    const dow = dowIndex(iso)
+    const mw = menuFor(iso)
+    const day = mw?.days[dow]
+    const over = dayFor(iso).menu
+    const pick = picked.value[iso] ?? {}
+    if (day?.off && !Object.keys(pick).length) return emptyDay(dow, trained)
 
-    if (i === null) {
-      const rotate = (kind: 'boite' | 'diner') => {
-        const ids = Object.keys(selection.value)
-          .filter(id => selection.value[id] > 0 && library.value.recipes[id]?.kind === kind)
-          .sort()
-        return ids.length ? ids[dowIndex(iso) % ids.length] : undefined
-      }
-      menu.lunch = menu.lunch ?? rotate('boite')
-      menu.dinner = menu.dinner ?? rotate('diner')
+    const slots = { ...day?.slots, ...pick }
+    // Semaine vierge : on ne propose PAS le menu du cycle en douce. Un repas affiché
+    // mais jamais acheté ni cuisiné est pire que pas de repas du tout — on le coche
+    // sans y penser et le compteur du jour devient faux.
+    if (day) {
+      slots.lunch ??= ''
+      slots.dinner ??= ''
     }
-    // Le créneau explicitement remplacé écrase le reste.
-    const day = picked.value[iso] ?? {}
-    if (day.lunch) menu.lunch = day.lunch
-    if (day.dinner) menu.dinner = day.dinner
-
-    // Hors fenêtre, l'index ne sert plus qu'à faire tourner les collations.
-    return buildDay(i ?? dowIndex(iso), trained, library.value, menu)
+    // Une exception de planning ne porte que sur les deux repas principaux.
+    if (over.lunch && !pick.lunch) slots.lunch = over.lunch
+    if (over.dinner && !pick.dinner) slots.dinner = over.dinner
+    return buildDay(dow, trained, library.value, { slots })
   }
   // ─── Repas mangés ─────────────────────────────────────────────────────────
   const isEaten = (iso: string, slot: string) => (eaten.value[iso] ?? []).includes(slot)
@@ -361,7 +470,11 @@ export function useNutrition() {
     return {
       prices: prices.value, checked: checked.value,
       eaten: eaten.value, baskets: baskets.value,
-      selection: selection.value, start: startDate.value, picked: picked.value,
+      // Les portions ne sont plus sauvegardées : elles se recomptent dans les
+      // semaines. Sauvegarder les deux, c'était exporter deux fois le même chiffre
+      // et laisser une restauration partielle les faire diverger.
+      menus: menus.value.filter(m => !m.builtin), activeMenu: activeMenu.value, menuAssign: menuAssign.value,
+      picked: picked.value,
       prepMode: prepMode.value, week: week.value, overrides: overrides.value,
       extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
@@ -374,8 +487,13 @@ export function useNutrition() {
     if (!n || typeof n !== 'object') return
     if (n.prices) { prices.value = n.prices; write(PRICES_KEY, prices.value) }
     if (n.checked) { checked.value = n.checked; write(CHECKED_KEY, checked.value) }
-    if (n.selection) { selection.value = n.selection; write(SEL_KEY, selection.value) }
-    if (typeof n.start === 'string' || n.start === null) { startDate.value = n.start; write(START_KEY, startDate.value) }
+    if (Array.isArray(n.menus)) {
+      const mine = n.menus.map(normalizeWeek).filter((w): w is MenuWeek => !!w && !w.builtin)
+      menus.value = [...builtinWeeks(), ...mine]
+      saveMenus()
+    }
+    if (typeof n.activeMenu === 'string' && menus.value.some(m => m.id === n.activeMenu)) setActiveMenu(n.activeMenu)
+    if (n.menuAssign) { menuAssign.value = n.menuAssign; write(ASSIGN_KEY, menuAssign.value) }
     if (n.picked) { picked.value = n.picked; write(PICKED_KEY, picked.value) }
     if (n.eaten) { eaten.value = n.eaten; write(EATEN_KEY, eaten.value) }
     if (Array.isArray(n.baskets)) { baskets.value = n.baskets; write(BASKETS_KEY, baskets.value) }
@@ -396,10 +514,12 @@ export function useNutrition() {
   return {
     prices, checked, eaten, baskets, pricedCount, prepMode, picked,
     week, overrides, extras, userFoods, userRecipes, disabledRecipes, library,
-    hydrate, indexFor, dayPlanFor,
+    hydrate, dayPlanFor,
     setWeekDay, resetWeek, dayFor, setOverride, clearOverride, hasOverride, ttConfirmed, stepsFor, setSteps,
-    selection, startDate, portionsOf, setPortions, bumpPortions, clearSelection, seedFromPlan, setStart,
-    selectionSummary, selectionShopping, selectionPrep, daysCovered, stock, pickedFor, setPicked,
+    menus, activeMenu, activeWeek, menuFor, appliedFrom, gymDays,
+    setActiveMenu, applyMenuFrom, setMenuSlot, toggleMenuDayOff,
+    duplicateMenu, renameMenu, removeMenu, blankMenu,
+    selection, selectionSummary, selectionShopping, cookSessions, daysCovered, stock, pickedFor, setPicked,
     isEaten, toggleEaten, eatenSlots, eatenCount, extrasFor, addExtra, removeExtra,
     addFood, patchFood, removeFood, resetFood, isCustomFood,
     addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,

@@ -18,11 +18,12 @@ const load = async () => {
   return n
 }
 
-describe('cycle de 14 jours', () => {
-  it('donne une position sans qu\'il y ait rien à démarrer', async () => {
+describe('semaines types de menus', () => {
+  it('livre deux semaines et en active une sans rien démarrer', async () => {
     const n = await load()
-    expect(n.indexFor('2026-08-06')).toBeGreaterThanOrEqual(0)
-    expect(n.indexFor('2026-08-06')).toBeLessThan(14)
+    expect(n.menus.value.filter(m => m.builtin)).toHaveLength(2)
+    expect(n.activeWeek.value).not.toBeNull()
+    expect(n.selectionSummary.value.portions).toBe(14)
   })
 })
 
@@ -124,9 +125,9 @@ describe('séance annulée', () => {
   it('fait réellement baisser les calories de la journée', async () => {
     const n = await load()
     const { buildDay } = await import('../../lib/nutritionStats')
-    const before = buildDay(n.indexFor('2026-08-03')!, n.dayFor('2026-08-03').gym).total.kcal
+    const before = n.dayPlanFor('2026-08-03', n.dayFor('2026-08-03').gym)!.total.kcal
     n.setOverride('2026-08-03', { gym: false })
-    const after = buildDay(n.indexFor('2026-08-03')!, n.dayFor('2026-08-03').gym).total.kcal
+    const after = n.dayPlanFor('2026-08-03', n.dayFor('2026-08-03').gym)!.total.kcal
     expect(before - after).toBeGreaterThan(150)
   })
 })
@@ -263,59 +264,79 @@ describe('sauvegarde', () => {
   })
 })
 
-describe('sélection : ce que je cuisine', () => {
-  it('coche des portions, les relit après rechargement, et en tire les courses', async () => {
+describe('la semaine type pilote tout', () => {
+  it('compte les portions dans la semaine et en tire les courses', async () => {
     const n = await load()
-    n.setPortions('boite-a', 4)
-    n.bumpPortions('boite-a', 1)
-    expect(n.portionsOf('boite-a')).toBe(5)
-    expect(n.selectionSummary.value.portions).toBe(5)
+    // 7 midis + 7 dîners : rien à saisir à la main, tout se compte dans le menu.
+    expect(n.selectionSummary.value.portions).toBe(14)
     expect(n.selectionShopping.value.length).toBeGreaterThan(0)
-
-    vi.resetModules()
-    const again = await load()
-    expect(again.portionsOf('boite-a')).toBe(5)
+    expect(n.daysCovered.value).toBe(7)
   })
 
-  it('zéro portion retire le plat de la sélection', async () => {
+  it('un jour d\'absence retire ses repas des courses et de la cuisine', async () => {
     const n = await load()
-    n.setPortions('boite-a', 3)
-    n.setPortions('boite-a', 0)
-    expect(n.selectionSummary.value.portions).toBe(0)
-    expect(n.selectionShopping.value).toEqual([])
+    const avant = n.selectionSummary.value.portions
+    n.toggleMenuDayOff(6)
+    expect(n.selectionSummary.value.portions).toBe(avant - 2)
+    expect(n.dayPlanFor('2026-08-09', false)).toBeNull() // un dimanche
+  })
+
+  it('modifier une semaine livrée en fait une copie, l\'originale reste intacte', async () => {
+    const n = await load()
+    n.setMenuSlot(0, 'lunch', 'boite-c')
+    expect(n.activeWeek.value!.builtin).toBeFalsy()
+    expect(n.menus.value.filter(m => m.builtin)[0].days[0].slots.lunch).not.toBe('boite-c')
+    expect(n.activeWeek.value!.days[0].slots.lunch).toBe('boite-c')
+  })
+
+  it('la semaine choisie sert tous les lundis suivants, indéfiniment', async () => {
+    const n = await load()
+    n.setMenuSlot(0, 'lunch', 'boite-c')
+    // Deux mois plus tard, un lundi : le modèle se répète, plus de fenêtre de 14 jours.
+    const plan = n.dayPlanFor('2026-10-12', true)!
+    expect(plan.meals.find((m: { slot: string }) => m.slot === 'lunch')?.recipeId).toBe('boite-c')
+  })
+
+  it('changer de semaine ne réécrit pas le passé', async () => {
+    const n = await load()
+    n.applyMenuFrom('2026-08-03', n.menus.value[0].id)
+    const avant = n.dayPlanFor('2026-08-04', true)!.meals.find((m: { slot: string }) => m.slot === 'lunch')?.recipeId
+    n.applyMenuFrom('2026-08-31', n.menus.value[1].id)
+    expect(n.dayPlanFor('2026-08-04', true)!.meals.find((m: { slot: string }) => m.slot === 'lunch')?.recipeId).toBe(avant)
+  })
+
+  it('les semaines perso survivent au rechargement, les livrées ne sont pas dupliquées', async () => {
+    const n = await load()
+    n.duplicateMenu('Semaine légère')
+    vi.resetModules()
+    const again = await load()
+    expect(again.menus.value.filter(m => m.builtin)).toHaveLength(2)
+    expect(again.menus.value.some(m => m.name === 'Semaine légère')).toBe(true)
   })
 
   it('« j\'ai pris autre chose » décrémente le stock du plat réellement mangé', async () => {
     const n = await load()
-    n.setPortions('boite-a', 3)
-    n.setPortions('boite-b', 2)
-    expect(n.stock.value['boite-b']).toBe(2)
-
-    n.setPicked('2026-08-10', 'lunch', 'boite-b')
-    expect(n.stock.value['boite-b']).toBe(1)
-    expect(n.stock.value['boite-a']).toBe(3)
-
+    const cible = Object.keys(n.stock.value)[0]
+    const avant = n.stock.value[cible]
+    n.setPicked('2026-08-10', 'lunch', cible)
+    expect(n.stock.value[cible]).toBe(avant - 1)
     n.setPicked('2026-08-10', 'lunch', null)
-    expect(n.stock.value['boite-b']).toBe(2)
-  })
-
-  it('hors des 14 jours livrés, le plan pioche dans la sélection', async () => {
-    const n = await load()
-    n.setStart('2026-08-09')
-    // Dans la fenêtre : c'est le menu pré-calculé.
-    expect(n.indexFor('2026-08-12')).toBe(3)
-    // Au-delà : plus d'index, mais un plan reste servi à partir des plats retenus.
-    expect(n.indexFor('2026-09-15')).toBeNull()
-    n.setPortions('boite-c', 4)
-    const plan = n.dayPlanFor('2026-09-15', true)
-    expect(plan.meals.find((m: { slot: string }) => m.slot === 'lunch')?.recipeId).toBe('boite-c')
+    expect(n.stock.value[cible]).toBe(avant)
   })
 
   it('un plat explicitement pris l\'emporte sur celui proposé', async () => {
     const n = await load()
-    n.setStart('2026-08-09')
     n.setPicked('2026-08-12', 'dinner', 'din-saumon')
-    const plan = n.dayPlanFor('2026-08-12', true)
+    const plan = n.dayPlanFor('2026-08-12', true)!
     expect(plan.meals.find((m: { slot: string }) => m.slot === 'dinner')?.recipeId).toBe('din-saumon')
+  })
+
+  it('les sessions de cuisine sortent de la semaine active', async () => {
+    const n = await load()
+    const ids = n.cookSessions.value.map(s => s.id)
+    expect(ids[0]).toBe('dim')
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+})
   })
 })

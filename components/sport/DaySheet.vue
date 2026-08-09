@@ -151,7 +151,10 @@ const weighIns = computed(() =>
           Repas
           <span v-if="planTotal" class="mono ds-section-n">{{ doneCount }}/{{ plan!.meals.length }} pris · {{ planTotal.kcal }} kcal prévus</span>
         </div>
-        <div v-if="plan" class="ds-meals">
+        <p v-if="plan?.off" class="muted ds-empty">
+          Jour marqué comme une absence dans ta semaine type : aucun repas prévu.
+        </p>
+        <div v-else-if="plan" class="ds-meals">
           <div v-for="m in plan.meals" :key="m.slot" class="ds-meal" :class="{ eaten: done.has(m.slot) }">
             <span class="ds-m-time mono">{{ m.time }}</span>
             <span class="ds-m-name">{{ m.name }}</span>

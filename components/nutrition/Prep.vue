@@ -2,46 +2,107 @@
 import { computed, ref } from 'vue'
 import { CAT_LABELS } from '~/data/nutritionProgram'
 import { useNutrition } from '~/composables/useNutrition'
-import { costPerDay, fmtEuro, lineCost, macrosOf, roundMacros } from '~/lib/nutritionStats'
-import { isoOf, shiftIso } from '~/utils/sportStats'
+import { costPerDay, fmtEuro, lineCost, listDays, macrosOf, roundMacros, slotsOf } from '~/lib/nutritionStats'
+import { shiftIso } from '~/utils/sportStats'
 
 // Onglet « Préparer » : trois étapes, dans l'ordre où on les fait.
 //
-//   1. je coche les plats et leurs portions ;
+//   1. je choisis ma semaine et j'ajuste les jours ;
 //   2. la liste de courses en sort, rangée par rayon ;
-//   3. les conseils de préparation, à part.
+//   3. le programme de cuisine, réparti entre dimanche et mercredi.
 //
-// La liste se déduisait avant d'une fenêtre de 7 ou 14 jours du cycle livré : il
-// fallait accepter le menu tel quel pour obtenir une liste juste, et le cycle
-// s'affichait partout alors qu'il n'est qu'un pré-remplissage. Partir des portions
-// réellement prévues rend la liste vraie pour trois jours comme pour deux semaines.
+// Il fallait avant cocher des plats et saisir des portions à la main, sans jamais
+// voir à quel jour ils correspondaient — et le plan livré s'étalait sur quatorze
+// jours, ce qui n'a aucun sens en cuisine : ça ne tient ni dans un frigo ni dans
+// les durées de conservation. Une semaine type dit QUEL jour on mange QUOI ; les
+// portions, les courses et les sessions de cuisine s'en déduisent toutes seules.
 const props = defineProps<{ todayIso: string }>()
 
 const {
-  library, portionsOf, bumpPortions, setPortions, clearSelection, seedFromPlan,
-  selectionSummary, selectionShopping, selectionPrep, daysCovered, stock, startDate, setStart,
+  library, week, menus, activeWeek, setActiveMenu, applyMenuFrom, appliedFrom,
+  setMenuSlot, toggleMenuDayOff, duplicateMenu, renameMenu, removeMenu, blankMenu,
+  selectionSummary, selectionShopping, cookSessions, daysCovered, stock,
   cost, isChecked, toggleChecked, clearChecked, setPrice, prices, baskets, addBasket, removeBasket,
 } = useNutrition()
 
-const step = ref<'plats' | 'courses' | 'prep'>('plats')
+const step = ref<'semaine' | 'courses' | 'cuisine'>('semaine')
+const openDow = ref<number | null>(null)
+const DOW = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 
-// Les plats qui se préparent à l'avance d'abord : ce sont eux qu'on cuisine en lot.
-const dishes = computed(() => Object.values(library.value.recipes)
-  .filter(r => !r.disabled && (r.kind === 'boite' || r.kind === 'diner'))
-  .map(r => ({ r, macros: roundMacros(macrosOf(r.items, library.value.foods)) }))
-  .sort((a, b) => Number(!!b.r.batch) - Number(!!a.r.batch) || a.r.name.localeCompare(b.r.name)))
+// ─── 1. Ma semaine ──────────────────────────────────────────────────────────
+const macrosFor = (id: string) => {
+  const r = library.value.recipes[id]
+  return r ? roundMacros(macrosOf(r.items, library.value.foods)) : null
+}
 
-const chosen = computed(() => dishes.value.filter(d => portionsOf(d.r.id) > 0))
+/**
+ * Les plats proposés pour un créneau. Un déjeuner peut être un plat du soir et
+ * l'inverse : la distinction boîte / dîner dit comment le plat se transporte, pas à
+ * quelle heure il se mange. Refuser le mélange obligeait à dupliquer des recettes.
+ */
+function optionsFor(slotId: string) {
+  const kinds = slotId === 'pdj'
+    ? ['pdj', 'collation']
+    : slotId === 'lunch' || slotId === 'dinner'
+      ? ['boite', 'diner']
+      : ['collation', 'pdj']
+  return Object.values(library.value.recipes)
+    .filter(r => !r.disabled && kinds.includes(r.kind))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** Les créneaux d'un jour : ils dépendent de la séance, réglée dans le planning. */
+const daySlots = (dow: number) => slotsOf(week.value.gym[dow] === true)
+const slotRecipe = (dow: number, slotId: string, fallback?: string) =>
+  activeWeek.value?.days[dow]?.slots[slotId] ?? fallback ?? ''
+
+const MAIN = new Set(['lunch', 'dinner'])
+const days = computed(() => Array.from({ length: 7 }, (_, d) => {
+  const slots = daySlots(d)
+  const off = activeWeek.value?.days[d]?.off === true
+  const main = slots.filter(s => MAIN.has(s.id))
+  return {
+    dow: d,
+    name: DOW[d],
+    off,
+    gym: week.value.gym[d] === true,
+    slots,
+    main,
+    others: slots.filter(s => !MAIN.has(s.id)),
+    kcal: off ? 0 : main.reduce((n, s) => n + (macrosFor(slotRecipe(d, s.id, s.recipe))?.kcal ?? 0), 0),
+  }
+}))
+
+/**
+ * Le lundi à venir. On cuisine le dimanche, mais le plan DÉMARRE le lundi : c'est
+ * le premier jour où l'on mange. Faire commencer la semaine la veille décalerait
+ * les sept menus d'un jour, et les plats tomberaient à côté des jours de salle.
+ */
+const nextMonday = computed(() => {
+  const dow = (new Date(props.todayIso + 'T00:00:00').getDay() + 6) % 7
+  return dow === 0 ? props.todayIso : shiftIso(props.todayIso, 7 - dow)
+})
+const fmtDay = (iso: string) => `${iso.slice(8)}/${iso.slice(5, 7)}`
+const launched = computed(() => appliedFrom.value === nextMonday.value)
+
+function onRename() {
+  const w = activeWeek.value
+  if (!w || w.builtin) return
+  const name = prompt('Nom de cette semaine', w.name)
+  if (name) renameMenu(w.id, name)
+}
+function onRemove() {
+  const w = activeWeek.value
+  if (!w || w.builtin) return
+  if (confirm(`Supprimer « ${w.name} » ? Les semaines livrées restent disponibles.`)) removeMenu(w.id)
+}
+
+// ─── 2. Courses ─────────────────────────────────────────────────────────────
 const money = computed(() => cost(selectionShopping.value))
 const totalLines = computed(() => selectionShopping.value.reduce((n, s) => n + s.lines.length, 0))
 const doneLines = computed(() => selectionShopping.value
   .reduce((n, s) => n + s.lines.filter(l => isChecked(l.food.id)).length, 0))
-
 const perDay = computed(() => costPerDay(money.value.total, Math.max(1, daysCovered.value)))
-
-const leftInFridge = computed(() => Object.entries(stock.value)
-  .filter(([, n]) => n > 0)
-  .map(([id, n]) => ({ name: library.value.recipes[id]?.name ?? id, n })))
 
 function onPrice(foodId: string, ev: Event) {
   const raw = (ev.target as HTMLInputElement).value.replace(',', '.').trim()
@@ -55,127 +116,125 @@ function saveBasket() {
   clearChecked()
 }
 
-function reseed() {
-  if (selectionSummary.value.portions > 0
-    && !confirm('Remplacer ta sélection par les 14 jours pré-configurés ?')) return
-  seedFromPlan()
-}
-
-/**
- * Le lundi à venir — et non le dimanche où l'on cuisine.
- *
- * Le CYCLE livré a son index 0 sur un LUNDI : c'est ce jour-là que commence le
- * plan. Démarrer un dimanche décalerait tous les menus d'un jour, et les plats
- * tomberaient à côté des jours de salle. Cuisiner la veille ne change pas le
- * premier jour du suivi : on prépare le dimanche, le plan démarre le lundi.
- */
-const nextMonday = computed(() => {
-  const d = new Date(props.todayIso + 'T00:00:00')
-  const dow = (d.getDay() + 6) % 7 // 0 = lundi
-  return dow === 0 ? props.todayIso : shiftIso(props.todayIso, 7 - dow)
-})
-const startLabel = computed(() => {
-  if (!startDate.value) return 'Pas encore démarré'
-  const d = new Date(startDate.value + 'T00:00:00')
-  return `Démarré le ${d.getDate()}/${String(d.getMonth() + 1).padStart(2, '0')}`
-})
+// ─── 3. Cuisine ─────────────────────────────────────────────────────────────
+const leftInFridge = computed(() => Object.entries(stock.value)
+  .filter(([, n]) => n > 0)
+  .map(([id, n]) => ({ name: library.value.recipes[id]?.name ?? id, n })))
+const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`)
 </script>
 
 <template>
   <div class="stack">
     <nav class="nu-steps">
-      <button class="nu-step" :class="{ on: step === 'plats' }" @click="step = 'plats'">
-        <span class="nu-step-n">1</span><span>Ce que je cuisine</span>
-        <span v-if="selectionSummary.portions" class="nu-step-b mono">{{ selectionSummary.portions }}</span>
+      <button class="nu-step" :class="{ on: step === 'semaine' }" @click="step = 'semaine'">
+        <span class="nu-step-n">1</span><span>Ma semaine</span>
       </button>
       <button class="nu-step" :class="{ on: step === 'courses' }" :disabled="!selectionSummary.portions" @click="step = 'courses'">
         <span class="nu-step-n">2</span><span>Courses</span>
         <span v-if="totalLines" class="nu-step-b mono">{{ doneLines }}/{{ totalLines }}</span>
       </button>
-      <button class="nu-step" :class="{ on: step === 'prep' }" :disabled="!selectionSummary.portions" @click="step = 'prep'">
-        <span class="nu-step-n">3</span><span>Préparation</span>
+      <button class="nu-step" :class="{ on: step === 'cuisine' }" :disabled="!selectionSummary.portions" @click="step = 'cuisine'">
+        <span class="nu-step-n">3</span><span>Cuisine</span>
       </button>
     </nav>
 
-    <!-- ─── 1. Ce que je cuisine ──────────────────────────────────────── -->
-    <template v-if="step === 'plats'">
+    <!-- ─── 1. Ma semaine ─────────────────────────────────────────────── -->
+    <template v-if="step === 'semaine'">
       <div class="card nu-selsum">
         <div class="nu-selsum-main">
-          <span class="nu-selsum-v mono">{{ selectionSummary.portions }}</span>
-          <span class="nu-selsum-l">portion{{ selectionSummary.portions > 1 ? 's' : '' }} · {{ selectionSummary.dishes }} plat{{ selectionSummary.dishes > 1 ? 's' : '' }}</span>
+          <span class="nu-selsum-v mono">{{ daysCovered }}</span>
+          <span class="nu-selsum-l">jour{{ daysCovered > 1 ? 's' : '' }} · {{ selectionSummary.portions }} portions à cuisiner</span>
         </div>
         <div class="muted">
-          <template v-if="selectionSummary.portions">
-            De quoi couvrir environ <b>{{ daysCovered }} jours</b> de midis et de dîners.
-          </template>
-          <template v-else>
-            Coche les plats que tu vas cuisiner et indique combien de portions de chacun.
-            La liste de courses et les conseils de préparation en découlent.
-          </template>
+          Une semaine type se répète tant que tu n'en changes pas. Modifie un jour, retire
+          un week-end où tu n'es pas là : les courses et la cuisine suivent.
         </div>
-        <div class="nav-row">
-          <button class="btn" @click="reseed()">↺ Partir des 14 jours livrés</button>
-          <button v-if="selectionSummary.portions" class="btn" @click="clearSelection()">Tout vider</button>
-        </div>
-      </div>
-
-      <!-- Le démarrage n'existe que pour pré-remplir les 14 premiers jours. Passé
-           ce délai plus rien n'est proposé d'office : c'est la sélection qui pilote. -->
-      <div class="card nu-start">
-        <div class="row-between">
-          <div class="section-label">Démarrage du plan livré</div>
-          <span class="mono muted">{{ startLabel }}</span>
-        </div>
-        <p class="muted mt-6">
-          Les 14 premiers jours sont pré-remplis avec le menu calculé pour toi. Au-delà,
-          l'appli ne propose plus rien d'elle-même — tu choisis.
-          <br>
-          Le plan commence un <b>lundi</b> : c'est le premier jour où tu manges, pas le
-          jour où tu cuisines. Démarrer la veille décalerait tous les menus d'un jour.
+        <button
+          class="btn-primary" :class="{ done: launched }"
+          @click="applyMenuFrom(nextMonday)"
+        >
+          {{ launched ? `✓ Lancée depuis lundi ${fmtDay(nextMonday)}` : `▶ Lancer à partir du lundi ${fmtDay(nextMonday)}` }}
+        </button>
+        <p class="muted center nu-launch-note">
+          On cuisine le dimanche, mais la semaine démarre le <b>lundi</b> : c'est le premier
+          jour où tu manges, pas le jour où tu prépares.
         </p>
-        <div class="nav-row mt-6">
-          <button class="btn" :class="{ sel: startDate === nextMonday }" @click="setStart(nextMonday)">
-            Lundi {{ nextMonday.slice(8) }}/{{ nextMonday.slice(5, 7) }}
+      </div>
+
+      <!-- Choix de la semaine. Les livrées sont en lecture seule : la première
+           retouche en fait une copie, pour qu'on puisse toujours y revenir. -->
+      <div class="card nu-weeks">
+        <div class="section-label mb-8">Semaine appliquée</div>
+        <div class="nu-week-chips">
+          <button
+            v-for="m in menus" :key="m.id"
+            class="nu-week-chip" :class="{ on: m.id === activeWeek?.id }"
+            @click="setActiveMenu(m.id)"
+          >
+            {{ m.name }}<span v-if="m.builtin" class="nu-week-lock">livrée</span>
           </button>
-          <button class="btn" :class="{ sel: startDate === props.todayIso }" @click="setStart(props.todayIso)">Aujourd'hui</button>
-          <button v-if="startDate" class="btn" @click="setStart(null)">Effacer</button>
         </div>
+        <div class="nav-row mt-6">
+          <button class="btn" @click="duplicateMenu()">⧉ Dupliquer</button>
+          <button class="btn" @click="blankMenu()">＋ Semaine vierge</button>
+          <button class="btn" :disabled="activeWeek?.builtin" @click="onRename()">✎ Renommer</button>
+          <button class="btn" :disabled="activeWeek?.builtin" @click="onRemove()">× Supprimer</button>
+        </div>
+        <p v-if="activeWeek?.builtin" class="nu-note mt-6">
+          Semaine livrée avec le plan : elle reste intacte. Dès que tu changes un plat,
+          une copie modifiable est créée — l'originale reste là pour y revenir.
+        </p>
       </div>
 
-      <div v-if="leftInFridge.length" class="card nu-fridge">
-        <div class="section-label mb-8">Reste au frigo</div>
-        <div class="nu-fridge-list">
-          <span v-for="f in leftInFridge" :key="f.name" class="nu-fridge-item">
-            {{ f.name }} <b class="mono">× {{ f.n }}</b>
-          </span>
-        </div>
-      </div>
+      <div class="nu-week">
+        <article v-for="d in days" :key="d.dow" class="card nu-day" :class="{ off: d.off }">
+          <header class="nu-day-head">
+            <span class="nu-day-name">{{ d.name }}</span>
+            <span class="nu-day-tag mono" :class="{ gym: d.gym }">{{ d.gym ? 'salle' : 'repos' }}</span>
+            <span v-if="!d.off && d.kcal" class="mono muted nu-day-kcal">{{ Math.round(d.kcal) }} kcal aux repas</span>
+            <button class="nu-day-off" :class="{ on: d.off }" @click="toggleMenuDayOff(d.dow)">
+              {{ d.off ? '↩ Je suis là' : '✈ Pas là' }}
+            </button>
+          </header>
 
-      <div class="nu-grid">
-        <article v-for="{ r, macros } in dishes" :key="r.id" class="card nu-plat" :class="{ picked: portionsOf(r.id) > 0 }">
-          <NutritionThumb :id="r.id" :label="r.name" class="nu-plat-cover" />
-          <div class="nu-plat-body">
-            <div class="nu-plat-kind mono">
-              {{ r.kind === 'boite' ? 'Déjeuner' : 'Dîner' }}<template v-if="r.batch"> · à l'avance</template>
-            </div>
-            <h4 class="nu-plat-name">{{ r.name }}</h4>
-            <div class="nu-plat-macros">
-              <span class="nu-plat-kcal mono">{{ macros.kcal }}</span>
-              <span class="mono muted">{{ macros.p }} P · {{ macros.g }} G · {{ macros.l }} L</span>
-            </div>
-            <p class="nu-plat-items muted">{{ r.items.map(i => `${library.foods[i.food]?.name ?? i.food} ${i.g} g`).join(' · ') }}</p>
-            <p v-if="r.steps" class="nu-plat-steps muted">{{ r.steps }}</p>
-            <div class="nu-stepper">
-              <button class="nu-stepper-b" :disabled="!portionsOf(r.id)" @click="bumpPortions(r.id, -1)">−</button>
-              <input
-                class="nu-stepper-v mono" type="number" inputmode="numeric" min="0" max="30"
-                :value="portionsOf(r.id)"
-                @input="setPortions(r.id, Number((($event.target as HTMLInputElement).value)) || 0)"
+          <p v-if="d.off" class="muted nu-day-empty">
+            Rien de prévu : ni courses, ni portions à cuisiner pour ce jour.
+          </p>
+          <template v-else>
+            <label v-for="s in d.main" :key="s.id" class="nu-mslot">
+              <span class="nu-mslot-time mono">{{ s.time }}</span>
+              <span class="nu-mslot-label">{{ s.label }}</span>
+              <select
+                class="nu-mslot-select"
+                :value="slotRecipe(d.dow, s.id, s.recipe)"
+                @change="setMenuSlot(d.dow, s.id, ($event.target as HTMLSelectElement).value)"
               >
-              <button class="nu-stepper-b" @click="bumpPortions(r.id, 1)">+</button>
-              <span class="nu-stepper-l muted">portions</span>
-            </div>
-          </div>
+                <option value="">— rien ce jour-là —</option>
+                <option v-for="r in optionsFor(s.id)" :key="r.id" :value="r.id">{{ r.name }}</option>
+              </select>
+            </label>
+
+            <!-- Petit-déjeuner et collations sont identiques presque tous les jours :
+                 les afficher d'office noyait les deux seules lignes qu'on change
+                 vraiment. Ils restent réglables, juste d'un cran plus loin. -->
+            <button class="nu-day-more" @click="openDow = openDow === d.dow ? null : d.dow">
+              {{ openDow === d.dow ? '▲ Masquer' : '▼ Petit-déjeuner et collations' }}
+            </button>
+            <template v-if="openDow === d.dow">
+              <label v-for="s in d.others" :key="s.id" class="nu-mslot">
+                <span class="nu-mslot-time mono">{{ s.time }}</span>
+                <span class="nu-mslot-label">{{ s.label }}</span>
+                <select
+                  class="nu-mslot-select"
+                  :value="slotRecipe(d.dow, s.id, s.recipe)"
+                  @change="setMenuSlot(d.dow, s.id, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">— rien ce jour-là —</option>
+                  <option v-for="r in optionsFor(s.id)" :key="r.id" :value="r.id">{{ r.name }}</option>
+                </select>
+              </label>
+            </template>
+          </template>
         </article>
       </div>
     </template>
@@ -194,9 +253,9 @@ const startLabel = computed(() => {
       </div>
 
       <p class="nu-note">
-        La liste couvre les plats choisis <b>et</b> le quotidien — petit-déjeuner,
-        collations, shaker, créatine — dosé sur les {{ daysCovered }} jours que ta
-        sélection représente. Ces aliments-là ne se choisissent pas, mais ils s'achètent.
+        Tout ce que la semaine mange est là : les plats, mais aussi le petit-déjeuner,
+        les collations, le shaker et la créatine. Les jours où tu n'es pas là ne sont
+        pas comptés, et un jour sans séance pèse moins de féculents.
       </p>
       <p v-if="money.missing.length" class="muted">
         Saisis le prix au kilo à côté de chaque aliment — une seule fois, il est mémorisé.
@@ -249,29 +308,51 @@ const startLabel = computed(() => {
       </template>
     </template>
 
-    <!-- ─── 3. Préparation ────────────────────────────────────────────── -->
+    <!-- ─── 3. Cuisine ────────────────────────────────────────────────── -->
     <template v-else>
-      <p class="muted">
-        Regroupé par geste et non par recette : on ne cuit pas le riz de quatre plats
-        en quatre fois. C'est l'ordre dans lequel on occupe une cuisine.
+      <p class="nu-note">
+        Le dimanche prend tout ce qui tient jusque-là. Ce qui ne tiendrait pas —
+        la viande cuite passé trois jours, le poisson passé deux — bascule au
+        mercredi soir. Chaque session est regroupée par geste, pas par recette :
+        on ne cuit pas le riz de quatre plats en quatre fois.
       </p>
-      <div v-for="g in selectionPrep" :key="g.id" class="card nu-prep">
-        <h4 class="nu-prep-title">{{ g.title }}</h4>
-        <p class="nu-note">{{ g.hint }}</p>
-        <ul class="nu-prep-steps">
-          <li v-for="(st, i) in g.steps" :key="i">{{ st }}</li>
-        </ul>
-      </div>
-      <div class="card nu-prep">
-        <h4 class="nu-prep-title">Les plats retenus</h4>
-        <div v-for="{ r } in chosen" :key="r.id" class="nu-prep-recipe">
-          <div class="row-between">
-            <strong class="flex-1">{{ r.name }}</strong>
-            <span class="mono">× {{ portionsOf(r.id) }}</span>
-          </div>
-          <p v-if="r.steps" class="nu-steps">{{ r.steps }}</p>
+
+      <div v-if="leftInFridge.length" class="card nu-fridge">
+        <div class="section-label mb-8">Reste au frigo</div>
+        <div class="nu-fridge-list">
+          <span v-for="f in leftInFridge" :key="f.name" class="nu-fridge-item">
+            {{ f.name }} <b class="mono">× {{ f.n }}</b>
+          </span>
         </div>
       </div>
+
+      <section v-for="s in cookSessions" :key="s.id" class="card nu-cook" :class="s.id">
+        <header class="nu-cook-head">
+          <h4 class="nu-prep-title">{{ s.title }}</h4>
+          <span v-if="s.minutes" class="nu-cook-min mono">≈ {{ fmtMin(s.minutes) }}</span>
+        </header>
+        <p class="muted nu-cook-when">{{ s.when }}</p>
+        <p class="nu-note">{{ s.hint }}</p>
+
+        <div class="nu-cook-dishes">
+          <div v-for="d in s.dishes" :key="d.recipeId" class="nu-cook-dish">
+            <NutritionThumb :id="d.recipeId" :label="d.name" class="nu-cook-thumb" />
+            <div class="nu-cook-dish-txt">
+              <strong>{{ d.name }}</strong>
+              <span class="muted">pour {{ listDays(d.days) }}</span>
+            </div>
+            <span class="mono nu-cook-n">× {{ d.n }}</span>
+          </div>
+        </div>
+
+        <div v-for="g in s.groups" :key="g.id" class="nu-cook-group">
+          <div class="section-label">{{ g.title }}</div>
+          <p class="nu-note">{{ g.hint }}</p>
+          <ul class="nu-prep-steps">
+            <li v-for="(st, i) in g.steps" :key="i">{{ st }}</li>
+          </ul>
+        </div>
+      </section>
     </template>
   </div>
 </template>

@@ -9,10 +9,10 @@
 // ses 50 exports au vocabulaire propre à l'entraînement, peut se le permettre ; pas
 // celui-ci. Ici, tous les imports sont explicites, donc rien ne se perd.
 
-import type { Food, FoodCat, MicroKey, Recipe, RecipeItem, Slot } from '../data/nutritionProgram'
+import type { DayTemplate, Food, FoodCat, MicroKey, Recipe, RecipeItem, Slot } from '../data/nutritionProgram'
 import {
-  CAT_ORDER, COOK_C_LOSS, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, MICRO_REFS, RATIO_DINNER_GYM,
-  RATIO_REST, RECIPE_BY_ID, SLOTS_GYM, SLOTS_REST, STARCHY_IDS,
+  CAT_ORDER, COOK_C_LOSS, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, MICRO_REFS,
+  RATIO_DINNER_GYM, RATIO_REST, RECIPE_BY_ID, SLOTS_GYM, SLOTS_REST, STARCHY_IDS,
 } from '../data/nutritionProgram'
 // isoOf et shiftIso viennent de sportStats. Nuxt auto-importe les deux fichiers d'utils :
 // les redéfinir ici provoquait un « Duplicated imports » au build et, plus embêtant,
@@ -127,11 +127,22 @@ export interface DayMeal {
   adjusted?: boolean // portion recalculée d'après la dépense réelle de la séance
 }
 export interface DayPlan {
-  index: number // position dans le cycle de 14 jours
+  index: number // jour de la semaine type, 0 = lundi
   trained: boolean
   meals: DayMeal[]
   total: Macros
+  /**
+   * Jour marqué absent dans la semaine type. La journée existe — elle a une date,
+   * une dépense, une pesée éventuelle — mais aucun repas n'est prévu. Renvoyer
+   * `null` à sa place obligerait chaque écran à se protéger d'un cas rare, et un
+   * oubli suffirait pour une page blanche.
+   */
+  off?: boolean
 }
+
+/** Journée sans repas prévus : « je ne suis pas là ». */
+export const emptyDay = (index: number, trained: boolean): DayPlan =>
+  ({ index, trained, meals: [], total: { kcal: 0, p: 0, g: 0, l: 0 }, off: true })
 
 const ratioOf = (slot: Slot): number => {
   if (slot.ratio === 'rest') return RATIO_REST
@@ -149,7 +160,16 @@ export function buildDay(
   index: number,
   trained: boolean,
   lib: Library = BUILTIN,
-  menu?: Partial<DayTemplate>,
+  menu?: Partial<DayTemplate> & {
+    /**
+     * Recette imposée pour un créneau donné, y compris les créneaux fixes.
+     *
+     * `lunch` et `dinner` ne suffisaient pas : une semaine type doit pouvoir changer
+     * le petit-déjeuner ou la collation d'un jour, pas seulement les deux repas
+     * principaux. Les créneaux absents gardent la recette par défaut du créneau.
+     */
+    slots?: Record<string, string>
+  },
 ): DayPlan {
   const i = ((index % CYCLE_LENGTH) + CYCLE_LENGTH) % CYCLE_LENGTH
   const tpl = { ...CYCLE[i], ...menu }
@@ -157,7 +177,7 @@ export function buildDay(
   const meals: DayMeal[] = []
 
   for (const slot of slots) {
-    const rid = slot.recipe ?? (slot.from === 'lunch' ? tpl.lunch : tpl.dinner)
+    const rid = menu?.slots?.[slot.id] ?? slot.recipe ?? (slot.from === 'lunch' ? tpl.lunch : tpl.dinner)
     const recipe = lib.recipes[rid] ?? RECIPE_BY_ID[rid]
     if (!recipe) continue
     const items = scaleItems(recipe.items, ratioOf(slot))
@@ -485,32 +505,30 @@ export function fmtQty(grams: number): string {
 }
 
 /**
- * Agrège les besoins bruts sur une suite de jours.
- * `trainedFor(index)` dit si le jour du cycle compte comme jour avec séance : les
- * portions de féculents en dépendent, donc la liste aussi.
+ * Range un total de grammes par rayon, dans l'ordre du magasin.
+ *
+ * Point de passage UNIQUE vers une liste de courses : qui que soit l'appelant, la
+ * liste est construite ici. Il y avait auparavant deux constructeurs — un partant
+ * des jours du cycle, un partant des portions choisies — qui divergeaient sur des
+ * détails (l'ordre des rayons, l'arrondi) et qu'il fallait corriger deux fois.
  */
-export function shoppingFor(
-  indices: number[],
-  trainedFor: (index: number) => boolean,
+export function shoppingFrom(
+  grams: Record<string, number>,
   foods: Record<string, Food> = FOOD_BY_ID,
 ): ShoppingList {
-  const grams: Record<string, number> = {}
-  for (const i of indices) {
-    for (const meal of buildDay(i, trainedFor(i)).meals) {
-      for (const it of meal.items) grams[it.food] = (grams[it.food] ?? 0) + it.g
-    }
-  }
   const byCat = new Map<FoodCat, ShoppingLine[]>()
   for (const [id, g] of Object.entries(grams)) {
     const food = foods[id]
-    if (!food) continue
-    const line: ShoppingLine = { food, grams: g, qty: fmtQty(g) }
+    if (!food || !(g > 0)) continue
+    const line: ShoppingLine = { food, grams: Math.round(g), qty: fmtQty(g) }
     const arr = byCat.get(food.cat)
     if (arr) arr.push(line)
     else byCat.set(food.cat, [line])
   }
   for (const lines of byCat.values()) lines.sort((a, b) => b.grams - a.grams)
-  return [...byCat.entries()].map(([cat, lines]) => ({ cat, lines }))
+  // Ordre des rayons, pas ordre alphabétique : on remonte les allées une fois, au
+  // lieu de faire des allers-retours en suivant l'ordre des recettes.
+  return CAT_ORDER.filter(c => byCat.has(c)).map(cat => ({ cat, lines: byCat.get(cat)! }))
 }
 
 /** Le cycle par défaut : séance les jours 0, 1, 3, 4 de chaque semaine (lundi, mardi, jeudi, vendredi). */
@@ -1310,33 +1328,154 @@ export const nextMeal = (line: TimelineEntry[]) => line.find(e => e.kind === 'pl
 /** Heure courante au format HH:MM, pour préremplir une saisie. */
 export const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
-// ─── Sélection : ce que je cuisine ──────────────────────────────────────────
+// ─── La semaine type ────────────────────────────────────────────────────────
 //
-// Le plan livré couvre 14 jours, mais l'appli ne les met plus en scène : ce n'est
-// qu'un pré-remplissage. Ce qui pilote vraiment, c'est la SÉLECTION — les plats
-// cochés avec leur nombre de portions. C'est d'elle que sortent la liste de
-// courses et les conseils de préparation, et c'est elle qui survit aux deux
-// semaines de démarrage.
+// Ce qui pilote la nutrition, c'est UNE SEMAINE, pas un cycle de quatorze jours.
+//
+// Le plan livré couvrait deux semaines d'un bloc. C'était invendable en cuisine :
+// on ne prépare pas quatorze jours le dimanche, ça ne tient ni dans un frigo ni
+// dans les durées de conservation. Une semaine type est un modèle de sept jours,
+// modifiable créneau par créneau, qu'on choisit avant de faire les courses et qui
+// se répète tant qu'on n'en change pas. Le cycle de quatorze jours n'a pas disparu :
+// il sert à fabriquer les deux semaines livrées, et rien d'autre.
+
+/** Un jour d'une semaine type. `slots` ne contient que les écarts au créneau par défaut. */
+export interface MenuDay {
+  /** « Je ne suis pas là » : aucun repas prévu, rien à acheter, rien à cuisiner. */
+  off: boolean
+  slots: Record<string, string>
+}
+export interface MenuWeek {
+  id: string
+  name: string
+  builtin?: boolean // livrée avec le plan : elle se réinitialise, elle ne se supprime pas
+  days: MenuDay[] // toujours 7, index 0 = lundi
+}
 
 /** Nombre de portions à cuisiner, par identifiant de plat. Zéro = non retenu. */
 export type Selection = Record<string, number>
 
-/** Durée du pré-remplissage livré. Au-delà, plus rien n'est proposé d'office. */
-export const PRECONFIG_DAYS = 14
+/** Les deux repas qu'on choisit vraiment. Le reste tourne autour. */
+export const MAIN_KINDS: Recipe['kind'][] = ['boite', 'diner']
+
+/** Créneaux d'une journée selon qu'il y a séance ou non. */
+export const slotsOf = (trained: boolean): Slot[] => (trained ? SLOTS_GYM : SLOTS_REST)
+
+const blankDay = (): MenuDay => ({ off: false, slots: {} })
+
+/** Sept jours vides — le squelette de toute semaine type. */
+export const blankWeekDays = (): MenuDay[] => Array.from({ length: 7 }, blankDay)
 
 /**
- * Position dans le cycle livré, comptée depuis le jour de démarrage.
- * `null` hors de la fenêtre : passé les 14 jours, l'appli n'a plus d'avis — c'est
- * la sélection qui décide. Un plan qui continue de proposer indéfiniment ce qu'il
- * a calculé une fois finit par proposer à côté.
+ * Les deux semaines livrées, découpées dans le cycle de quatorze jours.
+ *
+ * Elles ne sont pas figées dans un fichier de données : les recalculer depuis
+ * `CYCLE` garantit qu'elles ne peuvent pas diverger du plan d'origine, et qu'un
+ * changement de menu ne se corrige pas à deux endroits.
  */
-export function cycleIndexFrom(startIso: string | null, iso: string): number | null {
-  if (!startIso) return null
-  const d = Math.floor(daysBetween(startIso, iso))
-  return d >= 0 && d < PRECONFIG_DAYS ? d : null
+export function builtinWeeks(): MenuWeek[] {
+  const names = ['Semaine A', 'Semaine B']
+  return names.map((name, w) => ({
+    id: `built-${w + 1}`,
+    name,
+    builtin: true,
+    days: Array.from({ length: 7 }, (_, d) => {
+      const tpl = CYCLE[(w * 7 + d) % CYCLE_LENGTH]
+      return { off: false, slots: { lunch: tpl.lunch, dinner: tpl.dinner } }
+    }),
+  }))
 }
 
-/** Portions totales et macros de la sélection. */
+/**
+ * Remet une semaine venue du stockage en forme : sept jours, des identifiants de
+ * recette en chaîne, rien d'autre. Une sauvegarde plus ancienne ou tronquée passe
+ * sans faire tomber l'écran.
+ */
+export function normalizeWeek(raw: unknown): MenuWeek | null {
+  const w = raw as Partial<MenuWeek> | null
+  if (!w || typeof w.id !== 'string' || !Array.isArray(w.days)) return null
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = w.days![i] as Partial<MenuDay> | undefined
+    const slots: Record<string, string> = {}
+    for (const [k, v] of Object.entries(d?.slots ?? {})) {
+      // La chaîne vide est CONSERVÉE : c'est « rien à ce créneau ce jour-là », un
+      // choix explicite. La filtrer faisait réapparaître le porridge du plan au
+      // rechargement, sur un jour où on avait justement dit ne rien vouloir.
+      if (typeof v === 'string') slots[k] = v
+    }
+    return { off: d?.off === true, slots }
+  })
+  return { id: w.id, name: typeof w.name === 'string' && w.name ? w.name : 'Ma semaine', builtin: w.builtin === true, days }
+}
+
+/** Recette effective d'un créneau : celle du menu, sinon celle par défaut du créneau. */
+export function recipeForSlot(week: MenuWeek, dow: number, slot: Slot): string | undefined {
+  return week.days[dow]?.slots[slot.id] ?? slot.recipe
+}
+
+/**
+ * Les sept journées d'une semaine type, développées en plans complets.
+ *
+ * `gym[dow]` vient de la semaine type d'entraînement — un seul endroit décide des
+ * jours de salle, et c'est lui qui module les féculents. Un jour marqué absent
+ * renvoie `null` plutôt qu'une journée vide : c'est la différence entre « je ne
+ * mange rien » et « je ne suis pas là », et seule la seconde doit sortir des courses.
+ */
+export function weekDayPlans(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN): (DayPlan | null)[] {
+  return Array.from({ length: 7 }, (_, d) => {
+    const day = week.days[d]
+    if (!day || day.off) return null
+    return buildDay(d, gym[d] === true, lib, { slots: day.slots })
+  })
+}
+
+/** Jours réellement prévus dans la semaine — les absences ne comptent pas. */
+export const weekDaysOn = (week: MenuWeek) => week.days.filter(d => d && !d.off).length
+
+/**
+ * Grammes bruts d'une semaine, tous créneaux confondus.
+ *
+ * Petit-déjeuner, banane, shaker et collations sont dedans. Ils ne se CHOISISSENT
+ * pas — on ne sélectionne pas son porridge — mais ils s'ACHÈTENT : les laisser
+ * dehors, c'est rentrer du magasin sans petit-déjeuner. Et les portions sont prises
+ * après modulation, donc un jour sans séance pèse bien moins de féculents.
+ */
+export function weekGrams(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN): Record<string, number> {
+  const grams: Record<string, number> = {}
+  for (const plan of weekDayPlans(week, gym, lib)) {
+    if (!plan) continue
+    for (const meal of plan.meals) {
+      for (const it of meal.items) grams[it.food] = (grams[it.food] ?? 0) + it.g
+    }
+  }
+  return grams
+}
+
+/** La liste de courses d'une semaine type, rangée par rayon. */
+export const shoppingFromWeek = (week: MenuWeek, gym: boolean[], lib: Library = BUILTIN): ShoppingList =>
+  shoppingFrom(weekGrams(week, gym, lib), lib.foods)
+
+/**
+ * Portions à cuisiner : uniquement les repas principaux, comptés par plat.
+ *
+ * Un dîner préparé le soir même en fait partie — il s'achète et se cuisine, même
+ * s'il ne passe pas par une boîte. Ne retenir que les plats « à l'avance » donnait
+ * une liste amputée de la moitié des dîners, et on s'en apercevait devant le frigo.
+ */
+export function cookSelection(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN): Selection {
+  const sel: Selection = {}
+  for (const plan of weekDayPlans(week, gym, lib)) {
+    if (!plan) continue
+    for (const meal of plan.meals) {
+      const r = lib.recipes[meal.recipeId]
+      if (!r || !MAIN_KINDS.includes(r.kind)) continue
+      sel[meal.recipeId] = (sel[meal.recipeId] ?? 0) + 1
+    }
+  }
+  return sel
+}
+
+/** Portions totales et macros d'une sélection. */
 export function selectionTotals(sel: Selection, lib: Library = BUILTIN) {
   let portions = 0
   const macros: Macros[] = []
@@ -1350,102 +1489,162 @@ export function selectionTotals(sel: Selection, lib: Library = BUILTIN) {
   return { portions, dishes: macros.length, ...roundMacros(sumMacros(macros)) }
 }
 
-/**
- * Liste de courses issue de la sélection : on additionne les ingrédients de chaque
- * plat multipliés par ses portions, puis on regroupe par rayon.
- *
- * Elle se déduisait avant d'une fenêtre de jours du cycle, ce qui obligeait à
- * accepter le menu tel quel pour obtenir une liste juste. Partir des portions
- * réellement prévues rend la liste vraie quel que soit le nombre de jours couverts
- * — trois jours ou deux semaines.
- */
-export function shoppingFromSelection(
-  sel: Selection,
-  lib: Library = BUILTIN,
-  /** Jours de petits-déjeuners et de collations à couvrir en plus des plats choisis. */
-  staplesDays = 0,
-): ShoppingList {
-  const grams: Record<string, number> = { ...staplesFor(staplesDays, lib) }
+/** Ce qu'il reste au frigo : portions cuisinées moins portions déjà mangées. */
+export function stockOf(sel: Selection, consumed: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {}
   for (const [id, n] of Object.entries(sel)) {
-    const r = lib.recipes[id]
-    if (!r || !(n > 0)) continue
-    for (const it of r.items) grams[it.food] = (grams[it.food] ?? 0) + it.g * n
+    if (n > 0) out[id] = Math.max(0, n - (consumed[id] ?? 0))
   }
-  const byCat = new Map<FoodCat, ShoppingLine[]>()
-  for (const [id, g] of Object.entries(grams)) {
-    const food = lib.foods[id]
-    if (!food || g <= 0) continue
-    const line: ShoppingLine = { food, grams: Math.round(g), qty: fmtQty(g) }
-    const arr = byCat.get(food.cat)
-    if (arr) arr.push(line)
-    else byCat.set(food.cat, [line])
+  return out
+}
+
+// ─── Les sessions de cuisine ────────────────────────────────────────────────
+//
+// « Je fais tout dimanche, sauf ce qui ne tient pas la semaine. »
+//
+// C'est la règle, et elle se calcule : chaque aliment porte sa durée de
+// conservation une fois cuisiné, un plat prend la plus courte de ses ingrédients,
+// et un plat mangé au-delà de cette durée doit être refait. La session du mercredi
+// n'existe donc que si la semaine en a besoin — et elle ne contient que ce qui
+// n'aurait pas tenu.
+
+/** Jour de cuisson de chaque session, exprimé en index de semaine (0 = lundi). */
+export const COOK_SUNDAY = -1 // la veille du lundi
+export const COOK_WEDNESDAY = 2 // le mercredi soir, après le dîner
+
+/** Conservation d'un plat cuisiné : la plus courte de ses ingrédients. */
+export function keepsOf(recipe: Recipe, lib: Library = BUILTIN): number {
+  let min = KEEPS_DEFAULT
+  for (const it of recipe.items) {
+    const k = lib.foods[it.food]?.keeps
+    if (typeof k === 'number' && k < min) min = k
   }
-  for (const lines of byCat.values()) lines.sort((a, b) => b.grams - a.grams)
-  // Ordre des rayons, pas ordre alphabétique : on remonte les allées d'un magasin
-  // dans un ordre à peu près stable, et le frais se prend en dernier.
-  return CAT_ORDER.filter(c => byCat.has(c)).map(cat => ({ cat, lines: byCat.get(cat)! }))
+  return min
+}
+
+export type CookWhen = 'dim' | 'mer' | 'minute'
+
+export interface CookDish {
+  recipeId: string
+  name: string
+  n: number
+  days: number[] // index de jour concernés, 0 = lundi
+  keeps: number
+}
+export interface CookSession {
+  id: CookWhen
+  title: string
+  when: string
+  hint: string
+  minutes: number
+  dishes: CookDish[]
+  groups: PrepGroup[]
 }
 
 /**
- * Les créneaux qu'on ne choisit pas : petit-déjeuner, banane, shaker, collations,
- * créatine. Identiques tous les jours — on ne « sélectionne » pas son porridge.
- */
-const FIXED_SLOTS = new Set(['pdj', 'pre', 'post', 'snack', 'night', 'creatine'])
-
-/**
- * Le quotidien : ce qu'il faut acheter EN PLUS des plats choisis, pour `days` jours.
+ * Où placer la cuisson d'un plat mangé le jour `dow`.
  *
- * Ces aliments ne passaient pas du tout dans la liste de courses — flocons d'avoine,
- * fromage blanc, whey, fruits rouges, banane, créatine, pomme, amandes. Le
- * raisonnement (« le fromage blanc s'achète au paquet, pas à la portion ») justifiait
- * de les tenir hors du sélecteur de portions, pas de les faire disparaître des
- * courses : on ne les CHOISIT pas, mais on les ACHÈTE. Sans eux, on rentrait du
- * magasin sans petit-déjeuner ni collation.
+ * Un plat qui ne se prépare pas à l'avance (poisson, œufs, salade) est toujours
+ * fait le jour même : le réchauffer le rend immangeable, et ça n'est pas une
+ * question de sécurité mais de plaisir — un plan qu'on n'a pas envie de manger ne
+ * tient pas deux semaines.
  */
-export function staplesFor(days: number, lib: Library = BUILTIN): Record<string, number> {
-  const grams: Record<string, number> = {}
-  if (!(days > 0)) return grams
-  for (let d = 0; d < days; d++) {
-    // Mélange salle / repos de la semaine type : un jour sans séance n'a ni banane
-    // ni shaker, en acheter autant que de jours reviendrait à en jeter.
-    for (const meal of buildDay(d, DEFAULT_TRAINED(d), lib).meals) {
-      if (!FIXED_SLOTS.has(meal.slot)) continue
-      for (const it of meal.items) grams[it.food] = (grams[it.food] ?? 0) + it.g
-    }
-  }
-  return grams
+export function cookSlotFor(dow: number, keeps: number, batch: boolean): CookWhen {
+  if (!batch) return 'minute'
+  if (dow - COOK_SUNDAY <= keeps) return 'dim'
+  if (dow > COOK_WEDNESDAY && dow - COOK_WEDNESDAY <= keeps) return 'mer'
+  return 'minute'
+}
+
+const DAY_SHORT = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+
+/** Liste de jours en toutes lettres : « lundi, mardi et jeudi ». */
+export function listDays(days: number[]): string {
+  const names = [...new Set(days)].sort((a, b) => a - b).map(d => DAY_SHORT[d] ?? '?')
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} et ${names.at(-1)}`
 }
 
 /**
- * Pré-remplit la sélection à partir des 14 jours livrés.
- *
- * On compte TOUS les repas principaux, pas seulement ceux qui se préparent à
- * l'avance. Un dîner cuisiné le soir même s'achète quand même : ne retenir que les
- * plats « batch » donnait une liste de courses amputée de la moitié des dîners, et
- * on s'en apercevait devant le frigo. Le moment de la cuisson est une question de
- * préparation (voir `prepGroups`), pas une question de courses.
- *
- * Les collations restent dehors du SÉLECTEUR — on ne choisit pas son porridge — mais
- * elles entrent bien dans les courses, via `staplesFor`.
+ * Durée estimée d'une session. Volontairement grossière : ce qui compte est de
+ * savoir si on bloque une demi-heure ou une soirée, pas de compter les minutes.
  */
-export function seedSelection(lib: Library = BUILTIN, days = PRECONFIG_DAYS): Selection {
-  const sel: Selection = {}
-  for (let i = 0; i < days; i++) {
-    for (const meal of buildDay(i, DEFAULT_TRAINED(i), lib).meals) {
+export function cookMinutes(dishes: CookDish[]): number {
+  if (!dishes.length) return 0
+  const portions = dishes.reduce((n, d) => n + d.n, 0)
+  return Math.round((20 + dishes.length * 8 + portions * 2) / 5) * 5
+}
+
+const SESSION_META: Record<CookWhen, { title: string, when: string, hint: string }> = {
+  dim: {
+    title: 'Dimanche',
+    when: 'La veille du premier jour',
+    hint: 'Tout ce qui tient jusqu\'au milieu de semaine. Le féculent se cuit EN VRAC et se pèse au moment de remplir la boîte : c\'est ce qui permet de réduire une portion le soir d\'une séance annulée, ce qu\'une boîte déjà pesée ne permet plus.',
+  },
+  mer: {
+    title: 'Mercredi soir',
+    when: 'Après le dîner du mercredi',
+    hint: 'Uniquement ce qui n\'aurait pas tenu jusqu\'ici. Rien de ce qui est cuit dimanche n\'est refait : cette session-là est courte, c\'est le prix à payer pour ne pas manger du poulet de six jours le samedi.',
+  },
+  minute: {
+    title: 'Le soir même',
+    when: 'Au moment de manger',
+    hint: 'Poisson, œufs, légumes croquants : réchauffés, ils deviennent secs ou tristes. Leurs ingrédients sont bien dans la liste de courses — c\'est la cuisson qui attend, pas l\'achat.',
+  },
+}
+
+/**
+ * Le programme de cuisine d'une semaine : ce qu'on prépare dimanche, ce qu'il faut
+ * refaire mercredi, ce qui se fait le soir même.
+ *
+ * Une session vide n'est pas renvoyée : si toute la semaine tient d'un coup, il n'y
+ * a pas de session du mercredi, et afficher une carte vide laisserait croire à un
+ * oubli.
+ */
+export function cookPlan(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN): CookSession[] {
+  const plans = weekDayPlans(week, gym, lib)
+  const buckets = new Map<CookWhen, Map<string, CookDish>>()
+
+  plans.forEach((plan, dow) => {
+    if (!plan) return
+    for (const meal of plan.meals) {
       const r = lib.recipes[meal.recipeId]
-      if (!r || (r.kind !== 'boite' && r.kind !== 'diner')) continue
-      sel[meal.recipeId] = (sel[meal.recipeId] ?? 0) + 1
+      if (!r || !MAIN_KINDS.includes(r.kind)) continue
+      const keeps = keepsOf(r, lib)
+      const where = cookSlotFor(dow, keeps, !!r.batch)
+      const bucket = buckets.get(where) ?? new Map<string, CookDish>()
+      const cur = bucket.get(r.id) ?? { recipeId: r.id, name: r.name, n: 0, days: [], keeps }
+      cur.n += 1
+      cur.days.push(dow)
+      bucket.set(r.id, cur)
+      buckets.set(where, bucket)
     }
-  }
-  return sel
+  })
+
+  const order: CookWhen[] = ['dim', 'mer', 'minute']
+  return order.flatMap((id) => {
+    const bucket = buckets.get(id)
+    if (!bucket?.size) return []
+    const dishes = [...bucket.values()].sort((a, b) => a.days[0] - b.days[0])
+    const sel: Selection = Object.fromEntries(dishes.map(d => [d.recipeId, d.n]))
+    return [{
+      id,
+      ...SESSION_META[id],
+      // Les plats du soir même ne se « préparent » pas en lot : les regrouper par
+      // geste n'aurait aucun sens, on les cuisine un par un le jour venu.
+      minutes: id === 'minute' ? 0 : cookMinutes(dishes),
+      dishes,
+      groups: id === 'minute' ? [] : prepGroups(sel, lib),
+    }]
+  })
 }
 
 export interface PrepGroup { id: string, title: string, hint: string, steps: string[] }
 
 /**
- * Conseils de préparation, déduits de la sélection et regroupés par geste plutôt
- * que par plat : on ne cuit pas le riz de quatre recettes en quatre fois.
- * C'est l'ordre dans lequel on occupe une cuisine, pas l'ordre du carnet.
+ * Conseils de préparation, regroupés par geste plutôt que par plat : on ne cuit pas
+ * le riz de quatre recettes en quatre fois. C'est l'ordre dans lequel on occupe une
+ * cuisine, pas l'ordre du carnet.
  */
 export function prepGroups(sel: Selection, lib: Library = BUILTIN): PrepGroup[] {
   const chosen = Object.entries(sel)
@@ -1460,7 +1659,7 @@ export function prepGroups(sel: Selection, lib: Library = BUILTIN): PrepGroup[] 
     for (const it of r.items) {
       const f = lib.foods[it.food]
       if (!f) continue
-      const bucket = STARCHY.has(f.id) ? starch : f.cat === 'viandes' || f.cat === 'poissons' ? proteins : f.cat === 'legumes' ? veg : null
+      const bucket = STARCHY.has(f.id) ? starch : f.cat === 'viandes' || f.cat === 'oeufs' ? proteins : f.cat === 'legumes' ? veg : null
       if (bucket) bucket.set(f.name, (bucket.get(f.name) ?? 0) + it.g * n)
     }
   }
@@ -1468,56 +1667,37 @@ export function prepGroups(sel: Selection, lib: Library = BUILTIN): PrepGroup[] 
     [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, g]) => `${name} — ${fmtQty(g)}`)
 
   const out: PrepGroup[] = []
-  if (starch.size) {
-    out.push({
-      id: 'feculents',
-      title: 'Les féculents, en vrac',
-      hint: 'Tout d\'un coup et SANS portionner : c\'est ce qui permet d\'ajuster une assiette le soir d\'une séance annulée. Une portion déjà pesée dans une boîte ne se reprend pas.',
-      steps: lines(starch),
-    })
-  }
   if (proteins.size) {
     out.push({
       id: 'proteines',
       title: 'Les protéines',
-      hint: 'À cuire en premier si le four est partagé : c\'est le plus long, et le reste peut mijoter pendant.',
+      hint: 'À lancer en premier si le four est partagé : c\'est le plus long, et le reste peut cuire pendant.',
       steps: lines(proteins),
+    })
+  }
+  if (starch.size) {
+    out.push({
+      id: 'feculents',
+      title: 'Les féculents, en vrac',
+      hint: 'Tout d\'un coup et SANS portionner. Grammages pesés crus : c\'est ce que la liste de courses annonce, et c\'est le seul repère qui ne bouge pas à la cuisson.',
+      steps: lines(starch),
     })
   }
   if (veg.size) {
     out.push({
       id: 'legumes',
       title: 'Les légumes',
-      hint: 'Lavés et coupés maintenant, cuits au dernier moment quand c\'est possible : la vitamine C part à la cuisson et davantage encore au réchauffage.',
+      hint: 'Lavés et coupés maintenant, cuits au dernier moment quand c\'est possible : la vitamine C part à la cuisson, et davantage encore au réchauffage.',
       steps: lines(veg),
     })
   }
-  const ahead = chosen.filter(c => c.r.batch)
-  const fresh = chosen.filter(c => !c.r.batch)
-  if (ahead.length) {
+  if (chosen.length) {
     out.push({
       id: 'boites',
       title: 'La mise en boîte',
-      hint: 'Portionne protéines et légumes, laisse le féculent à part. Au frigo, 3 jours pour la viande et le poisson cuits ; au-delà, congèle dès la mise en boîte plutôt qu\'au dernier moment.',
-      steps: ahead.map(({ r, n }) => `${r.name} — ${n} portion${n > 1 ? 's' : ''}`),
+      hint: 'Pèse le plat FINI et divise-le en parts égales : chaque boîte contient alors exactement sa part des apports annoncés, quelle que soit l\'eau perdue à la cuisson. Refroidir à découvert avant de fermer, sinon la condensation détrempe tout.',
+      steps: chosen.map(({ r, n }) => `${r.name} — ${n} portion${n > 1 ? 's' : ''}`),
     })
-  }
-  if (fresh.length) {
-    out.push({
-      id: 'minute',
-      title: 'À cuisiner le soir même',
-      hint: 'Ceux-là ne se préparent pas à l\'avance — poisson, œufs, légumes croquants perdent trop à être réchauffés. Leurs ingrédients sont bien dans la liste de courses : c\'est la cuisson qui attend, pas l\'achat.',
-      steps: fresh.map(({ r, n }) => `${r.name} — ${n} fois`),
-    })
-  }
-  return out
-}
-
-/** Ce qu'il reste au frigo : portions cuisinées moins portions déjà mangées. */
-export function stockOf(sel: Selection, consumed: Record<string, number>): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const [id, n] of Object.entries(sel)) {
-    if (n > 0) out[id] = Math.max(0, n - (consumed[id] ?? 0))
   }
   return out
 }
