@@ -1,17 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BUDGET_WARN_BYTES, MAX_EDGE, MAX_INPUT_BYTES, THUMB_EDGE,
+  BUDGET_WARN_BYTES, CARD_EDGE, MAX_EDGE, MAX_INPUT_BYTES, THUMB_EDGE,
   expectedBytes, fitWithin, humanBytes, rejectReason, storageVerdict,
 } from '../../lib/photoSize'
+
+describe('les trois tailles servies', () => {
+  it('vont de la vignette de liste au plein écran', () => {
+    // Servir la vignette en couverture de carte était toute l'explication du flou :
+    // 192 px étirés sur une carte de 340 px. Trois tailles, trois usages.
+    expect(THUMB_EDGE).toBeLessThan(CARD_EDGE)
+    expect(CARD_EDGE).toBeLessThan(MAX_EDGE)
+  })
+
+  it('le plein format couvre un téléphone à 3× sans mollesse', () => {
+    // 400 px CSS de large sur un écran à 3× réclament 1200 px réels.
+    expect(MAX_EDGE).toBeGreaterThanOrEqual(1200)
+  })
+})
 
 describe('fitWithin', () => {
   it('réduit une photo d\'iPhone au côté long demandé', () => {
     // 12 Mpx en portrait : 3024 × 4032.
-    expect(fitWithin(3024, 4032, MAX_EDGE)).toEqual({ w: 768, h: 1024 })
+    expect(fitWithin(3024, 4032, MAX_EDGE)).toEqual({ w: 1080, h: MAX_EDGE })
   })
 
   it('garde les proportions en paysage', () => {
-    expect(fitWithin(4032, 3024, MAX_EDGE)).toEqual({ w: 1024, h: 768 })
+    expect(fitWithin(4032, 3024, MAX_EDGE)).toEqual({ w: MAX_EDGE, h: 1080 })
   })
 
   it('n\'agrandit jamais — inventer des pixels ne fait que gonfler le fichier', () => {

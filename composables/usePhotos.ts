@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { MAX_EDGE, QUALITY, THUMB_EDGE, THUMB_QUALITY, fitWithin, rejectReason, storageVerdict } from '../lib/photoSize'
+import { CARD_EDGE, CARD_QUALITY, MAX_EDGE, QUALITY, THUMB_EDGE, THUMB_QUALITY, fitWithin, rejectReason } from '../lib/photoSize'
 
 // Photos des plats, une par plat, stockées SUR LE TÉLÉPHONE.
 //
@@ -20,6 +20,15 @@ const STORE = 'dishes'
 export interface DishPhoto {
   id: string // identifiant du plat
   full: Blob
+  /**
+   * Taille intermédiaire pour les couvertures de cartes.
+   *
+   * Il n'y en avait que deux, et les cartes affichaient la vignette de liste :
+   * 192 px étirés sur 340 px de large, d'où le flou. Servir le plein format à leur
+   * place aurait réglé le flou en faisant décoder seize images de 1440 px pour une
+   * grille. Une taille de plus coûte 15 Ko par photo et règle les deux.
+   */
+  card?: Blob
   thumb: Blob
   w: number
   h: number
@@ -39,6 +48,11 @@ let dbPromise: Promise<IDBDatabase | null> | null = null
 // URL d'objet par plat. Sans ce cache, chaque rendu recrée une URL et l'ancienne
 // n'est jamais révoquée : le blob reste en mémoire jusqu'au rechargement de la page.
 const urls = new Map<string, string>()
+/** Les trois tailles stockées pour chaque photo. */
+export type PhotoKind = 'thumb' | 'card' | 'full'
+export const PHOTO_KINDS = ['thumb', 'card', 'full'] as const
+/** Le navigateur s'est-il engagé à ne pas évincer le stockage ? */
+const persisted = ref<boolean | null>(null)
 
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise
@@ -119,6 +133,13 @@ export function usePhotos() {
   async function hydrate() {
     if (hydrated || !import.meta.client) return
     hydrated = true
+    // « Stockage persistant » : sans ça, un navigateur à court d'espace peut vider
+    // IndexedDB sans prévenir — c'est ce qui fait dire que les photos sont « dans le
+    // cache ». Avec, elles ne partent que si l'utilisateur les supprime lui-même.
+    try {
+      if (navigator.storage?.persist) persisted.value = await navigator.storage.persist()
+    }
+    catch { persisted.value = null }
     const all = await tx<DishPhoto[]>('readonly', s => s.getAll() as IDBRequest<DishPhoto[]>)
     const next: Record<string, PhotoMeta> = {}
     for (const p of all ?? []) next[p.id] = { id: p.id, w: p.w, h: p.h, bytes: p.bytes, at: p.at }
@@ -139,16 +160,17 @@ export function usePhotos() {
     busy.value = id
     try {
       const src = await decode(file)
-      const [full, thumb] = await Promise.all([
+      const [full, card, thumb] = await Promise.all([
         encode(src, MAX_EDGE, QUALITY),
+        encode(src, CARD_EDGE, CARD_QUALITY),
         encode(src, THUMB_EDGE, THUMB_QUALITY),
       ])
       // Lire les dimensions AVANT de fermer le bitmap : après close(), width vaut 0.
       const size = fitWithin(src.width, src.height, MAX_EDGE)
       if ('close' in src) src.close() // libère le bitmap sans attendre le ramasse-miettes
       const rec: DishPhoto = {
-        id, full, thumb, w: size.w, h: size.h,
-        bytes: full.size + thumb.size,
+        id, full, card, thumb, w: size.w, h: size.h,
+        bytes: full.size + card.size + thumb.size,
         at: new Date().toISOString().slice(0, 16),
       }
       const ok = await tx('readwrite', s => s.put(rec))
@@ -188,7 +210,7 @@ export function usePhotos() {
   // Les deux tailles sont indexées séparément (`id:thumb`, `id:full`) : les révoquer
   // toutes les deux, sinon la vignette de l'ancienne photo survit au remplacement.
   function revoke(id: string) {
-    for (const kind of ['thumb', 'full'] as const) {
+    for (const kind of PHOTO_KINDS) {
       const key = `${id}:${kind}`
       const u = urls.get(key)
       if (u) { URL.revokeObjectURL(u); urls.delete(key) }
@@ -199,22 +221,44 @@ export function usePhotos() {
     urls.clear()
   }
 
-  /** URL affichable. `thumb` pour les listes, plein format pour l'aperçu. */
-  async function urlOf(id: string, kind: 'thumb' | 'full' = 'thumb'): Promise<string | null> {
+  /**
+   * URL affichable, à la taille demandée : `thumb` pour les listes, `card` pour les
+   * couvertures de cartes, `full` pour l'aperçu plein écran. Servir la mauvaise
+   * taille se voit tout de suite — soit c'est flou, soit ça rame.
+   */
+  async function urlOf(id: string, kind: PhotoKind = 'thumb'): Promise<string | null> {
     const key = `${id}:${kind}`
     const cached = urls.get(key)
     if (cached) return cached
     const rec = await tx<DishPhoto>('readonly', s => s.get(id) as IDBRequest<DishPhoto>)
     if (!rec) return null
-    const url = URL.createObjectURL(kind === 'full' ? rec.full : rec.thumb)
+    // Les photos prises avant l'ajout de la taille intermédiaire n'ont pas de `card` :
+    // on retombe sur le plein format, net, plutôt que sur la vignette, floue.
+    const blob = kind === 'thumb' ? rec.thumb : kind === 'card' ? rec.card ?? rec.full : rec.full
+    const url = URL.createObjectURL(blob)
     urls.set(key, url)
     return url
   }
 
-  const usage = () => {
-    const list = Object.values(metas.value)
-    return storageVerdict(list.reduce((n, p) => n + p.bytes, 0), list.length)
+  /**
+   * Télécharge la photo pleine taille, pour la ranger dans la galerie du téléphone.
+   *
+   * IndexedDB n'est pas un cache — c'est du stockage persistant, et `persist()`
+   * ci-dessus demande au navigateur de ne jamais l'évincer. Mais une PWA ne peut pas
+   * écrire dans la pellicule : sur iPhone comme sur Android, la seule voie est un
+   * téléchargement que l'utilisateur range où il veut.
+   */
+  async function download(id: string, label = 'plat'): Promise<boolean> {
+    const url = await urlOf(id, 'full')
+    if (!url) return false
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${label.replace(/[^\w\-]+/g, '-').toLowerCase()}.webp`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    return true
   }
 
-  return { hydrate, has, metaOf, metas, put, remove, prune, urlOf, revoke, revokeAll, usage, busy, error }
+  return { hydrate, has, metaOf, metas, put, remove, prune, urlOf, download, revoke, revokeAll, persisted, busy, error }
 }

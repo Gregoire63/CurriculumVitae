@@ -37,10 +37,55 @@ const KINDS: { id: RecipeKind, label: string }[] = [
   { id: 'sauce', label: 'Sauce / condiment' },
 ]
 
-const recipes = computed(() => Object.values(library.value.recipes)
+// ─── Filtres ─────────────────────────────────────────────────────────────────
+//
+// Trente-cinq plats dans une grille, ça ne se parcourt plus : on cherche « du
+// poisson » ou « une sauce », pas « la sixième carte ». Deux axes, parce que ce
+// sont les deux questions qu'on se pose — à quel moment de la journée, et avec
+// quoi dedans.
+type Base = 'viande' | 'poisson' | 'oeufs' | 'vege'
+const BASES: { id: Base, label: string, foods: string[] }[] = [
+  { id: 'viande', label: '🍗 Viande', foods: ['filet-de-poulet', 'escalope-de-dinde', 'steak-hache-5'] },
+  { id: 'poisson', label: '🐟 Poisson', foods: ['cabillaud-colin', 'saumon', 'thon-au-naturel-egoutte'] },
+  { id: 'oeufs', label: '🥚 Œufs', foods: ['ufs-entiers'] },
+  { id: 'vege', label: '🌱 Sans viande', foods: [] },
+]
+const ANIMAL = new Set(BASES.flatMap(b => b.foods))
+const kindFilter = ref<RecipeKind | null>(null)
+const baseFilter = ref<Base | null>(null)
+const search = ref('')
+
+/** Le plat contient-il cette base ? « Sans viande » se déduit de l'absence des autres. */
+function matchesBase(r: Recipe, base: Base): boolean {
+  const ids = r.items.map(i => i.food)
+  if (base === 'vege') return !ids.some(i => ANIMAL.has(i))
+  return ids.some(i => BASES.find(b => b.id === base)!.foods.includes(i))
+}
+
+const allRecipes = computed(() => Object.values(library.value.recipes)
   .map(r => ({ r, macros: roundMacros(macrosOf(expandItems(r, library.value), library.value.foods)) }))
   .sort((a, b) => KINDS.findIndex(k => k.id === a.r.kind) - KINDS.findIndex(k => k.id === b.r.kind)
     || a.r.name.localeCompare(b.r.name)))
+
+const recipes = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  return allRecipes.value.filter(({ r }) => {
+    if (kindFilter.value && r.kind !== kindFilter.value) return false
+    if (baseFilter.value && !matchesBase(r, baseFilter.value)) return false
+    if (q && !r.name.toLowerCase().includes(q)
+      && !r.items.some(i => (library.value.foods[i.food]?.name ?? '').toLowerCase().includes(q))) return false
+    return true
+  })
+})
+const countOfKind = (k: RecipeKind) => allRecipes.value.filter(x => x.r.kind === k).length
+function clearFilters() {
+  kindFilter.value = null
+  baseFilter.value = null
+  search.value = ''
+}
+
+// La fiche d'un plat, ouverte au clic sur sa carte.
+const sheetId = ref<string | null>(null)
 
 const foods = computed(() => CAT_ORDER
   .map(cat => ({ cat, items: Object.values(library.value.foods).filter(f => f.cat === cat).sort((a, b) => a.name.localeCompare(b.name)) }))
@@ -153,6 +198,36 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
         </button>
       </div>
 
+      <!-- Deux axes de filtre : le moment de la journée, et ce qu'il y a dedans.
+           Ce sont les deux seules questions qu'on se pose devant trente-cinq plats. -->
+      <div class="card nu-filters">
+        <input v-model="search" class="nu-search" type="search" placeholder="Chercher un plat ou un ingrédient…">
+        <div class="nu-chips">
+          <button class="nu-chip" :class="{ on: !kindFilter }" @click="kindFilter = null">Tout</button>
+          <button
+            v-for="k in KINDS" :key="k.id"
+            class="nu-chip" :class="{ on: kindFilter === k.id }"
+            @click="kindFilter = kindFilter === k.id ? null : k.id"
+          >
+            {{ k.label }} <span class="nu-chip-n mono">{{ countOfKind(k.id) }}</span>
+          </button>
+        </div>
+        <div class="nu-chips">
+          <button
+            v-for="b in BASES" :key="b.id"
+            class="nu-chip" :class="{ on: baseFilter === b.id }"
+            @click="baseFilter = baseFilter === b.id ? null : b.id"
+          >
+            {{ b.label }}
+          </button>
+          <button v-if="kindFilter || baseFilter || search" class="nu-chip clear" @click="clearFilters()">✕ Effacer</button>
+        </div>
+      </div>
+
+      <p v-if="!recipes.length" class="muted center">
+        Aucun plat ne correspond. <button class="btn" @click="clearFilters()">Effacer les filtres</button>
+      </p>
+
       <!-- Grille qui se réorganise seule : une liste d'une carte par ligne obligeait
            à faire défiler seize écrans pour retrouver un plat, alors qu'on les
            reconnaît à leur image bien avant de lire leur nom. -->
@@ -169,7 +244,12 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
               <span class="nu-plat-kcal mono">{{ macros.kcal }}</span>
               <span class="mono muted">{{ macros.p }} P · {{ macros.g }} G · {{ macros.l }} L</span>
             </div>
-            <p class="nu-plat-items muted">{{ r.items.map(i => `${foodName(i.food)} ${i.g} g`).join(' · ') }}</p>
+            <!-- Le corps de la carte ouvre la fiche. Les boutons du bas restent des
+                 actions à part : on ne supprime pas un plat en voulant le lire. -->
+            <button class="nu-plat-open" @click="sheetId = r.id">
+              <span class="nu-plat-items muted">{{ r.items.map(i => `${foodName(i.food)} ${i.g} g`).join(' · ') }}</span>
+              <span class="nu-plat-more">Voir la recette →</span>
+            </button>
             <!-- La sauce se prépare à part mais se mange bien : ses calories sont
                  déjà dans le compteur ci-dessus, il faut donc la voir. -->
             <p v-if="r.sauce" class="nu-plat-sauce">🥣 avec {{ library.recipes[r.sauce]?.name ?? r.sauce }}</p>
@@ -208,6 +288,14 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
     </template>
 
     <!-- ─── Éditeur de plat ───────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div class="sport-app sport-portal">
+        <transition name="sheet">
+          <NutritionRecipeSheet v-if="sheetId" :id="sheetId" @close="sheetId = null" />
+        </transition>
+      </div>
+    </Teleport>
+
     <transition name="sheet">
       <div v-if="draft" class="sheet-overlay" @click.self="draft = null">
         <div class="sheet">

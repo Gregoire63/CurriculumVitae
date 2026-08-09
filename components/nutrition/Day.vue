@@ -322,30 +322,15 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
       </div>
     </div>
 
-    <transition name="sheet">
-      <div v-if="sheet" class="sheet-overlay" @click.self="sheet = null">
-        <div class="sheet">
-          <div class="sheet-handle" />
-          <div class="sheet-head">
-            <div>
-              <div class="sheet-title">{{ sheet.name }}</div>
-              <div class="muted mono">
-                {{ sheet.time }} · {{ Math.round(sheet.macros.kcal) }} kcal ·
-                {{ Math.round(sheet.macros.p) }} P / {{ Math.round(sheet.macros.g) }} G / {{ Math.round(sheet.macros.l) }} L
-              </div>
-            </div>
-            <button class="sheet-close" aria-label="Fermer" @click="sheet = null">×</button>
-          </div>
-          <div class="sheet-body">
-            <div v-for="it in sheet.items" :key="it.food" class="nu-ing">
-              <span>{{ foodName(it.food) }}</span>
-              <span class="mono">{{ it.g }} g</span>
-            </div>
-          </div>
-          <p class="nu-steps">{{ sheet.steps }}</p>
-          <p class="muted italic">Viandes, poissons et féculents : toujours pesés crus.</p>
-        </div>
+    <!-- Une seule fiche de plat dans toute l'appli : celle-ci montre la photo, les
+         ingrédients ET la recette. La version recopiée ici n'avait ni photo ni
+         sauce, et il fallait la corriger deux fois à chaque changement. -->
+    <Teleport to="body">
+      <div class="sport-app sport-portal">
+        <transition name="sheet">
+          <NutritionRecipeSheet v-if="sheet" :id="sheet.recipeId" @close="sheet = null" />
+        </transition>
       </div>
-    </transition>
+    </Teleport>
   </div>
 </template>

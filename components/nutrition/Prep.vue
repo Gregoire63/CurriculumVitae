@@ -26,6 +26,8 @@ const {
 } = useNutrition()
 
 const step = ref<'semaine' | 'courses' | 'cuisine'>('semaine')
+// La fiche d'un plat, ouverte au clic depuis la session de cuisine.
+const sheetId = ref<string | null>(null)
 const openDow = ref<number | null>(null)
 const DOW = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 
@@ -121,10 +123,39 @@ const leftInFridge = computed(() => Object.entries(stock.value)
   .filter(([, n]) => n > 0)
   .map(([id, n]) => ({ name: library.value.recipes[id]?.name ?? id, n })))
 const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`)
+
+/**
+ * Le petit-déjeuner et les collations n'apparaissent dans la cuisine que s'ils se
+ * préparent à l'avance. Le porridge se fait le matin même, le shaker se remplit sur
+ * place : les faire figurer dans une session de préparation serait mentir.
+ *
+ * Mais leur absence ressemble à un oubli. On dit donc pourquoi, et on propose la
+ * bascule — c'est un geste, pas une explication à comprendre.
+ */
+const MAKE_AHEAD = { pdj: 'pdj-overnight', snack: 'col-oeufs' } as const
+const hasMakeAhead = computed(() => cookSessions.value
+  .some(s => s.dishes.some(d => {
+    const k = library.value.recipes[d.recipeId]?.kind
+    return k === 'pdj' || k === 'collation'
+  })))
+function useMakeAhead() {
+  for (let d = 0; d < 7; d++) {
+    if (activeWeek.value?.days[d]?.off) continue
+    for (const [slot, id] of Object.entries(MAKE_AHEAD)) setMenuSlot(d, slot, id)
+  }
+}
 </script>
 
 <template>
   <div class="stack">
+    <Teleport to="body">
+      <div class="sport-app sport-portal">
+        <transition name="sheet">
+          <NutritionRecipeSheet v-if="sheetId" :id="sheetId" @close="sheetId = null" />
+        </transition>
+      </div>
+    </Teleport>
+
     <!-- Trois phrases, une fois pour toutes. Sans elles, l'écran demande de
          comprendre un modèle avant de pouvoir s'en servir — et on referme. -->
     <div class="card nu-how">
@@ -142,7 +173,10 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 6
       </button>
       <button class="nu-step" :class="{ on: step === 'courses' }" :disabled="!selectionSummary.portions" @click="step = 'courses'">
         <span class="nu-step-n">2</span><span>Courses</span>
-        <span v-if="totalLines" class="nu-step-b mono">{{ doneLines }}/{{ totalLines }}</span>
+        <!-- Le compteur « 31/31 » débordait de la pastille. Un état vaut mieux qu'un
+             ratio : ce qu'on veut savoir, c'est si les courses sont faites. -->
+        <span v-if="totalLines && doneLines === totalLines" class="nu-step-ok" title="Courses faites">✓</span>
+        <span v-else-if="doneLines" class="nu-step-dot" title="Courses commencées" />
       </button>
       <button class="nu-step" :class="{ on: step === 'cuisine' }" :disabled="!selectionSummary.portions" @click="step = 'cuisine'">
         <span class="nu-step-n">3</span><span>Cuisine</span>
@@ -345,6 +379,17 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 6
         </div>
       </div>
 
+      <!-- Pourquoi le petit-déjeuner n'est pas dans la liste, et comment l'y mettre. -->
+      <div v-if="!hasMakeAhead" class="card nu-freeze">
+        <b>Ton petit-déjeuner et tes collations ne sont pas là ?</b>
+        C'est normal : le porridge se fait le matin même et le shaker se remplit sur place,
+        donc il n'y a rien à préparer le dimanche. Si tu préfères ne rien avoir à faire à
+        10 h, bascule sur les versions qui se préparent d'avance — <b>overnight oats</b>
+        (trois bocaux, prêts la veille) et <b>œufs durs</b> (six d'un coup, ils tiennent
+        cinq jours). Elles apparaîtront alors ici avec leurs étapes.
+        <button class="btn nu-freeze-btn" @click="useMakeAhead()">Préparer aussi mes matins →</button>
+      </div>
+
       <div v-if="leftInFridge.length" class="card nu-fridge">
         <div class="section-label mb-8">Reste au frigo</div>
         <div class="nu-fridge-list">
@@ -367,13 +412,13 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 6
         <div class="nu-cook-dishes">
           <div v-for="d in s.dishes" :key="d.recipeId" class="nu-cook-dish">
             <NutritionThumb :id="d.recipeId" :label="d.name" class="nu-cook-thumb" />
-            <div class="nu-cook-dish-txt">
+            <button class="nu-cook-dish-txt" @click="sheetId = d.recipeId">
               <strong>{{ d.name }}<span v-if="d.frozen" class="nu-gel">congélateur</span></strong>
               <span class="muted">
                 pour {{ listDays(d.days) }} ·
                 {{ d.frozen ? 'congelé dès la fermeture' : `se garde ${d.keeps} jours au frigo` }}
               </span>
-            </div>
+            </button>
             <span class="mono nu-cook-n">× {{ d.n }}</span>
           </div>
         </div>
@@ -396,17 +441,17 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 6
              en deux temps, et chercher un poids ne doit pas obliger à relire une
              étape. -->
         <template v-if="s.ingredients.length">
-          <div class="section-label nu-ing-head">Ingrédients — {{ s.dishes.reduce((n, d) => n + d.n, 0) }} portions</div>
+          <div class="section-label nu-rec-head">Ingrédients — {{ s.dishes.reduce((n, d) => n + d.n, 0) }} portions</div>
           <p class="nu-note">
             Sors et pèse tout maintenant, avant d'allumer quoi que ce soit. Ce qui est
             marqué <b>cru</b> se pèse cru : c'est ce que la liste de courses annonce, et le
             seul repère qui ne bouge pas à la cuisson.
           </p>
-          <ul class="nu-ing">
-            <li v-for="i in s.ingredients" :key="i.foodId" class="nu-ing-l">
-              <span class="nu-ing-q mono">{{ i.qty }}</span>
-              <span class="nu-ing-n">
-                {{ i.name }}<span v-if="i.raw" class="nu-ing-raw">cru</span>
+          <ul class="nu-rec-ing">
+            <li v-for="i in s.ingredients" :key="i.foodId" class="nu-rec-ing-l">
+              <span class="nu-rec-ing-q mono">{{ i.qty }}</span>
+              <span class="nu-rec-ing-n">
+                {{ i.name }}<span v-if="i.raw" class="nu-rec-ing-raw">cru</span>
                 <span v-if="i.note" class="muted">{{ i.note }}</span>
               </span>
             </li>
@@ -414,7 +459,7 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 6
         </template>
 
         <!-- La préparation. -->
-        <div v-if="s.steps.length" class="section-label nu-ing-head">Préparation</div>
+        <div v-if="s.steps.length" class="section-label nu-rec-head">Préparation</div>
         <ol v-if="s.steps.length" class="nu-recipe">
           <li v-for="st in s.steps" :key="st.n" class="nu-rstep">
             <span class="nu-rstep-n mono">{{ st.n }}</span>

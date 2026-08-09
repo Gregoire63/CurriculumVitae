@@ -622,6 +622,13 @@
 }
 .nu-step.on .nu-step-n { background: var(--accent-primary); color: #fff; }
 .nu-step-b { margin-left: auto; font-size: 10px; }
+/* Un état, pas un ratio : « 31/31 » débordait de la pastille et ne disait rien de
+   plus que « c'est fait ». */
+.nu-step-ok { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--accent-primary); }
+.nu-step-dot {
+  margin-left: auto; width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto;
+  background: var(--accent-secondary);
+}
 
 .nu-selsum { display: flex; flex-direction: column; gap: 10px; border-left: 4px solid var(--accent-primary); }
 .nu-launch-note { font-size: 11px; line-height: 1.45; margin: 0; }
@@ -688,7 +695,11 @@
 .nu-cook-dishes { display: flex; flex-direction: column; gap: 6px; }
 .nu-cook-dish { display: flex; align-items: center; gap: 9px; }
 .nu-cook-thumb { width: 34px; height: 34px; flex: 0 0 auto; border-radius: 9px; }
-.nu-cook-dish-txt { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.nu-cook-dish-txt {
+  display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  min-width: 0; flex: 1; background: none; border: none; padding: 0; cursor: pointer; color: inherit;
+}
+.nu-cook-dish-txt:hover strong { text-decoration: underline; }
 .nu-cook-dish-txt strong { font-size: 13px; }
 .nu-cook-dish-txt .muted { font-size: 10.5px; }
 .nu-cook-n { font-size: 13px; font-weight: 700; white-space: nowrap; }
@@ -721,16 +732,68 @@
 }
 
 /* Les ingrédients, avant la préparation — comme dans n'importe quelle recette. */
-.nu-ing-head { border-top: 1px solid var(--bg-accent); padding-top: 10px; }
-.nu-ing { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.nu-ing-l { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: baseline; font-size: 13px; }
-.nu-ing-q { font-weight: 700; text-align: right; color: var(--accent-primary); }
-.nu-ing-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
-.nu-ing-n .muted { font-size: 10.5px; }
-.nu-ing-raw {
+.nu-rec-head { border-top: 1px solid var(--bg-accent); padding-top: 10px; }
+.nu-rec-ing { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.nu-rec-ing-l { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: baseline; font-size: 13px; }
+.nu-rec-ing-q { font-weight: 700; text-align: right; color: var(--accent-primary); }
+.nu-rec-ing-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.nu-rec-ing-n .muted { font-size: 10.5px; }
+.nu-rec-ing-raw {
   font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 5px;
   border-radius: 999px; background: var(--bg-secondary); color: var(--text-muted);
 }
+
+/* Filtres de la bibliothèque : deux rangées de pastilles, pas un menu déroulant.
+   On veut voir les options sans les ouvrir. */
+.nu-filters { display: flex; flex-direction: column; gap: 8px; }
+.nu-search {
+  width: 100%; padding: 9px 12px; border-radius: 10px; font-size: 13px; font-family: inherit;
+  background: var(--bg-primary); color: var(--text-primary); border: 1.5px solid var(--bg-accent);
+}
+.nu-search:focus { outline: none; border-color: var(--accent-primary); }
+.nu-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nu-chip {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--bg-secondary); border: 1.5px solid var(--bg-accent); color: var(--text-muted);
+}
+.nu-chip:hover { border-color: var(--accent-secondary); }
+.nu-chip.on {
+  border-color: var(--accent-primary); color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-primary));
+}
+.nu-chip-n { font-size: 10px; opacity: 0.7; }
+.nu-chip.clear { border-style: dashed; }
+
+/* Le corps de la carte est un bouton : lire une recette ne doit pas demander
+   d'ouvrir son formulaire d'édition. */
+.nu-plat-open {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
+  background: none; border: none; padding: 0; cursor: pointer; color: inherit; flex: 1; width: 100%;
+}
+.nu-plat-more { font-size: 11px; font-weight: 600; color: var(--accent-primary); }
+.nu-plat-open:hover .nu-plat-more { text-decoration: underline; }
+
+/* La fiche d'un plat, ouverte depuis n'importe quelle carte. */
+.rs { padding-top: 0 !important; }
+.rs-cover { position: relative; margin: 0 -16px; }
+.rs-cover .nu-photo { display: block; width: 100%; }
+.rs-cover .nu-photo-thumb, .rs-cover .nu-photo-add {
+  width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; border: none;
+}
+.rs-cover .nu-photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.rs-close {
+  position: absolute; top: 10px; right: 12px; z-index: 2;
+  background: rgb(0 0 0 / 45%); color: #fff; border: none;
+}
+.rs-kind { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.rs-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.rs-item { display: grid; grid-template-columns: 62px 1fr; gap: 10px; align-items: baseline; font-size: 13.5px; }
+.rs-q { font-weight: 700; text-align: right; color: var(--accent-primary); }
+.rs-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.rs-n .muted { font-size: 10.5px; }
+.rs-raw { font-size: 11px; margin: 2px 0 0; }
+.rs-steps { margin: 0; }
 
 /* La recette guidée : des étapes numérotées, dans l'ordre où on les fait. */
 .nu-recipe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--bg-accent); padding-top: 12px; }

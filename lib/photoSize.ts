@@ -5,18 +5,32 @@
 
 /**
  * Côté le plus long conservé pour l'affichage plein écran.
- * 1024 px suffit : la carte la plus large du module fait ~340 px CSS, et même un
- * écran à 3× ne demande que 1020 px réels. Au-delà, on stocke des pixels que
- * personne ne verra jamais.
+ *
+ * 1024 px partait du principe que la plus grande carte fait 340 px CSS. C'était
+ * faux dès qu'on ouvre l'aperçu plein écran : un téléphone de 400 px à 3× réclame
+ * 1200 px réels, et l'image apparaissait molle. 1440 couvre l'aperçu plein écran de
+ * tous les téléphones courants pour environ 40 Ko de plus par photo.
  */
-export const MAX_EDGE = 1024
+export const MAX_EDGE = 1440
 
 /**
- * Vignette des listes. La bibliothèque affiche une quinzaine de plats d'un coup :
- * décoder quinze images de 1024 px coûte de la mémoire et un à-coup au défilement,
- * pour des cases de 56 px à l'écran.
+ * Vignette des LISTES, et d'elles seules : les pastilles de 38 px et les lignes de
+ * repas. Décoder quinze images pleines d'un coup coûte de la mémoire et un à-coup
+ * au défilement.
+ *
+ * Elle ne doit JAMAIS servir de couverture de carte. C'était le cas, et une
+ * vignette de 192 px étirée sur une carte de 340 px expliquait à elle seule le flou
+ * dont on se plaignait : le problème n'était pas la compression, c'était de servir
+ * l'image de la mauvaise taille.
  */
 export const THUMB_EDGE = 192
+
+/**
+ * Taille intermédiaire, pour les couvertures de cartes en grille. Assez nette sur
+ * un écran à 3×, sans charger le plein format pour une grille de seize plats.
+ */
+export const CARD_EDGE = 720
+export const CARD_QUALITY = 0.74
 
 /**
  * 0,72 en WebP : au-dessus, le fichier grossit vite sans gain visible sur une photo

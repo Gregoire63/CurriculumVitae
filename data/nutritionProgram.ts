@@ -107,14 +107,20 @@ export const FOODS: Food[] = [
   },
   {
     id: 'whey-poudre',
-    name: 'Whey (poudre)',
+    // Nom générique : le plan ne dépend pas d'une marque ni même d'une source. Ce
+    // qui compte est la densité protéique, et un isolat de bœuf hydrolysé fait aussi
+    // bien qu'une whey — parfois mieux.
+    name: 'Protéine en poudre',
     cat: 'complements',
-    kcal: 375,
-    p: 80,
-    g: 7,
-    l: 5,
-    buy: '1 dose ≈ 30 g',
-    micro: { ca: 400, fe: 1, mg: 60, zn: 3, k: 500, b9: 20 },
+    kcal: 407,
+    p: 90,
+    g: 6,
+    l: 2.5,
+    buy: '1 dose ≈ 30 g · vise 80 g de protéines ou plus pour 100 g',
+    // Une protéine de bœuf n'apporte PAS le calcium d'une whey (400 mg/100 g contre
+    // une vingtaine) : c'est du petit-lait qu'il venait. Le compteur de calcium doit
+    // le savoir, sinon il annonce une couverture qui n'existe pas.
+    micro: { ca: 20, fe: 2, mg: 15, zn: 3, k: 100, b9: 5 },
   },
   { id: 'creatine-monohydrate', name: 'Creatine monohydrate', cat: 'complements', kcal: 0, p: 0, g: 0, l: 0 },
   {
@@ -1125,7 +1131,7 @@ export const RECIPES: Recipe[] = [
     steps: 'La solution des jours pressés : poudre dans le shaker le matin, lait ajouté à 17 h. Aucune vaisselle, aucune excuse. Le lait ralentit la digestion par rapport à l\'eau, donc ça cale mieux.',
     items: [
       { food: 'lait-ecreme', g: 250 },
-      { food: 'whey-poudre', g: 25 },
+      { food: 'whey-poudre', g: 22 },
     ],
   },
   {
