@@ -1186,6 +1186,54 @@ describe('les variantes de petit-déjeuner et de collation', () => {
   })
 })
 
+describe('ce qui se prépare à l\'avance entre dans la session', () => {
+  const week = () => {
+    const w = builtinWeeks()[0]
+    for (const d of w.days) { d.slots.pdj = 'pdj-overnight'; d.slots.snack = 'col-oeufs' }
+    return w
+  }
+
+  it('cuisine aussi les petits-déjeuners et collations préparables à l\'avance', () => {
+    // Régression : trois recettes étaient marquées « à l'avance » sans jamais
+    // apparaître dans une session — donc sans jamais dire quand les faire.
+    const dim = cookPlan(week(), GYM_WEEK).find(s => s.id === 'dim')!
+    const ids = dim.dishes.map(d => d.recipeId)
+    expect(ids).toContain('pdj-overnight')
+    expect(ids).toContain('col-oeufs')
+  })
+
+  it('laisse dehors ce qui se fait sur le moment', () => {
+    // Le porridge et le shaker n'ont rien à faire dans une session de préparation.
+    const w = builtinWeeks()[0]
+    const ids = cookPlan(w, GYM_WEEK).flatMap(s => s.dishes.map(d => d.recipeId))
+    expect(ids).not.toContain('pdj')
+    expect(ids).not.toContain('col-post')
+  })
+
+  it('respecte la conservation déclarée sur la recette, pas celle des ingrédients', () => {
+    // Avoine et fromage blanc tiennent longtemps ; le bocal monté tient 3 jours.
+    expect(keepsOf(RECIPE_BY_ID['pdj-overnight'])).toBe(3)
+    const dim = cookPlan(week(), GYM_WEEK).find(s => s.id === 'dim')!
+    expect(dim.dishes.find(d => d.recipeId === 'pdj-overnight')!.n).toBe(3)
+  })
+
+  it('compte en pots, pas en boîtes, et donne le mode d\'emploi', () => {
+    const dim = cookPlan(week(), GYM_WEEK).find(s => s.id === 'dim')!
+    const oats = dim.steps.find(st => st.title.startsWith('Overnight oats'))!
+    expect(oats.title).toMatch(/pots/)
+    expect(oats.lines[0]).toMatch(/par pot/)
+    expect(oats.hint).toMatch(/la veille au soir/i)
+  })
+
+  it('n\'applique pas aux collations les consignes de cuisson des plats', () => {
+    // « Œufs battus versés sur les légumes » n'a aucun sens pour des œufs durs :
+    // les étapes de cuisson ne regardent que les repas principaux.
+    const dim = cookPlan(week(), GYM_WEEK).find(s => s.id === 'dim')!
+    const prot = dim.steps.find(st => /protéines/i.test(st.title))!
+    expect(prot.lines.some(l => /Œufs entiers/.test(l))).toBe(false)
+  })
+})
+
 describe('les sauces', () => {
   it('sont comptées dans le plat : elles se mangent, même à part', () => {
     const nu = macrosOf(RECIPE_BY_ID['boite-a'].items)

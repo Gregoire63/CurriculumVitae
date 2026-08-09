@@ -752,6 +752,15 @@ export interface Recipe {
    * cinq jours et sauve un plat qu'on a déjà mangé trois fois.
    */
   sauce?: string
+  /**
+   * Conservation du plat PRÉPARÉ, quand elle ne se déduit pas des ingrédients.
+   *
+   * Des flocons d'avoine tiennent des mois et du fromage blanc cinq jours ; mélangés
+   * dans un bocal depuis la veille, l'ensemble tient trois jours. C'est la
+   * préparation qui limite, pas un ingrédient — d'où cette valeur, qui l'emporte sur
+   * le calcul quand elle est renseignée.
+   */
+  keeps?: number
 }
 
 export const RECIPES: Recipe[] = [
@@ -997,6 +1006,7 @@ export const RECIPES: Recipe[] = [
   // 10 h au bureau n'est pas l'envie, c'est le temps.
   {
     id: 'pdj-overnight',
+    keeps: 3,
     name: 'Overnight oats fruits rouges',
     kind: 'pdj',
     batch: true,
@@ -1084,6 +1094,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     id: 'col-mousse',
+    keeps: 2,
     name: 'Mousse whey-aquafaba',
     kind: 'collation',
     batch: true,
@@ -1096,6 +1107,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     id: 'col-oeufs',
+    keeps: 5,
     name: 'Œufs durs et cornichons',
     kind: 'collation',
     batch: true,

@@ -1556,6 +1556,10 @@ export const freshItemsOf = (recipe: Recipe, lib: Library = BUILTIN): RecipeItem
  * donc sortis du calcul et listés à part, à ajouter le jour venu.
  */
 export function keepsOf(recipe: Recipe, lib: Library = BUILTIN): number {
+  // La recette a le dernier mot : c'est parfois la préparation qui limite, pas un
+  // ingrédient. Des flocons d'avoine tiennent des mois, un bocal d'overnight oats
+  // tient trois jours.
+  if (typeof recipe.keeps === 'number') return recipe.keeps
   let min = KEEPS_DEFAULT
   for (const it of recipe.items) {
     const k = lib.foods[it.food]?.keeps
@@ -1696,7 +1700,7 @@ const SESSION_META: Record<CookWhen, { title: string, when: string, hint: string
   minute: {
     title: 'À faire le jour même',
     when: 'Au moment de manger',
-    hint: 'Ces plats-là ne tiennent pas assez longtemps pour être préparés à l\'avance. Leurs ingrédients sont bien dans la liste de courses : c\'est la cuisson qui attend, pas l\'achat.',
+    hint: 'Ceux-là ne tiennent pas assez longtemps pour être préparés avec le reste. Leurs ingrédients sont bien dans la liste de courses : c\'est la préparation qui attend, pas l\'achat. Certains se montent la VEILLE au soir plutôt que le jour même — leur mode d\'emploi le précise.',
   },
 }
 
@@ -1784,6 +1788,7 @@ export function cookSteps(dishes: CookDish[], lib: Library = BUILTIN): CookStep[
   const push = (title: string, hint: string, lines: string[]) => {
     if (lines.length) steps.push({ n: steps.length + 1, title, hint, lines })
   }
+  const mains = dishes.filter(d => MAIN_KINDS.includes(lib.recipes[d.recipeId]?.kind ?? 'boite'))
   const linesOf = (m: Map<string, number>) =>
     [...m.entries()]
       .sort((a, b) => b[1] - a[1])
@@ -1808,18 +1813,18 @@ export function cookSteps(dishes: CookDish[], lib: Library = BUILTIN): CookStep[
   push(
     'Les féculents, en vrac',
     'Tout d\'un coup et SANS portionner. Une portion déjà pesée dans une boîte ne se reprend plus : garder le féculent en vrac est ce qui te permet de réduire une assiette le soir d\'une séance annulée.',
-    linesOf(totalGrams(dishes, lib, f => !isFresh(f) && !!f.cook && isStarch(f))),
+    linesOf(totalGrams(mains, lib, f => !isFresh(f) && !!f.cook && isStarch(f))),
   )
   push(
     'Les protéines',
     'Pendant que les féculents cuisent. C\'est le poste le plus long et celui qui décide du goût : ne le bâcle pas, c\'est ce que tu mangeras sept fois.',
-    linesOf(totalGrams(dishes, lib, f => !isFresh(f) && !!f.cook && isProtein(f))),
+    linesOf(totalGrams(mains, lib, f => !isFresh(f) && !!f.cook && isProtein(f))),
   )
   // Les sauces : le poste qui décide si la semaine est tenable. Préparées en une
   // fois, dans des pots, jamais mélangées à la boîte — c'est ce qui leur permet de
   // tenir cinq jours et de sauver un plat déjà mangé trois fois.
   const sauces = new Map<string, number>()
-  for (const d of dishes) {
+  for (const d of mains) {
     const sid = lib.recipes[d.recipeId]?.sauce
     if (sid && (lib.recipes[sid] ?? RECIPE_BY_ID[sid])) sauces.set(sid, (sauces.get(sid) ?? 0) + d.n)
   }
@@ -1835,7 +1840,7 @@ export function cookSteps(dishes: CookDish[], lib: Library = BUILTIN): CookStep[
   push(
     'Les légumes',
     'En dernier, et un peu moins cuits que d\'habitude : ils finiront de cuire au réchauffage. Trop cuits maintenant, ils seront en bouillie jeudi.',
-    linesOf(totalGrams(dishes, lib, f => !isFresh(f) && !!f.cook && isVeg(f))),
+    linesOf(totalGrams(mains, lib, f => !isFresh(f) && !!f.cook && isVeg(f))),
   )
 
   push(
@@ -1852,7 +1857,7 @@ export function cookSteps(dishes: CookDish[], lib: Library = BUILTIN): CookStep[
     const keep = r.items.filter(it => !freshItemsOf(r, lib).some(f => f.food === it.food))
     const lines = keep.map((it) => {
       const f = lib.foods[it.food]
-      return f ? `${f.name} — ${Math.round(it.g)} g par boîte` : ''
+      return f ? `${f.name} — ${Math.round(it.g)} g par ${MAIN_KINDS.includes(r.kind) ? 'boîte' : 'pot'}` : ''
     }).filter(Boolean)
     if (!lines.length) continue
     const fresh = freshItemsOf(r, lib)
@@ -1860,9 +1865,12 @@ export function cookSteps(dishes: CookDish[], lib: Library = BUILTIN): CookStep[
       .filter(Boolean)
     steps.push({
       n: steps.length + 1,
-      title: `${r.name} — ${d.n} boîte${d.n > 1 ? 's' : ''}${d.frozen ? ' (à congeler)' : ''}`,
+      // « Pots » pour un petit-déjeuner ou une collation : personne ne remplit une
+      // boîte de mousse au chocolat.
+      title: `${r.name} — ${d.n} ${MAIN_KINDS.includes(r.kind) ? 'boîte' : 'pot'}${d.n > 1 ? 's' : ''}${d.frozen ? ' (à congeler)' : ''}`,
       hint: [
         `Pour ${listDays(d.days)}.`,
+        MAIN_KINDS.includes(r.kind) ? '' : r.steps,
         sauceOf(d) ? `Sert avec la ${sauceOf(d)!.toLowerCase()} — dans un pot, à côté, pas dans la boîte.` : '',
         d.frozen
           ? 'Au CONGÉLATEUR dès que la boîte est fermée et refroidie, pas dans deux jours : congeler une boîte qui a déjà passé la moitié de sa vie au frigo ne rattrape rien. Sors-la la veille au soir, elle décongèle au frigo pendant la nuit.'
@@ -1917,7 +1925,11 @@ export function cookPlan(
     if (!plan) return
     for (const meal of plan.meals) {
       const r = lib.recipes[meal.recipeId]
-      if (!r || !MAIN_KINDS.includes(r.kind)) continue
+      // Les repas principaux, plus tout ce qui se prépare à l'avance : un bocal
+      // d'overnight oats et six œufs durs se cuisinent le dimanche comme le reste.
+      // Les tenir hors de la session revenait à les marquer « à l'avance » sans
+      // jamais dire quand — donc à ne jamais les faire.
+      if (!r || (!MAIN_KINDS.includes(r.kind) && !r.batch)) continue
       const keeps = keepsOf(r, lib)
       const { where, frozen } = cookPlaceFor(dow, keeps, freezableOf(r, lib), opts)
       const bucket = buckets.get(where) ?? new Map<string, CookDish>()
