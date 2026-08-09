@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, MICRO_REFS, RATIO_DINNER_GYM, RATIO_REST,
-  RECIPE_BY_ID, STARCHY_IDS, SLOTS_GYM, SLOTS_REST,
+  KEEPS_FRESH, RECIPE_BY_ID, STARCHY_IDS, SLOTS_GYM, SLOTS_REST,
 } from '../../data/nutritionProgram'
 import {
   ADJUST_THRESHOLD, CARRY_MAX_PER_DAY, DEFAULT_WEEK, DEFICIT_MAX, DEFICIT_MIN, STEPS_TT,
@@ -12,7 +12,9 @@ import {
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   adjustPlanFor, applySteps, LEAVE_MAX, removalSteps, adjustRemaining, upcomingPlan, ADJUST_MAX,
   FAT_PER_KG, KCAL_L, KCAL_P, MACRO_BAND, donutArcs, macroGaps, macroTargets,
-  builtinWeeks, cookPlan, cookSelection, cookSlotFor, keepsOf, listDays, normalizeWeek,
+  builtinWeeks, cookPlaceFor, cookPlan, cookSelection, cookSlotFor, cookSteps, freezableOf, freshItemsOf,
+  cookIngredients, expandItems, keepsOf, listDays,
+  normalizeWeek,
   selectionTotals, shoppingFrom, shoppingFromWeek, stockOf, weekDayPlans, weekDaysOn, weekGrams,
   sessionBurn, sessionsOn, targetFor, targetOf, tdeeOf, usableDuration,
   workSetCount,
@@ -1045,34 +1047,52 @@ describe('conservation', () => {
     expect(keepsOf(RECIPE_BY_ID['din-poisson'])).toBe(2)
   })
 
+  it('un ingrédient frais ne condamne pas le plat entier', () => {
+    // Poulet-lentilles-salade : la salade tient 1 jour, mais on veut quand même
+    // pouvoir cuire le poulet et les lentilles le dimanche.
+    const r = RECIPE_BY_ID['din-poulet']
+    expect(keepsOf(r)).toBe(3)
+    expect(freshItemsOf(r).map(i => i.food)).toEqual(['salade-verte'])
+  })
+
   it('retombe sur la valeur par défaut sans information', () => {
     expect(keepsOf({ id: 'x', name: 'x', kind: 'boite', batch: true, steps: '', items: [] })).toBe(KEEPS_DEFAULT)
+  })
+
+  it('le seuil du frais reste sous la conservation par défaut', () => {
+    expect(KEEPS_FRESH).toBeLessThan(KEEPS_DEFAULT)
   })
 })
 
 describe('répartition des sessions de cuisine', () => {
   it('le dimanche couvre tout ce qui tient depuis la veille du lundi', () => {
-    expect(cookSlotFor(0, 3, true)).toBe('dim')
-    expect(cookSlotFor(2, 3, true)).toBe('dim')
+    expect(cookSlotFor(0, 3)).toBe('dim')
+    expect(cookSlotFor(2, 3)).toBe('dim')
   })
 
   it('bascule au mercredi soir ce qui n\'aurait pas tenu', () => {
     // Un plat de 3 jours mangé jeudi : 5 jours après le dimanche, impossible.
-    expect(cookSlotFor(3, 3, true)).toBe('mer')
-    expect(cookSlotFor(5, 3, true)).toBe('mer')
+    expect(cookSlotFor(3, 3)).toBe('mer')
+    expect(cookSlotFor(5, 3)).toBe('mer')
   })
 
   it('laisse au jour même ce que même le mercredi ne couvre pas', () => {
-    expect(cookSlotFor(6, 3, true)).toBe('minute')
-    expect(cookSlotFor(5, 2, true)).toBe('minute')
+    expect(cookSlotFor(6, 3)).toBe('minute')
+    expect(cookSlotFor(5, 2)).toBe('minute')
   })
 
   it('un plat qui tient toute la semaine se fait entièrement le dimanche', () => {
-    for (let d = 0; d < 7; d++) expect(cookSlotFor(d, 8, true)).toBe('dim')
+    for (let d = 0; d < 7; d++) expect(cookSlotFor(d, 8)).toBe('dim')
   })
 
-  it('un plat qui ne se prépare pas à l\'avance reste au soir même', () => {
-    expect(cookSlotFor(0, 9, false)).toBe('minute')
+  it('ne renonce plus à un plat parce qu\'il est meilleur frais', () => {
+    // Régression : le drapeau « à faire minute » écartait TOUS les dîners de la
+    // session du dimanche — la moitié de la semaine disparaissait du programme.
+    const dim = cookPlan(A(), GYM_WEEK).find(s => s.id === 'dim')!
+    const kinds = dim.dishes.map(d => RECIPE_BY_ID[d.recipeId].kind)
+    expect(kinds).toContain('boite')
+    expect(kinds).toContain('diner')
+    expect(dim.dishes.some(d => !RECIPE_BY_ID[d.recipeId].batch)).toBe(true)
   })
 })
 
@@ -1090,12 +1110,30 @@ describe('cookPlan', () => {
     expect(total).toBe(14)
   })
 
+  it('met au dimanche tout ce que la conservation autorise', () => {
+    // Cinq portions seulement : les viandes cuites tiennent trois jours, pas sept.
+    // Le chiffre est bas, mais c'est le vrai — d'où la sortie par le congélateur.
+    const dim = byId.dim.dishes.reduce((n, d) => n + d.n, 0)
+    expect(dim).toBe(5)
+    for (const d of byId.dim.dishes) expect(Math.max(...d.days)).toBeLessThanOrEqual(d.keeps - 1)
+  })
+
+  it('propose de congeler pour supprimer la session du mercredi', () => {
+    const gelables = byId.mer.freezable!
+    expect(gelables.length).toBeGreaterThan(0)
+    // Rien qui se congèle mal ne doit être proposé : les œufs deviennent caoutchouc.
+    for (const d of gelables) expect(freezableOf(RECIPE_BY_ID[d.recipeId])).toBe(true)
+  })
+
+  it('n\'attache la sortie congélateur qu\'à la session du mercredi', () => {
+    expect(byId.dim.freezable).toBeUndefined()
+    expect(byId.minute?.freezable).toBeUndefined()
+  })
+
   it('range chaque portion dans la session que sa conservation autorise', () => {
     for (const s of sessions) {
       for (const d of s.dishes) {
-        for (const dow of d.days) {
-          expect(cookSlotFor(dow, d.keeps, !!RECIPE_BY_ID[d.recipeId].batch)).toBe(s.id)
-        }
+        for (const dow of d.days) expect(cookSlotFor(dow, d.keeps)).toBe(s.id)
       }
     }
   })
@@ -1105,28 +1143,227 @@ describe('cookPlan', () => {
     expect(listDays([2])).toBe('mercredi')
   })
 
-  it('estime une durée pour les sessions, pas pour le soir même', () => {
+  it('estime une durée pour les sessions, pas pour le jour même', () => {
     expect(byId.dim.minutes).toBeGreaterThan(0)
     expect(byId.minute?.minutes ?? 0).toBe(0)
   })
+})
 
-  it('regroupe la préparation par geste, sauf pour le soir même', () => {
-    expect(byId.dim.groups.map(g => g.id)).toContain('feculents')
-    expect(byId.minute?.groups ?? []).toEqual([])
+describe('les variantes de petit-déjeuner et de collation', () => {
+  const kcalOf = (id: string) => macrosOf(RECIPE_BY_ID[id].items).kcal
+  const pOf = (id: string) => macrosOf(RECIPE_BY_ID[id].items).p
+
+  it('chaque petit-déjeuner tient les macros du porridge à 10 % près', () => {
+    // C'est la condition pour qu'en changer soit un vrai choix : une option qui
+    // pèse 200 kcal de plus n'est pas une alternative, c'est un piège.
+    const ref = kcalOf('pdj')
+    for (const r of Object.values(RECIPE_BY_ID).filter(x => x.kind === 'pdj')) {
+      expect(Math.abs(kcalOf(r.id) - ref) / ref).toBeLessThan(0.1)
+      expect(pOf(r.id)).toBeGreaterThanOrEqual(pOf('pdj') * 0.9)
+    }
+  })
+
+  it('offre au moins un petit-déjeuner préparable à l\'avance et un liquide', () => {
+    const pdj = Object.values(RECIPE_BY_ID).filter(r => r.kind === 'pdj')
+    expect(pdj.some(r => r.batch)).toBe(true)
+    expect(pdj.some(r => /boire|smoothie/i.test(r.name))).toBe(true)
+  })
+
+  it('les collations restent sous 180 kcal', () => {
+    for (const id of ['col-cacao', 'col-skyr', 'col-mousse', 'col-oeufs', 'col-shaker', 'col-soir-cacahuete']) {
+      expect(kcalOf(id)).toBeLessThanOrEqual(180)
+    }
+  })
+
+  it('propose au moins une collation salée : le sucré finit par écœurer', () => {
+    expect(RECIPE_BY_ID['col-oeufs'].items.map(i => i.food)).toContain('cornichons')
+  })
+
+  it('la mousse aquafaba offre le meilleur rapport protéines / calories', () => {
+    const ratio = (id: string) => pOf(id) / kcalOf(id)
+    const autres = ['col-cacao', 'col-skyr', 'col-oeufs', 'col-shaker'].map(ratio)
+    expect(ratio('col-mousse')).toBeGreaterThan(Math.max(...autres))
+  })
+})
+
+describe('les sauces', () => {
+  it('sont comptées dans le plat : elles se mangent, même à part', () => {
+    const nu = macrosOf(RECIPE_BY_ID['boite-a'].items)
+    const avec = macrosOf(expandItems(RECIPE_BY_ID['boite-a']))
+    expect(avec.kcal).toBeGreaterThan(nu.kcal)
+    expect(avec.p).toBeGreaterThan(nu.p)
+  })
+
+  it('entrent dans les courses avec le reste', () => {
+    const ids = shoppingFromWeek(A(), GYM_WEEK).flatMap(c => c.lines).map(l => l.food.id)
+    expect(ids).toContain('yaourt-grec-0')
+    expect(ids).toContain('paprika-fume')
+    expect(ids).toContain('ail')
+  })
+
+  it('ne pénalisent pas la conservation du plat : elles ne sont pas dans la boîte', () => {
+    // Le yaourt grec se congèle mal. S'il comptait dans le plat, la Boîte A ne
+    // pourrait plus jamais partir au congélateur — alors qu'il est dans un pot.
+    expect(freezableOf(RECIPE_BY_ID['boite-a'])).toBe(true)
+    expect(keepsOf(RECIPE_BY_ID['boite-a'])).toBe(3)
+  })
+
+  it('ont leur propre étape, séparée de l\'assemblage', () => {
+    const steps = cookSteps(cookPlan(A(), GYM_WEEK)[0].dishes)
+    const sauces = steps.find(st => /sauces/i.test(st.title))!
+    expect(sauces.hint).toMatch(/JAMAIS dans la boîte/)
+    expect(sauces.lines.length).toBeGreaterThan(0)
+    // Les quantités sont multipliées par le nombre de portions du plat servi.
+    expect(sauces.lines.some(l => /4 portions/.test(l))).toBe(true)
+  })
+
+  it('restent légères : aucune ne dépasse 90 kcal la portion', () => {
+    for (const r of Object.values(RECIPE_BY_ID).filter(x => x.kind === 'sauce')) {
+      expect(macrosOf(r.items).kcal).toBeLessThanOrEqual(90)
+    }
+  })
+
+  it('assaisonnent tous les repas principaux livrés', () => {
+    for (const r of Object.values(RECIPE_BY_ID)) {
+      if (r.kind === 'boite' || r.kind === 'diner') expect(r.sauce).toBeTruthy()
+    }
+  })
+})
+
+describe('le congélateur, quand il y a la place', () => {
+  const sans = cookPlan(A(), GYM_WEEK)
+  const avec = cookPlan(A(), GYM_WEEK, undefined, { freezer: true })
+  const dimOf = (p: typeof sans) => p.find(s => s.id === 'dim')!
+
+  it('n\'est jamais supposé : sans réglage, le plan ne change pas', () => {
+    expect(cookPlan(A(), GYM_WEEK, undefined, {})).toEqual(sans)
+    expect(dimOf(sans).dishes.some(d => d.frozen)).toBe(false)
+  })
+
+  it('remonte au dimanche tout ce qui se congèle', () => {
+    expect(avec.find(s => s.id === 'mer')).toBeUndefined()
+    const total = dimOf(avec).dishes.reduce((n, d) => n + d.n, 0)
+    expect(total).toBeGreaterThan(dimOf(sans).dishes.reduce((n, d) => n + d.n, 0))
+  })
+
+  it('laisse au jour même ce qui se congèle mal', () => {
+    // L'omelette : les œufs cuits deviennent caoutchouteux une fois congelés.
+    const minute = avec.find(s => s.id === 'minute')!
+    expect(minute.dishes.every(d => !freezableOf(RECIPE_BY_ID[d.recipeId]))).toBe(true)
+  })
+
+  it('ne congèle pas ce qui tenait déjà au frigo', () => {
+    for (const d of dimOf(avec).dishes) {
+      if (Math.max(...d.days) < d.keeps) expect(d.frozen).toBe(false)
+    }
+  })
+
+  it('sépare les portions d\'un même plat selon leur destination', () => {
+    // Le plat du lundi va au frigo, celui du vendredi au congélateur : deux entrées,
+    // parce que ce ne sont ni le même geste ni la même étagère.
+    const poisson = dimOf(avec).dishes.filter(d => d.recipeId === 'din-poisson')
+    expect(poisson).toHaveLength(2)
+    expect(poisson.map(d => d.frozen).sort()).toEqual([false, true])
+  })
+
+  it('range le frigo et le congélateur dans deux listes distinctes', () => {
+    const last = dimOf(avec).steps.at(-1)!
+    expect(last.lines).toContain('AU FRIGO :')
+    expect(last.lines).toContain('AU CONGÉLATEUR, tout de suite :')
+  })
+
+  it('ne propose plus la sortie congélateur quand elle est déjà prise', () => {
+    expect(sans.find(s => s.id === 'mer')!.freezable!.length).toBeGreaterThan(0)
+    for (const s of avec) expect(s.freezable).toBeUndefined()
+  })
+
+  it('cookPlaceFor : le frigo d\'abord, le congélateur en secours', () => {
+    expect(cookPlaceFor(0, 3, true, { freezer: true })).toEqual({ where: 'dim', frozen: false })
+    expect(cookPlaceFor(5, 3, true, { freezer: true })).toEqual({ where: 'dim', frozen: true })
+    expect(cookPlaceFor(5, 3, false, { freezer: true })).toEqual({ where: 'mer', frozen: false })
+    expect(cookPlaceFor(5, 3, true, {})).toEqual({ where: 'mer', frozen: false })
+  })
+})
+
+describe('la recette guidée', () => {
+  const steps = cookSteps(cookPlan(A(), GYM_WEEK)[0].dishes)
+  const titles = steps.map(s => s.title)
+
+  it('numérote les étapes sans trou, dans l\'ordre', () => {
+    expect(steps.map(s => s.n)).toEqual(steps.map((_, i) => i + 1))
+  })
+
+  it('commence par le four et finit par le rangement', () => {
+    expect(titles[0]).toMatch(/four/i)
+    expect(titles.at(-1)).toMatch(/range/i)
+  })
+
+  it('sort les quantités des étapes : elles ont leur propre liste', () => {
+    // Une recette se lit en deux temps — ce qu'on sort, puis ce qu'on fait. Les
+    // quantités noyées dans une première étape obligeaient à remonter dans le
+    // texte à chaque fois qu'on cherchait un poids.
+    const ing = cookIngredients(cookPlan(A(), GYM_WEEK)[0].dishes)
+    expect(ing.length).toBeGreaterThan(10)
+    expect(ing.map(i => i.name)).not.toContain(undefined)
+    // Du plus lourd au plus léger : les kilos d'abord, les pincées ensuite.
+    const g = ing.map(i => Number.parseFloat(i.qty.replace(',', '.')) * (i.qty.includes('kg') ? 1000 : 1))
+    expect(g).toEqual([...g].sort((a, b) => b - a))
+  })
+
+  it('marque ce qui se pèse cru, et rappelle les repères d\'achat', () => {
+    const ing = cookIngredients(cookPlan(A(), GYM_WEEK)[0].dishes)
+    expect(ing.find(i => i.foodId === 'filet-de-poulet')!.raw).toBe(true)
+    expect(ing.find(i => i.foodId === 'brocolis')!.raw).toBe(false)
+    expect(ing.find(i => i.foodId === 'paprika-fume')!.note).toMatch(/c. à café/)
+  })
+
+  it('n\'oublie pas les ingrédients des sauces', () => {
+    const ing = cookIngredients(cookPlan(A(), GYM_WEEK)[0].dishes)
+    expect(ing.map(i => i.foodId)).toContain('yaourt-grec-0')
+  })
+
+  it('lance le four avant de cuisiner quoi que ce soit', () => {
+    const four = titles.findIndex(t => /four/i.test(t))
+    const prot = titles.findIndex(t => /protéines/i.test(t))
+    expect(four).toBeGreaterThan(-1)
+    expect(four).toBeLessThan(prot)
+  })
+
+  it('cuit les féculents avant les légumes : c\'est le plus long', () => {
+    expect(titles.findIndex(t => /féculents/i.test(t)))
+      .toBeLessThan(titles.findIndex(t => /légumes/i.test(t)))
+  })
+
+  it('donne les temps de cuisson, pas seulement les quantités', () => {
+    const fec = steps.find(s => /féculents/i.test(s.title))!
+    expect(fec.lines.some(l => /min/.test(l))).toBe(true)
+  })
+
+  it('additionne les quantités au lieu de répéter chaque recette', () => {
+    const fec = steps.find(s => /féculents/i.test(s.title))!
+    const noms = fec.lines.map(l => l.split(' — ')[0])
+    expect(new Set(noms).size).toBe(noms.length)
   })
 
   it('rappelle de ne PAS portionner les féculents', () => {
-    expect(byId.dim.groups.find(g => g.id === 'feculents')!.hint).toMatch(/SANS portionner/)
+    expect(steps.find(s => /féculents/i.test(s.title))!.hint).toMatch(/SANS portionner/)
   })
 
-  it('dit que les plats du soir même sont quand même dans les courses', () => {
-    expect(byId.minute.hint).toMatch(/liste de courses/)
+  it('donne le contenu d\'UNE boîte, pas le total du plat', () => {
+    const boite = steps.find(s => s.title.startsWith('Boîte A'))!
+    expect(boite.lines.some(l => /180 g par boîte/.test(l))).toBe(true)
   })
 
-  it('ne propose aucune session sur une semaine entièrement absente', () => {
-    const week = A()
-    week.days.forEach((d) => { d.off = true })
-    expect(cookPlan(week, GYM_WEEK)).toEqual([])
+  it('sort les ingrédients frais de l\'assemblage et le dit', () => {
+    const poulet = steps.find(s => /Poulet, lentilles/.test(s.title))
+    if (poulet) {
+      expect(poulet.lines.some(l => /Salade/i.test(l))).toBe(false)
+      expect(poulet.hint).toMatch(/le jour même/)
+    }
+  })
+
+  it('ne propose aucune étape sans plat', () => {
+    expect(cookSteps([])).toEqual([])
   })
 })
 
@@ -1134,7 +1371,9 @@ describe('totaux et stock', () => {
   it('les totaux suivent le nombre de portions', () => {
     const one = selectionTotals({ 'boite-a': 1 })
     const three = selectionTotals({ 'boite-a': 3 })
-    expect(three.kcal).toBeCloseTo(one.kcal * 3, 0)
+    // À l'unité près : chaque total est arrondi une fois, à la fin. Trois portions
+    // d'un plat à 681,3 kcal font 2044, pas 3 × 681.
+    expect(Math.abs(three.kcal - one.kcal * 3)).toBeLessThanOrEqual(3)
     expect(three.portions).toBe(3)
     expect(three.dishes).toBe(1)
   })

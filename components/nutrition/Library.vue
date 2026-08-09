@@ -4,7 +4,7 @@ import { CAT_LABELS, CAT_ORDER } from '~/data/nutritionProgram'
 import type { FoodCat, Recipe, RecipeItem, RecipeKind } from '~/data/nutritionProgram'
 import { useNutrition } from '~/composables/useNutrition'
 import { usePhotos } from '~/composables/usePhotos'
-import { macrosOf, roundMacros, validateFood, validateRecipe } from '~/lib/nutritionStats'
+import { expandItems, macrosOf, roundMacros, validateFood, validateRecipe } from '~/lib/nutritionStats'
 
 // Vue « Plats » : la bibliothèque complète, consultable et extensible.
 // Tout ce qui est livré avec le plan est modifiable, et tout ce qui manque peut être
@@ -34,10 +34,11 @@ const KINDS: { id: RecipeKind, label: string }[] = [
   { id: 'diner', label: 'Dîner' },
   { id: 'pdj', label: 'Petit-déjeuner' },
   { id: 'collation', label: 'Collation' },
+  { id: 'sauce', label: 'Sauce / condiment' },
 ]
 
 const recipes = computed(() => Object.values(library.value.recipes)
-  .map(r => ({ r, macros: roundMacros(macrosOf(r.items, library.value.foods)) }))
+  .map(r => ({ r, macros: roundMacros(macrosOf(expandItems(r, library.value), library.value.foods)) }))
   .sort((a, b) => KINDS.findIndex(k => k.id === a.r.kind) - KINDS.findIndex(k => k.id === b.r.kind)
     || a.r.name.localeCompare(b.r.name)))
 
@@ -169,6 +170,9 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
               <span class="mono muted">{{ macros.p }} P · {{ macros.g }} G · {{ macros.l }} L</span>
             </div>
             <p class="nu-plat-items muted">{{ r.items.map(i => `${foodName(i.food)} ${i.g} g`).join(' · ') }}</p>
+            <!-- La sauce se prépare à part mais se mange bien : ses calories sont
+                 déjà dans le compteur ci-dessus, il faut donc la voir. -->
+            <p v-if="r.sauce" class="nu-plat-sauce">🥣 avec {{ library.recipes[r.sauce]?.name ?? r.sauce }}</p>
             <div class="nu-plat-acts">
               <button class="btn" @click="editRecipe(r.id)">✎</button>
               <button class="btn" :class="{ sel: !isRecipeActive(r.id) }" @click="toggleRecipeActive(r.id)">

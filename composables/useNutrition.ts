@@ -27,6 +27,7 @@ const OFF_KEY = 'gr-nutri-off-v1' // plats mis de côté
 const MENUS_KEY = 'gr-nutri-menus-v1' // semaines types : les menus de sept jours
 const ACTIVE_KEY = 'gr-nutri-menu-active-v1' // semaine type en cours
 const ASSIGN_KEY = 'gr-nutri-menu-map-v1' // semaine appliquée, par lundi
+const FREEZER_KEY = 'gr-nutri-freezer-v1' // ai-je de la place au congélateur ?
 const PICKED_KEY = 'gr-nutri-picked-v1' // plat réellement pris, quand il diffère
 // Clé de l'ancienne sélection « plat → portions », remplacée par la semaine type.
 // Les portions ne se saisissent plus à la main : elles se comptent dans la semaine.
@@ -52,6 +53,12 @@ const overrides = ref<Record<string, DayOverride>>({})
 const menus = ref<MenuWeek[]>([])
 const activeMenu = ref<string | null>(null)
 const menuAssign = ref<Record<string, string>>({})
+/**
+ * Place disponible au congélateur. `false` par défaut, et ce défaut compte : congeler
+ * est la seule façon de tout cuisiner le dimanche, mais un tiroir plein est un fait,
+ * pas un détail. Le supposer produirait un programme de cuisine irréalisable.
+ */
+const freezer = ref(false)
 // Plat réellement pris quand il diffère de celui proposé — « j'ai pris autre chose ».
 const picked = ref<Record<string, Record<string, string>>>({})
 const extras = ref<Record<string, Extra[]>>({})
@@ -100,6 +107,7 @@ export function useNutrition() {
     if (isWeek(w)) week.value = w
     const pm = localStorage.getItem(PREP_KEY)
     if (pm === 'assembled' || pm === 'separate') prepMode.value = pm
+    freezer.value = localStorage.getItem(FREEZER_KEY) === '1'
     hydrated = true
   }
 
@@ -341,7 +349,11 @@ export function useNutrition() {
     (activeWeek.value ? shoppingFromWeek(activeWeek.value, gymDays.value, library.value) : []))
   /** Les sessions de cuisine : dimanche, mercredi si besoin, et le soir même. */
   const cookSessions = computed(() =>
-    (activeWeek.value ? cookPlan(activeWeek.value, gymDays.value, library.value) : []))
+    (activeWeek.value ? cookPlan(activeWeek.value, gymDays.value, library.value, { freezer: freezer.value }) : []))
+  function setFreezer(has: boolean) {
+    freezer.value = has
+    writeRaw(FREEZER_KEY, has ? '1' : '0')
+  }
 
   /** Portions déjà consommées, par plat : sert à savoir ce qu'il reste au frigo. */
   const consumed = computed(() => {
@@ -475,7 +487,7 @@ export function useNutrition() {
       // et laisser une restauration partielle les faire diverger.
       menus: menus.value.filter(m => !m.builtin), activeMenu: activeMenu.value, menuAssign: menuAssign.value,
       picked: picked.value,
-      prepMode: prepMode.value, week: week.value, overrides: overrides.value,
+      prepMode: prepMode.value, freezer: freezer.value, week: week.value, overrides: overrides.value,
       extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
       disabledRecipes: disabledRecipes.value,
@@ -498,6 +510,7 @@ export function useNutrition() {
     if (n.eaten) { eaten.value = n.eaten; write(EATEN_KEY, eaten.value) }
     if (Array.isArray(n.baskets)) { baskets.value = n.baskets; write(BASKETS_KEY, baskets.value) }
     if (n.prepMode === 'assembled' || n.prepMode === 'separate') setPrepMode(n.prepMode)
+    if (typeof n.freezer === 'boolean') setFreezer(n.freezer)
     if (isWeek(n.week)) { week.value = n.week; write(WEEK_KEY, week.value) }
     if (n.overrides) { overrides.value = n.overrides; write(OVER_KEY, overrides.value) }
     if (n.extras) { extras.value = n.extras; write(EXTRA_KEY, extras.value) }
@@ -520,6 +533,7 @@ export function useNutrition() {
     setActiveMenu, applyMenuFrom, setMenuSlot, toggleMenuDayOff,
     duplicateMenu, renameMenu, removeMenu, blankMenu,
     selection, selectionSummary, selectionShopping, cookSessions, daysCovered, stock, pickedFor, setPicked,
+    freezer, setFreezer,
     isEaten, toggleEaten, eatenSlots, eatenCount, extrasFor, addExtra, removeExtra,
     addFood, patchFood, removeFood, resetFood, isCustomFood,
     addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,

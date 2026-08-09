@@ -692,7 +692,64 @@
 .nu-cook-dish-txt strong { font-size: 13px; }
 .nu-cook-dish-txt .muted { font-size: 10.5px; }
 .nu-cook-n { font-size: 13px; font-weight: 700; white-space: nowrap; }
-.nu-cook-group { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--bg-accent); padding-top: 9px; }
+/* La sortie par le congélateur : un conseil, pas une alerte. */
+.nu-freeze {
+  font-size: 12px; line-height: 1.55; padding: 10px 12px; border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-secondary) 10%, var(--bg-primary));
+  border-left: 3px solid var(--accent-secondary);
+}
+.nu-freeze-btn { display: block; margin-top: 8px; font-size: 11.5px; padding: 6px 10px; }
+
+/* Le choix du congélateur : deux options franches, pas une case à cocher perdue. */
+.nu-freezer { display: flex; flex-direction: column; }
+.nu-freezer-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.nu-freezer-opt {
+  display: flex; flex-direction: column; gap: 4px; text-align: left; cursor: pointer;
+  padding: 10px 12px; border-radius: 12px; font-size: 12.5px;
+  background: var(--bg-secondary); border: 1.5px solid var(--bg-accent); color: var(--text-primary);
+}
+.nu-freezer-opt:hover { border-color: var(--accent-secondary); }
+.nu-freezer-opt.on {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-primary));
+}
+.nu-freezer-opt .muted { font-size: 11px; line-height: 1.45; }
+.nu-gel {
+  margin-left: 6px; font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: 999px; vertical-align: middle;
+  background: color-mix(in srgb, var(--accent-secondary) 18%, var(--bg-primary)); color: var(--accent-secondary);
+}
+
+/* Les ingrédients, avant la préparation — comme dans n'importe quelle recette. */
+.nu-ing-head { border-top: 1px solid var(--bg-accent); padding-top: 10px; }
+.nu-ing { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.nu-ing-l { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: baseline; font-size: 13px; }
+.nu-ing-q { font-weight: 700; text-align: right; color: var(--accent-primary); }
+.nu-ing-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+.nu-ing-n .muted { font-size: 10.5px; }
+.nu-ing-raw {
+  font-size: 9px; letter-spacing: 0.05em; text-transform: uppercase; padding: 1px 5px;
+  border-radius: 999px; background: var(--bg-secondary); color: var(--text-muted);
+}
+
+/* La recette guidée : des étapes numérotées, dans l'ordre où on les fait. */
+.nu-recipe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--bg-accent); padding-top: 12px; }
+.nu-rstep { display: flex; gap: 10px; align-items: flex-start; }
+.nu-rstep-n {
+  width: 24px; height: 24px; flex: 0 0 auto; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-primary); color: #fff; font-size: 11.5px; font-weight: 700;
+}
+.nu-rstep-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.nu-rstep-title { font-family: var(--font-display); font-size: 14.5px; font-weight: 700; margin: 0; line-height: 1.3; }
+.nu-rstep-hint { font-size: 11.5px; line-height: 1.5; color: var(--text-muted); margin: 0; }
+.nu-rstep-lines { margin: 3px 0 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; line-height: 1.45; }
+
+/* Le mode d'emploi de l'onglet. Il se lit une fois, il ne doit donc pas crier. */
+.nu-how { border-left: 4px solid var(--accent-secondary); display: flex; flex-direction: column; gap: 8px; }
+.nu-how-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; margin: 0; }
+.nu-how-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.5; }
+
 
 .nu-selsum-main { display: flex; align-items: baseline; gap: 8px; }
 .nu-selsum-v { font-family: var(--font-display); font-size: 32px; font-weight: 800; line-height: 1; }
@@ -747,6 +804,7 @@
      est dans l'éditeur. Sans limite, une carte sur deux faisait le double des autres. */
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
+.nu-plat-sauce { font-size: 11px; margin: 2px 0 0; color: var(--accent-secondary); font-weight: 600; }
 .nu-plat-acts { display: flex; gap: 5px; margin-top: 8px; }
 .nu-plat-acts .btn { padding: 6px 8px; font-size: 11px; flex: 0 0 auto; }
 .nu-plat-acts .btn:nth-child(2) { flex: 1; }

@@ -11,7 +11,7 @@
 
 import type { DayTemplate, Food, FoodCat, MicroKey, Recipe, RecipeItem, Slot } from '../data/nutritionProgram'
 import {
-  CAT_ORDER, COOK_C_LOSS, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, MICRO_REFS,
+  CAT_ORDER, COOK_C_LOSS, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, KEEPS_FRESH, MICRO_REFS,
   RATIO_DINNER_GYM, RATIO_REST, RECIPE_BY_ID, SLOTS_GYM, SLOTS_REST, STARCHY_IDS,
 } from '../data/nutritionProgram'
 // isoOf et shiftIso viennent de sportStats. Nuxt auto-importe les deux fichiers d'utils :
@@ -83,6 +83,20 @@ export const roundPortion = (g: number) => Math.round(g / 5) * 5
 export function scaleItems(items: RecipeItem[], ratio = 1): RecipeItem[] {
   if (ratio === 1) return items.map(i => ({ ...i }))
   return items.map(i => (STARCHY.has(i.food) ? { food: i.food, g: roundPortion(i.g * ratio) } : { ...i }))
+}
+
+/**
+ * Les ingrédients d'un plat, sauce comprise.
+ *
+ * La sauce est une recette à part — elle se prépare dans un pot, se garde cinq
+ * jours et s'ajoute au moment de manger — mais elle se mange bel et bien : ses
+ * calories comptent dans la journée et ses ingrédients dans le caddie. La tenir
+ * hors des calculs sous prétexte qu'elle n'est pas dans la boîte reviendrait à
+ * manger 400 kcal par semaine sans les voir passer.
+ */
+export function expandItems(recipe: Recipe, lib: Library = BUILTIN): RecipeItem[] {
+  const sauce = recipe.sauce ? lib.recipes[recipe.sauce] ?? RECIPE_BY_ID[recipe.sauce] : null
+  return sauce ? [...recipe.items, ...sauce.items] : recipe.items
 }
 
 const EMPTY: Macros = { kcal: 0, p: 0, g: 0, l: 0 }
@@ -180,7 +194,7 @@ export function buildDay(
     const rid = menu?.slots?.[slot.id] ?? slot.recipe ?? (slot.from === 'lunch' ? tpl.lunch : tpl.dinner)
     const recipe = lib.recipes[rid] ?? RECIPE_BY_ID[rid]
     if (!recipe) continue
-    const items = scaleItems(recipe.items, ratioOf(slot))
+    const items = scaleItems(expandItems(recipe, lib), ratioOf(slot))
     meals.push({
       slot: slot.id,
       time: slot.time,
@@ -1483,7 +1497,7 @@ export function selectionTotals(sel: Selection, lib: Library = BUILTIN) {
     const r = lib.recipes[id]
     if (!r || !(n > 0)) continue
     portions += n
-    const m = macrosOf(r.items, lib.foods)
+    const m = macrosOf(expandItems(r, lib), lib.foods)
     macros.push({ kcal: m.kcal * n, p: m.p * n, g: m.g * n, l: m.l * n })
   }
   return { portions, dishes: macros.length, ...roundMacros(sumMacros(macros)) }
@@ -1500,24 +1514,52 @@ export function stockOf(sel: Selection, consumed: Record<string, number>): Recor
 
 // ─── Les sessions de cuisine ────────────────────────────────────────────────
 //
-// « Je fais tout dimanche, sauf ce qui ne tient pas la semaine. »
+// « Dimanche, je cuisine le plus de plats possible qui tiendront pour la semaine.
+//   Ce qui ne tient pas, je le fais plus tard. »
 //
-// C'est la règle, et elle se calcule : chaque aliment porte sa durée de
-// conservation une fois cuisiné, un plat prend la plus courte de ses ingrédients,
-// et un plat mangé au-delà de cette durée doit être refait. La session du mercredi
-// n'existe donc que si la semaine en a besoin — et elle ne contient que ce qui
-// n'aurait pas tenu.
+// C'est la règle, et elle se calcule. Chaque aliment porte sa durée de conservation
+// une fois cuisiné ; un plat prend la plus courte de ses ingrédients ; et un plat
+// mangé au-delà de cette durée doit être refait. Rien d'autre n'entre en jeu.
+//
+// En particulier, plus aucun plat n'est exclu d'office. Le drapeau « à faire minute »
+// écartait tous les dîners de la session du dimanche — la moitié de la semaine
+// disparaissait du programme de cuisine. Il ne dit plus qu'une chose, et c'est un
+// conseil, pas une interdiction : ce plat est meilleur frais.
 
 /** Jour de cuisson de chaque session, exprimé en index de semaine (0 = lundi). */
 export const COOK_SUNDAY = -1 // la veille du lundi
 export const COOK_WEDNESDAY = 2 // le mercredi soir, après le dîner
 
-/** Conservation d'un plat cuisiné : la plus courte de ses ingrédients. */
+/**
+ * Un plat se congèle si aucun des ingrédients QUI PARTENT EN BOÎTE ne s'y prête mal.
+ *
+ * Les ingrédients frais sont hors jeu : ils s'ajoutent au moment de manger, donc ils
+ * ne voient jamais le congélateur. Les compter interdisait de congeler une assiette
+ * de poulet-lentilles à cause de la salade qu'on pose dessus le jour même.
+ */
+export const freezableOf = (recipe: Recipe, lib: Library = BUILTIN): boolean => {
+  const fresh = new Set(freshItemsOf(recipe, lib).map(it => it.food))
+  return recipe.items.every(it => fresh.has(it.food) || !lib.foods[it.food]?.noFreeze)
+}
+
+/** Les ingrédients d'un plat qui s'ajoutent au dernier moment. */
+export const freshItemsOf = (recipe: Recipe, lib: Library = BUILTIN): RecipeItem[] =>
+  recipe.items.filter(it => (lib.foods[it.food]?.keeps ?? KEEPS_DEFAULT) <= KEEPS_FRESH)
+
+/**
+ * Conservation d'un plat cuisiné : la plus courte de ses ingrédients — sauf ceux
+ * qui ne se préparent jamais à l'avance.
+ *
+ * Une salade verte dans une assiette de poulet-lentilles faisait tomber tout le
+ * plat à un jour, donc hors de toute session : on renonçait à cuire le poulet ET
+ * les lentilles le dimanche à cause de deux feuilles. Les ingrédients frais sont
+ * donc sortis du calcul et listés à part, à ajouter le jour venu.
+ */
 export function keepsOf(recipe: Recipe, lib: Library = BUILTIN): number {
   let min = KEEPS_DEFAULT
   for (const it of recipe.items) {
     const k = lib.foods[it.food]?.keeps
-    if (typeof k === 'number' && k < min) min = k
+    if (typeof k === 'number' && k > KEEPS_FRESH && k < min) min = k
   }
   return min
 }
@@ -1530,6 +1572,41 @@ export interface CookDish {
   n: number
   days: number[] // index de jour concernés, 0 = lundi
   keeps: number
+  fresh: RecipeItem[] // à ajouter au moment de manger
+  bestFresh: boolean // meilleur cuisiné le jour même — un conseil, pas une règle
+  /**
+   * Ces boîtes partent au congélateur dès la fermeture, pas au frigo.
+   *
+   * Un même plat peut se retrouver des deux côtés — trois portions dont la première
+   * se mange lundi et la dernière samedi — d'où deux entrées distinctes plutôt qu'un
+   * drapeau sur le plat : elles ne se rangent pas au même endroit, donc elles ne se
+   * lisent pas sur la même ligne.
+   */
+  frozen: boolean
+}
+
+/** De quoi dispose la cuisine. Rien n'est supposé : la place au congélateur se déclare. */
+export interface CookOptions {
+  /**
+   * `false` par défaut, et c'est volontaire. Congeler est la seule façon de tout
+   * cuisiner le dimanche, mais tout le monde n'a pas un tiroir libre — le supposer
+   * produirait un programme irréalisable, ce qui est pire que d'en faire deux fois.
+   */
+  freezer?: boolean
+}
+export interface CookStep {
+  n: number
+  title: string
+  hint: string
+  lines: string[]
+}
+/** Une ligne de la liste d'ingrédients : de quoi remplir le plan de travail. */
+export interface CookIngredient {
+  foodId: string
+  name: string
+  qty: string
+  raw: boolean // à peser CRU — viandes, poissons, féculents
+  note?: string // repère d'achat ou de dosage (« 1 c. à café = 2 g »)
 }
 export interface CookSession {
   id: CookWhen
@@ -1538,22 +1615,52 @@ export interface CookSession {
   hint: string
   minutes: number
   dishes: CookDish[]
-  groups: PrepGroup[]
+  /**
+   * Les ingrédients, avec leurs quantités, AVANT les étapes.
+   *
+   * C'est la moitié qui manquait : une recette se lit en deux temps, ce qu'il faut
+   * sortir puis ce qu'il faut faire. Noyer les quantités dans une première étape
+   * obligeait à remonter dans le texte à chaque fois qu'on cherchait un poids.
+   */
+  ingredients: CookIngredient[]
+  steps: CookStep[]
+  /**
+   * Les plats de cette session qui pourraient être cuisinés dès le dimanche et
+   * congelés sur-le-champ. Renseigné uniquement sur la session du mercredi : c'est
+   * la seule façon de la supprimer entièrement, et personne n'y pense tout seul.
+   */
+  freezable?: CookDish[]
 }
 
 /**
- * Où placer la cuisson d'un plat mangé le jour `dow`.
+ * Où cuisiner un plat mangé le jour `dow`.
  *
- * Un plat qui ne se prépare pas à l'avance (poisson, œufs, salade) est toujours
- * fait le jour même : le réchauffer le rend immangeable, et ça n'est pas une
- * question de sécurité mais de plaisir — un plan qu'on n'a pas envie de manger ne
- * tient pas deux semaines.
+ * Le dimanche d'abord, toujours : c'est le but. On ne bascule au mercredi que si la
+ * conservation ne suit pas, et au jour même que si même le mercredi est trop loin.
  */
-export function cookSlotFor(dow: number, keeps: number, batch: boolean): CookWhen {
-  if (!batch) return 'minute'
+export function cookSlotFor(dow: number, keeps: number): CookWhen {
   if (dow - COOK_SUNDAY <= keeps) return 'dim'
   if (dow > COOK_WEDNESDAY && dow - COOK_WEDNESDAY <= keeps) return 'mer'
   return 'minute'
+}
+
+/**
+ * Où cuisiner, et faut-il congeler.
+ *
+ * Avec un congélateur, un plat qui se congèle bien remonte TOUJOURS au dimanche,
+ * quel que soit le jour où il sera mangé : c'est exactement ce que le congélateur
+ * achète. Sans, on retombe sur la conservation au frigo, qui décide seule.
+ */
+export function cookPlaceFor(
+  dow: number,
+  keeps: number,
+  freezable: boolean,
+  opts: CookOptions = {},
+): { where: CookWhen, frozen: boolean } {
+  const where = cookSlotFor(dow, keeps)
+  if (where === 'dim') return { where, frozen: false }
+  if (opts.freezer && freezable) return { where: 'dim', frozen: true }
+  return { where, frozen: false }
 }
 
 const DAY_SHORT = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
@@ -1579,18 +1686,214 @@ const SESSION_META: Record<CookWhen, { title: string, when: string, hint: string
   dim: {
     title: 'Dimanche',
     when: 'La veille du premier jour',
-    hint: 'Tout ce qui tient jusqu\'au milieu de semaine. Le féculent se cuit EN VRAC et se pèse au moment de remplir la boîte : c\'est ce qui permet de réduire une portion le soir d\'une séance annulée, ce qu\'une boîte déjà pesée ne permet plus.',
+    hint: 'Tout ce qui tiendra jusqu\'au jour où tu le mangeras. Suis les étapes dans l\'ordre : elles sont rangées par temps de cuisson, pas par recette, pour que rien n\'attende.',
   },
   mer: {
     title: 'Mercredi soir',
     when: 'Après le dîner du mercredi',
-    hint: 'Uniquement ce qui n\'aurait pas tenu jusqu\'ici. Rien de ce qui est cuit dimanche n\'est refait : cette session-là est courte, c\'est le prix à payer pour ne pas manger du poulet de six jours le samedi.',
+    hint: 'Uniquement ce qui n\'aurait pas tenu depuis dimanche. Rien n\'est refait en double — c\'est le prix à payer pour ne pas manger du poulet de six jours le samedi.',
   },
   minute: {
-    title: 'Le soir même',
+    title: 'À faire le jour même',
     when: 'Au moment de manger',
-    hint: 'Poisson, œufs, légumes croquants : réchauffés, ils deviennent secs ou tristes. Leurs ingrédients sont bien dans la liste de courses — c\'est la cuisson qui attend, pas l\'achat.',
+    hint: 'Ces plats-là ne tiennent pas assez longtemps pour être préparés à l\'avance. Leurs ingrédients sont bien dans la liste de courses : c\'est la cuisson qui attend, pas l\'achat.',
   },
+}
+
+/** Additionne les grammages d'une liste de plats, ingrédient par ingrédient. */
+function totalGrams(dishes: CookDish[], lib: Library, keep: (f: Food) => boolean): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const d of dishes) {
+    const r = lib.recipes[d.recipeId]
+    if (!r) continue
+    for (const it of r.items) {
+      const f = lib.foods[it.food]
+      if (!f || !keep(f)) continue
+      out.set(f.id, (out.get(f.id) ?? 0) + it.g * d.n)
+    }
+  }
+  return out
+}
+
+/**
+ * « pesés crus » plutôt que « crus » : ce sont les GRAMMES qui sont pesés crus, et
+ * la formule reste juste au singulier comme au pluriel, pour un filet de poulet
+ * comme pour du riz. Le pain et les conserves n'en ont pas besoin — rien à cuire.
+ */
+const rawSuffix = (f: Food) =>
+  (f.cook && (f.cat === 'feculents' || f.cat === 'viandes') ? ' pesés crus' : '')
+
+/** Une ligne d'étape : « Riz basmati — 240 g · 11 min à l'eau bouillante salée ». */
+function cookLine(f: Food, grams: number): string {
+  const base = `${f.name} — ${fmtQty(grams)}${rawSuffix(f)}`
+  return f.cook ? `${base} · ${f.cook}` : base
+}
+
+const isFresh = (f: Food) => (f.keeps ?? KEEPS_DEFAULT) <= KEEPS_FRESH
+const isStarch = (f: Food) => STARCHY.has(f.id)
+const isProtein = (f: Food) => f.cat === 'viandes' || f.cat === 'oeufs'
+const isVeg = (f: Food) => f.cat === 'legumes'
+
+/**
+ * Tout ce qu'il faut sortir, sauces comprises, additionné entre les recettes.
+ *
+ * Trié du plus lourd au plus léger : on sort les kilos d'abord et les pincées
+ * ensuite, ce qui est aussi l'ordre dans lequel on encombre un plan de travail.
+ */
+export function cookIngredients(dishes: CookDish[], lib: Library = BUILTIN): CookIngredient[] {
+  const grams = totalGrams(dishes, lib, () => true)
+  // Les sauces se préparent à part mais s'achètent et se pèsent avec le reste.
+  for (const d of dishes) {
+    const sid = lib.recipes[d.recipeId]?.sauce
+    const sauce = sid ? lib.recipes[sid] ?? RECIPE_BY_ID[sid] : null
+    if (!sauce) continue
+    for (const it of sauce.items) grams.set(it.food, (grams.get(it.food) ?? 0) + it.g * d.n)
+  }
+  return [...grams.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .flatMap(([id, g]) => {
+      const f = lib.foods[id]
+      if (!f || !(g > 0)) return []
+      return [{
+        foodId: id,
+        name: f.name,
+        qty: fmtQty(g),
+        raw: !!rawSuffix(f),
+        note: f.buy,
+      }]
+    })
+}
+
+/**
+ * La session, écrite comme une recette : des étapes numérotées, dans l'ordre où on
+ * les fait, avec les quantités déjà additionnées.
+ *
+ * Trois listes séparées par geste ne suffisaient pas — elles disaient QUOI, jamais
+ * dans quel ordre ni combien de temps, et surtout jamais comment remplir une boîte.
+ * Le point d'arrivée d'une session de cuisine, c'est sept boîtes prêtes ; le reste
+ * n'est que le chemin pour y aller.
+ */
+export function cookSteps(dishes: CookDish[], lib: Library = BUILTIN): CookStep[] {
+  if (!dishes.length) return []
+  const sauceOf = (d: CookDish) => {
+    const sid = lib.recipes[d.recipeId]?.sauce
+    const r = sid ? lib.recipes[sid] ?? RECIPE_BY_ID[sid] : null
+    return r?.name ?? null
+  }
+  const steps: CookStep[] = []
+  const push = (title: string, hint: string, lines: string[]) => {
+    if (lines.length) steps.push({ n: steps.length + 1, title, hint, lines })
+  }
+  const linesOf = (m: Map<string, number>) =>
+    [...m.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([id, g]) => (lib.foods[id] ? cookLine(lib.foods[id], g) : ''))
+      .filter(Boolean)
+
+  // 2. Le four en premier : il met dix minutes à monter, autant qu'il chauffe
+  // pendant qu'on épluche.
+  const needsOven = dishes.some((d) => {
+    const r = lib.recipes[d.recipeId]
+    return r?.items.some(it => lib.foods[it.food]?.cook?.includes('four'))
+  })
+  if (needsOven) {
+    steps.push({
+      n: steps.length + 1,
+      title: 'Préchauffe le four à 200 °C',
+      hint: 'Il met une dizaine de minutes à monter. Lance-le maintenant, tu épluches pendant ce temps.',
+      lines: ['Four à 200 °C, chaleur tournante', 'Sors une grande plaque et du papier cuisson'],
+    })
+  }
+
+  push(
+    'Les féculents, en vrac',
+    'Tout d\'un coup et SANS portionner. Une portion déjà pesée dans une boîte ne se reprend plus : garder le féculent en vrac est ce qui te permet de réduire une assiette le soir d\'une séance annulée.',
+    linesOf(totalGrams(dishes, lib, f => !isFresh(f) && !!f.cook && isStarch(f))),
+  )
+  push(
+    'Les protéines',
+    'Pendant que les féculents cuisent. C\'est le poste le plus long et celui qui décide du goût : ne le bâcle pas, c\'est ce que tu mangeras sept fois.',
+    linesOf(totalGrams(dishes, lib, f => !isFresh(f) && !!f.cook && isProtein(f))),
+  )
+  // Les sauces : le poste qui décide si la semaine est tenable. Préparées en une
+  // fois, dans des pots, jamais mélangées à la boîte — c'est ce qui leur permet de
+  // tenir cinq jours et de sauver un plat déjà mangé trois fois.
+  const sauces = new Map<string, number>()
+  for (const d of dishes) {
+    const sid = lib.recipes[d.recipeId]?.sauce
+    if (sid && (lib.recipes[sid] ?? RECIPE_BY_ID[sid])) sauces.set(sid, (sauces.get(sid) ?? 0) + d.n)
+  }
+  const sauceLines = [...sauces.entries()].map(([sid, n]) => {
+    const r = lib.recipes[sid] ?? RECIPE_BY_ID[sid]
+    const items = r.items
+      .map(it => (lib.foods[it.food] ? `${lib.foods[it.food].name} ${fmtQty(it.g * n)}` : ''))
+      .filter(Boolean)
+      .join(', ')
+    return `${r.name} — ${n} portion${n > 1 ? 's' : ''} : ${items}`
+  })
+
+  push(
+    'Les légumes',
+    'En dernier, et un peu moins cuits que d\'habitude : ils finiront de cuire au réchauffage. Trop cuits maintenant, ils seront en bouillie jeudi.',
+    linesOf(totalGrams(dishes, lib, f => !isFresh(f) && !!f.cook && isVeg(f))),
+  )
+
+  push(
+    'Les sauces, dans des pots à part',
+    'JAMAIS dans la boîte : une sauce blanche tranche au réchauffage et une vinaigrette détrempe tout. Dans un pot fermé au frigo, elles tiennent cinq jours — et c\'est ce qui fait qu\'on mange encore son plan avec plaisir le jeudi. Une cuillère au moment de servir.',
+    sauceLines,
+  )
+
+  // 3. L'assemblage, plat par plat, avec le contenu d'UNE boîte. C'est la seule
+  // chose qu'on lit vraiment, une louche à la main.
+  for (const d of dishes) {
+    const r = lib.recipes[d.recipeId]
+    if (!r) continue
+    const keep = r.items.filter(it => !freshItemsOf(r, lib).some(f => f.food === it.food))
+    const lines = keep.map((it) => {
+      const f = lib.foods[it.food]
+      return f ? `${f.name} — ${Math.round(it.g)} g par boîte` : ''
+    }).filter(Boolean)
+    if (!lines.length) continue
+    const fresh = freshItemsOf(r, lib)
+      .map(it => lib.foods[it.food]?.name)
+      .filter(Boolean)
+    steps.push({
+      n: steps.length + 1,
+      title: `${r.name} — ${d.n} boîte${d.n > 1 ? 's' : ''}${d.frozen ? ' (à congeler)' : ''}`,
+      hint: [
+        `Pour ${listDays(d.days)}.`,
+        sauceOf(d) ? `Sert avec la ${sauceOf(d)!.toLowerCase()} — dans un pot, à côté, pas dans la boîte.` : '',
+        d.frozen
+          ? 'Au CONGÉLATEUR dès que la boîte est fermée et refroidie, pas dans deux jours : congeler une boîte qui a déjà passé la moitié de sa vie au frigo ne rattrape rien. Sors-la la veille au soir, elle décongèle au frigo pendant la nuit.'
+          : '',
+        fresh.length ? `À ajouter le jour même, pas maintenant : ${fresh.join(', ')}.` : '',
+        d.bestFresh ? 'Ce plat est meilleur cuisiné le soir même — si tu as dix minutes ce jour-là, préfère ça.' : '',
+      ].filter(Boolean).join(' '),
+      lines,
+    })
+  }
+
+  // 4. Le rangement décide de la sécurité et du goût. C'est l'étape qu'on saute et
+  // celle qui fait jeter une boîte le jeudi.
+  // Frigo et congélateur ne se rangent pas ensemble, et se tromper d'étagère coûte
+  // une boîte. Les deux listes sont donc explicitement séparées.
+  const byDay = (a: CookDish, b: CookDish) => Math.min(...a.days) - Math.min(...b.days)
+  const label = (d: CookDish) => `${d.name} — ${listDays(d.days)}`
+  const chilled = dishes.filter(d => !d.frozen).sort(byDay).map(label)
+  const frozen = dishes.filter(d => d.frozen).sort(byDay).map(label)
+  steps.push({
+    n: steps.length + 1,
+    title: 'Refroidis, ferme, range',
+    hint: 'Laisse refroidir À DÉCOUVERT une vingtaine de minutes avant de fermer : une boîte fermée chaude fabrique de la condensation, et c\'est elle qui détrempe tout et abrège la conservation. Range ensuite dans l\'ordre où tu mangeras, le premier devant.',
+    lines: [
+      ...(chilled.length ? [frozen.length ? 'AU FRIGO :' : ''] : []),
+      ...chilled,
+      ...(frozen.length ? ['AU CONGÉLATEUR, tout de suite :'] : []),
+      ...frozen,
+    ].filter(Boolean),
+  })
+  return steps
 }
 
 /**
@@ -1601,7 +1904,12 @@ const SESSION_META: Record<CookWhen, { title: string, when: string, hint: string
  * a pas de session du mercredi, et afficher une carte vide laisserait croire à un
  * oubli.
  */
-export function cookPlan(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN): CookSession[] {
+export function cookPlan(
+  week: MenuWeek,
+  gym: boolean[],
+  lib: Library = BUILTIN,
+  opts: CookOptions = {},
+): CookSession[] {
   const plans = weekDayPlans(week, gym, lib)
   const buckets = new Map<CookWhen, Map<string, CookDish>>()
 
@@ -1611,12 +1919,24 @@ export function cookPlan(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN)
       const r = lib.recipes[meal.recipeId]
       if (!r || !MAIN_KINDS.includes(r.kind)) continue
       const keeps = keepsOf(r, lib)
-      const where = cookSlotFor(dow, keeps, !!r.batch)
+      const { where, frozen } = cookPlaceFor(dow, keeps, freezableOf(r, lib), opts)
       const bucket = buckets.get(where) ?? new Map<string, CookDish>()
-      const cur = bucket.get(r.id) ?? { recipeId: r.id, name: r.name, n: 0, days: [], keeps }
+      // Frais et congelé se rangent séparément, même pour un seul et même plat :
+      // ce ne sont ni le même geste ni la même étagère.
+      const key = `${r.id}:${frozen ? 'gel' : 'frais'}`
+      const cur = bucket.get(key) ?? {
+        recipeId: r.id,
+        name: r.name,
+        n: 0,
+        days: [],
+        keeps,
+        fresh: freshItemsOf(r, lib),
+        bestFresh: !r.batch,
+        frozen,
+      }
       cur.n += 1
       cur.days.push(dow)
-      bucket.set(r.id, cur)
+      bucket.set(key, cur)
       buckets.set(where, bucket)
     }
   })
@@ -1625,79 +1945,21 @@ export function cookPlan(week: MenuWeek, gym: boolean[], lib: Library = BUILTIN)
   return order.flatMap((id) => {
     const bucket = buckets.get(id)
     if (!bucket?.size) return []
-    const dishes = [...bucket.values()].sort((a, b) => a.days[0] - b.days[0])
-    const sel: Selection = Object.fromEntries(dishes.map(d => [d.recipeId, d.n]))
+    const dishes = [...bucket.values()].sort((a, b) => Math.min(...a.days) - Math.min(...b.days))
     return [{
       id,
       ...SESSION_META[id],
-      // Les plats du soir même ne se « préparent » pas en lot : les regrouper par
-      // geste n'aurait aucun sens, on les cuisine un par un le jour venu.
+      // Le jour même ne se « prépare » pas : détailler des étapes de lot pour un
+      // plat cuisiné en une fois n'aurait aucun sens.
       minutes: id === 'minute' ? 0 : cookMinutes(dishes),
       dishes,
-      groups: id === 'minute' ? [] : prepGroups(sel, lib),
+      ingredients: id === 'minute' ? [] : cookIngredients(dishes, lib),
+      steps: id === 'minute' ? [] : cookSteps(dishes, lib),
+      // Ce que le congélateur permettrait d'avancer au dimanche. Proposé seulement
+      // quand on n'a pas déclaré en avoir : sinon c'est déjà fait.
+      freezable: id === 'mer' && !opts.freezer
+        ? dishes.filter(d => lib.recipes[d.recipeId] && freezableOf(lib.recipes[d.recipeId], lib))
+        : undefined,
     }]
   })
-}
-
-export interface PrepGroup { id: string, title: string, hint: string, steps: string[] }
-
-/**
- * Conseils de préparation, regroupés par geste plutôt que par plat : on ne cuit pas
- * le riz de quatre recettes en quatre fois. C'est l'ordre dans lequel on occupe une
- * cuisine, pas l'ordre du carnet.
- */
-export function prepGroups(sel: Selection, lib: Library = BUILTIN): PrepGroup[] {
-  const chosen = Object.entries(sel)
-    .filter(([id, n]) => n > 0 && lib.recipes[id])
-    .map(([id, n]) => ({ r: lib.recipes[id], n }))
-  if (!chosen.length) return []
-
-  const starch = new Map<string, number>()
-  const proteins = new Map<string, number>()
-  const veg = new Map<string, number>()
-  for (const { r, n } of chosen) {
-    for (const it of r.items) {
-      const f = lib.foods[it.food]
-      if (!f) continue
-      const bucket = STARCHY.has(f.id) ? starch : f.cat === 'viandes' || f.cat === 'oeufs' ? proteins : f.cat === 'legumes' ? veg : null
-      if (bucket) bucket.set(f.name, (bucket.get(f.name) ?? 0) + it.g * n)
-    }
-  }
-  const lines = (m: Map<string, number>) =>
-    [...m.entries()].sort((a, b) => b[1] - a[1]).map(([name, g]) => `${name} — ${fmtQty(g)}`)
-
-  const out: PrepGroup[] = []
-  if (proteins.size) {
-    out.push({
-      id: 'proteines',
-      title: 'Les protéines',
-      hint: 'À lancer en premier si le four est partagé : c\'est le plus long, et le reste peut cuire pendant.',
-      steps: lines(proteins),
-    })
-  }
-  if (starch.size) {
-    out.push({
-      id: 'feculents',
-      title: 'Les féculents, en vrac',
-      hint: 'Tout d\'un coup et SANS portionner. Grammages pesés crus : c\'est ce que la liste de courses annonce, et c\'est le seul repère qui ne bouge pas à la cuisson.',
-      steps: lines(starch),
-    })
-  }
-  if (veg.size) {
-    out.push({
-      id: 'legumes',
-      title: 'Les légumes',
-      hint: 'Lavés et coupés maintenant, cuits au dernier moment quand c\'est possible : la vitamine C part à la cuisson, et davantage encore au réchauffage.',
-      steps: lines(veg),
-    })
-  }
-  if (chosen.length) {
-    out.push({
-      id: 'boites',
-      title: 'La mise en boîte',
-      hint: 'Pèse le plat FINI et divise-le en parts égales : chaque boîte contient alors exactement sa part des apports annoncés, quelle que soit l\'eau perdue à la cuisson. Refroidir à découvert avant de fermer, sinon la condensation détrempe tout.',
-      steps: chosen.map(({ r, n }) => `${r.name} — ${n} portion${n > 1 ? 's' : ''}`),
-    })
-  }
-  return out
 }
