@@ -133,9 +133,21 @@ function newSprintRows(): SprintRow[] {
 }
 function addSprintRow(kind: 'echauffement' | 'sprint') { sprintDraft.value.push({ kind, count: '', duration: '', intensity: '' }) }
 function removeSprintRow(i: number) { sprintDraft.value.splice(i, 1) }
-// Chrono flottant : visible quand on a scrollé vers le bas
-const pageScrolled = ref(false)
-function onScroll() { pageScrolled.value = window.scrollY > 150 }
+/**
+ * Chrono flottant : visible dès que le VRAI chrono ne l'est plus.
+ *
+ * Il se déclenchait sur un défilement de 150 px, ce qui n'a rien à voir avec la
+ * question posée — le chrono de la colonne d'outils peut très bien être hors champ
+ * sans qu'on ait bougé d'un pixel, selon l'exercice qu'on est en train de remplir.
+ * On validait alors une série et il ne se passait rien de visible : il fallait
+ * faire défiler la page POUR VOIR qu'un décompte avait démarré.
+ *
+ * On observe donc directement l'élément : présent à l'écran, pas de doublon ;
+ * absent, le flottant prend le relais.
+ */
+const timerBox = ref<HTMLElement | null>(null)
+const timerVisible = ref(true)
+let timerObserver: IntersectionObserver | null = null
 // Position du chrono flottant calée sur le viewport VISIBLE (reste visible clavier ouvert sur iOS)
 // Décalé sous l'en-tête collant de la feuille (gap haut ~26 px + en-tête ~56 px).
 const floatTop = ref(92)
@@ -267,7 +279,6 @@ function onDragStart(e: PointerEvent) {
   window.addEventListener('pointercancel', onDragEnd)
 }
 function requestCollapse() { if (!dragMoved) collapseSession() } // tap sur la poignée
-function onSheetScroll(e: Event) { pageScrolled.value = (e.target as HTMLElement).scrollTop > 150 }
 
 // ─────────── Popup « annuler la séance » (remplace le confirm() natif) ────────
 const cancelPromptOpen = ref(false)
@@ -392,6 +403,14 @@ function setLabel(rows: { warm: boolean }[], i: number) {
   for (let k = 0; k <= i; k++) if (!rows[k].warm) n++
   return 'S' + n
 }
+/**
+ * Repos après une série d'ÉCHAUFFEMENT. Court, mais pas nul : il faut bien le temps
+ * de changer les disques, et sans décompte on traîne ou on enchaîne trop vite. Un
+ * échauffement ne se récupère pas comme une série lourde — d'où les 45 secondes
+ * plutôt que les deux à trois minutes d'une série de travail.
+ */
+const WARMUP_REST = 45
+
 function restForReps(reps: string): number {
   const nums = reps.match(/\d+/g)
   const top = nums ? parseInt(nums[nums.length - 1], 10) : 12
@@ -399,7 +418,10 @@ function restForReps(reps: string): number {
   if (top <= 12) return 120
   return 75
 }
-function toggleSet(s: { done: boolean; warm: boolean }, reps: string) { s.done = !s.done; if (s.done && !s.warm) startRest(restForReps(reps)) }
+function toggleSet(s: { done: boolean; warm: boolean }, reps: string) {
+  s.done = !s.done
+  if (s.done) startRest(s.warm ? WARMUP_REST : restForReps(reps))
+}
 type DraftRow = { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }
 // Charge d'échauffement d'un exercice, d'après la série de travail la plus lourde
 // actuellement saisie (utilisée par le bouton « + Échauffement »).
@@ -620,15 +642,29 @@ onMounted(() => {
   const desktop = window.matchMedia('(min-width: 1080px)').matches
   plateOpen.value = desktop
   ormOpen.value = desktop
-  window.addEventListener('scroll', onScroll, { passive: true })
+
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', onViewport)
     window.visualViewport.addEventListener('scroll', onViewport)
     onViewport()
   }
+
+  // Le chrono de la colonne d'outils n'existe que dans la vue « séance » : on
+  // (re)branche l'observateur quand il apparaît, et on le débranche quand il part.
+  watch(timerBox, (el) => {
+    timerObserver?.disconnect()
+    if (!el) { timerVisible.value = false; return }
+    timerObserver = new IntersectionObserver(
+      ([entry]) => { timerVisible.value = entry.isIntersecting },
+      // Une marge négative en haut : à moitié caché sous l'en-tête collant, il ne
+      // compte pas comme visible.
+      { root: null, rootMargin: '-64px 0px 0px 0px', threshold: 0.5 },
+    )
+    timerObserver.observe(el)
+  }, { immediate: true })
 })
 onUnmounted(() => {
-  window.removeEventListener('scroll', onScroll)
+  timerObserver?.disconnect()
   if (import.meta.client && window.visualViewport) {
     window.visualViewport.removeEventListener('resize', onViewport)
     window.visualViewport.removeEventListener('scroll', onViewport)
@@ -662,7 +698,7 @@ onUnmounted(() => {
 
     <!-- Chrono de repos flottant : fixe en haut quand on a scrollé, revient à sa place en haut de page -->
     <transition name="ft-drop">
-      <div v-if="sheetOpen && restLeft > 0 && (pageScrolled || keyboardOpen)" class="floating-timer" :style="{ top: floatTop + 'px' }">
+      <div v-if="sheetOpen && restLeft > 0 && (!timerVisible || keyboardOpen)" class="floating-timer" :style="{ top: floatTop + 'px' }">
         <span class="ft-time mono">{{ restFmt(restLeft) }}</span>
         <span class="ft-label">Repos</span>
         <button class="ft-btn" @click="addRest(15)">+15</button>
@@ -739,7 +775,7 @@ onUnmounted(() => {
     <!-- ═══════════ SÉANCE (vraie feuille : monte, descend, glissable au doigt) ═══════════ -->
     <!-- Voile : l'onglet reste rendu derrière ; on le voit quand on descend la feuille -->
     <div v-if="sheetVisible" class="sheet-scrim" :style="scrimStyle" @click="collapseSession"></div>
-    <div v-if="sheetVisible && activeSession" class="session-sheet" :style="[{ '--c': activeSession.color }, sheetStyle]" @scroll.passive="onSheetScroll">
+    <div v-if="sheetVisible && activeSession" class="session-sheet" :style="[{ '--c': activeSession.color }, sheetStyle]">
       <div class="session-sheet-head" @pointerdown="onDragStart">
         <button class="sheet-grab" :aria-label="editingRecord ? 'Fermer' : 'Réduire la séance'" @click="requestCollapse"></button>
         <div class="ssh-row">
@@ -757,7 +793,7 @@ onUnmounted(() => {
       <div class="session-layout">
         <aside class="session-tools">
         <div class="tools-sticky">
-          <div class="timer-box"><LazySportRestTimer /></div>
+          <div ref="timerBox" class="timer-box"><LazySportRestTimer /></div>
           <div class="tool">
             <button class="btn tool-toggle" @click="plateOpen = !plateOpen">🏋️ Calcul de barre {{ plateOpen ? '▲' : '▼' }}</button>
             <LazySportPlateCalc v-show="plateOpen" />

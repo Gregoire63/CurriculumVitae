@@ -76,13 +76,31 @@ export const LOSS_MAX_KG = 0.8
 
 const STARCHY = new Set(STARCHY_IDS)
 
+/**
+ * L'aliment sur lequel on peut jouer pour ajuster une assiette.
+ *
+ * La liste livrée ne connaît que six féculents. Un plat créé à la main avec du
+ * boulgour, du quinoa ou des haricots blancs n'aurait donc offert AUCUNE prise à
+ * l'ajustement du soir : l'appli aurait constaté l'écart sans pouvoir le corriger.
+ * La catégorie fait donc foi autant que la liste — c'est le seul moyen que le
+ * mécanisme continue de marcher sur des repas que je n'ai pas écrits.
+ */
+export const isStarchy = (food: Food | undefined): boolean =>
+  !!food && (STARCHY.has(food.id) || food.cat === 'feculents')
+
 /** Portions arrondies au multiple de 5 g : en dessous, la balance de cuisine ne suit pas. */
 export const roundPortion = (g: number) => Math.round(g / 5) * 5
 
-/** Applique la modulation des féculents. Protéines, légumes et matières grasses ne bougent pas. */
-export function scaleItems(items: RecipeItem[], ratio = 1): RecipeItem[] {
+/**
+ * Applique la modulation des féculents. Protéines, légumes et matières grasses ne
+ * bougent pas.
+ *
+ * Le ratio ne vaut jamais autre chose que 1 en dehors du déjeuner et du dîner, si
+ * bien que l'avoine du petit-déjeuner n'est pas concernée malgré sa catégorie.
+ */
+export function scaleItems(items: RecipeItem[], ratio = 1, foods: Record<string, Food> = FOOD_BY_ID): RecipeItem[] {
   if (ratio === 1) return items.map(i => ({ ...i }))
-  return items.map(i => (STARCHY.has(i.food) ? { food: i.food, g: roundPortion(i.g * ratio) } : { ...i }))
+  return items.map(i => (isStarchy(foods[i.food]) ? { food: i.food, g: roundPortion(i.g * ratio) } : { ...i }))
 }
 
 /**
@@ -194,7 +212,7 @@ export function buildDay(
     const rid = menu?.slots?.[slot.id] ?? slot.recipe ?? (slot.from === 'lunch' ? tpl.lunch : tpl.dinner)
     const recipe = lib.recipes[rid] ?? RECIPE_BY_ID[rid]
     if (!recipe) continue
-    const items = scaleItems(expandItems(recipe, lib), ratioOf(slot))
+    const items = scaleItems(expandItems(recipe, lib), ratioOf(slot), lib.foods)
     meals.push({
       slot: slot.id,
       time: slot.time,
@@ -598,29 +616,52 @@ export const MICRO_FAIR = 100
  * La vitamine C des légumes est minorée : la cuisson en détruit environ 35 %, et
  * ignorer cette perte donnerait une couverture flatteuse et fausse.
  */
+/**
+ * Micronutriments d'une liste d'ingrédients.
+ *
+ * La vitamine C des légumes est minorée : elle part à la cuisson, et l'annoncer
+ * intacte reviendrait à compter une couverture qu'on ne mange pas.
+ */
+export function microsOf(items: RecipeItem[], foods: Record<string, Food> = FOOD_BY_ID): Record<MicroKey, number> {
+  const totals = {} as Record<MicroKey, number>
+  for (const k of Object.keys(MICRO_REFS) as MicroKey[]) totals[k] = 0
+  for (const it of items) {
+    const f = foods[it.food]
+    if (!f?.micro) continue
+    const factor = it.g / 100
+    for (const [k, v] of Object.entries(f.micro) as [MicroKey, number][]) {
+      const loss = k === 'vc' && f.cat === 'legumes' ? COOK_C_LOSS : 1
+      totals[k] += v * factor * loss
+    }
+  }
+  return totals
+}
+
+/** Fibres d'une liste d'ingrédients, en grammes. */
+export const fiberOf = (items: RecipeItem[], foods: Record<string, Food> = FOOD_BY_ID): number =>
+  Math.round(microsOf(items, foods).fib)
+
+/**
+ * Couverture moyenne sur une suite de journées DÉJÀ CONSTRUITES.
+ *
+ * Elle se calculait sur les quatorze jours livrés, quels que soient les menus
+ * réellement choisis. Depuis que la semaine est modifiable, ce chiffre ne décrivait
+ * plus l'assiette de personne — il décrivait le plan d'origine.
+ */
 export function microCoverage(
-  indices: number[],
-  trainedFor: (index: number) => boolean,
+  days: (DayPlan | null)[],
   foods: Record<string, Food> = FOOD_BY_ID,
 ): MicroCoverage[] {
   const totals = {} as Record<MicroKey, number>
   for (const k of Object.keys(MICRO_REFS) as MicroKey[]) totals[k] = 0
 
-  for (const i of indices) {
-    for (const meal of buildDay(i, trainedFor(i)).meals) {
-      for (const it of meal.items) {
-        const f = foods[it.food]
-        if (!f?.micro) continue
-        const factor = it.g / 100
-        for (const [k, v] of Object.entries(f.micro) as [MicroKey, number][]) {
-          const loss = k === 'vc' && f.cat === 'legumes' ? COOK_C_LOSS : 1
-          totals[k] += v * factor * loss
-        }
-      }
-    }
+  const kept = days.filter((d): d is DayPlan => !!d && d.meals.length > 0)
+  for (const day of kept) {
+    const one = microsOf(day.meals.flatMap(m => m.items), foods)
+    for (const k of Object.keys(totals) as MicroKey[]) totals[k] += one[k]
   }
 
-  const n = Math.max(1, indices.length)
+  const n = Math.max(1, kept.length)
   return (Object.keys(MICRO_REFS) as MicroKey[]).map((key) => {
     const meta = MICRO_REFS[key]
     const perDay = totals[key] / n
@@ -635,6 +676,60 @@ export function microCoverage(
       status: pct < MICRO_LOW ? 'low' : pct < MICRO_FAIR ? 'fair' : 'ok',
     }
   }).sort((a, b) => a.pct - b.pct)
+}
+
+// ─── Les fibres, jour par jour ──────────────────────────────────────────────
+//
+// Elles ne figuraient que dans la moyenne des micronutriments, sur quatorze jours.
+// Or c'est un poste qui se juge AU JOUR LE JOUR : on ne ressent pas une moyenne, on
+// ressent la journée où l'on est passé de 20 à 45 g d'un coup. Un plan qui triple le
+// volume de légumes sans le dire prépare une mauvaise surprise digestive.
+
+/** Plancher : en dessous, le transit et la satiété en pâtissent. */
+export const FIBER_MIN = 25
+/** Référence ANSES pour un adulte. */
+export const FIBER_TARGET = 30
+/**
+ * Au-delà, l'inconfort devient probable — ballonnements, gaz — et l'absorption du
+ * zinc et du fer commence à être gênée. Ce n'est pas un poison, c'est un seuil de
+ * vigilance : au-dessus, il faut surtout boire davantage.
+ */
+export const FIBER_HIGH = 45
+
+export type FiberTone = 'low' | 'ok' | 'high'
+export interface FiberVerdict { grams: number, ref: number, pct: number, tone: FiberTone, advice: string }
+
+export function fiberVerdict(grams: number): FiberVerdict {
+  const pct = Math.round(grams / FIBER_TARGET * 100)
+  const base = { grams: Math.round(grams), ref: FIBER_TARGET, pct }
+  if (grams < FIBER_MIN) {
+    return {
+      ...base,
+      tone: 'low',
+      advice: `${Math.round(FIBER_TARGET - grams)} g en dessous de la référence. Ajoute des légumes ou remplace un féculent blanc par sa version complète : à calories égales, les fibres calent plus longtemps.`,
+    }
+  }
+  if (grams > FIBER_HIGH) {
+    return {
+      ...base,
+      tone: 'high',
+      advice: 'Beaucoup de fibres aujourd\'hui. Ce n\'est pas dangereux, mais bois davantage — des fibres sans eau, c\'est exactement ce qui bloque au lieu de faire transiter. Si tu ballonnes, étale les légumes sur la journée plutôt que de tout mettre au dîner.',
+    }
+  }
+  return { ...base, tone: 'ok', advice: 'Dans la fourchette. Les fibres sont ce qui rend un déficit supportable : elles remplissent l\'estomac pour presque rien.' }
+}
+
+/**
+ * Fibres réellement avalées et fibres prévues sur la journée.
+ *
+ * Les repas hors plan ne sont pas comptés : on n'en connaît que les calories, et
+ * inventer leurs fibres donnerait un chiffre faux avec l'air d'être juste.
+ */
+export function fiberIntake(day: DayPlan, eaten: string[], foods: Record<string, Food> = FOOD_BY_ID) {
+  const done = new Set(eaten)
+  const all = day.meals.flatMap(m => m.items)
+  const taken = day.meals.filter(m => done.has(m.slot)).flatMap(m => m.items)
+  return { eaten: fiberOf(taken, foods), planned: fiberOf(all, foods) }
 }
 
 // ─── Dépense réelle d'une séance ────────────────────────────────────────────
@@ -795,7 +890,7 @@ export function dinnerAdjustment(
   const capped = clamp(delta, -ADJUST_MAX, ADJUST_MAX)
   // On agit sur le féculent le plus calorique du plat : c'est le levier le plus lisible.
   const starchy = dinner.items
-    .filter(i => STARCHY.has(i.food) && foods[i.food])
+    .filter(i => isStarchy(foods[i.food]))
     .sort((a, b) => (foods[b.food].kcal * b.g) - (foods[a.food].kcal * a.g))[0]
 
   if (!starchy) {
@@ -911,7 +1006,7 @@ export function removalSteps(day: DayPlan, need: number, foods: Record<string, F
     const meal = day.meals.find(m => m.slot === slot)
     if (!meal) return null
     const it = meal.items
-      .filter(i => STARCHY.has(i.food) && foods[i.food])
+      .filter(i => isStarchy(foods[i.food]))
       .sort((a, b) => (foods[b.food].kcal * b.g) - (foods[a.food].kcal * a.g))[0]
     return it ? { meal, item: it, food: foods[it.food] } : null
   }
@@ -1046,7 +1141,7 @@ export function applySteps(day: DayPlan, plan: AdjustPlan | null, foods: Record<
         return { ...m, items, macros: macrosOf(items, foods), adjusted: true }
       }
       const target = m.items
-        .filter(i => STARCHY.has(i.food) && foods[i.food])
+        .filter(i => isStarchy(foods[i.food]))
         .sort((a, b) => (foods[b.food].kcal * b.g) - (foods[a.food].kcal * a.g))[0]
       if (!target) return m
       const leaveG = roundPortion(-step.kcal / (foods[target.food].kcal / 100))
@@ -1734,7 +1829,7 @@ function cookLine(f: Food, grams: number): string {
 }
 
 const isFresh = (f: Food) => (f.keeps ?? KEEPS_DEFAULT) <= KEEPS_FRESH
-const isStarch = (f: Food) => STARCHY.has(f.id)
+const isStarch = (f: Food) => isStarchy(f)
 const isProtein = (f: Food) => f.cat === 'viandes' || f.cat === 'oeufs'
 const isVeg = (f: Food) => f.cat === 'legumes'
 

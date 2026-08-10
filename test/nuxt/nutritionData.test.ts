@@ -1,4 +1,3 @@
-// @vitest-environment nuxt
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Ces tests couvrent le CÂBLAGE du module nutrition (localStorage, aller-retour
@@ -128,7 +127,11 @@ describe('séance annulée', () => {
     const before = n.dayPlanFor('2026-08-03', n.dayFor('2026-08-03').gym)!.total.kcal
     n.setOverride('2026-08-03', { gym: false })
     const after = n.dayPlanFor('2026-08-03', n.dayFor('2026-08-03').gym)!.total.kcal
-    expect(before - after).toBeGreaterThan(150)
+    // Le seuil a baissé avec les grammages : les sauces et les épices ont pris une
+    // part de l'énergie des féculents, et c'est sur eux que porte la modulation.
+    // L'écart reste franc — il ne s'agit pas de vérifier un chiffre mais qu'annuler
+    // une séance se voit vraiment dans l'assiette.
+    expect(before - after).toBeGreaterThan(120)
   })
 })
 
@@ -196,8 +199,6 @@ describe('prix et panier', () => {
     expect(n.baskets.value).toHaveLength(0)
   })
 })
-
-describe('batch cooking', () => {})
 
 describe('mode de préparation', () => {
   it('part sur les féculents à part, le mode le plus souple', async () => {
@@ -278,7 +279,13 @@ describe('la semaine type pilote tout', () => {
     const avant = n.selectionSummary.value.portions
     n.toggleMenuDayOff(6)
     expect(n.selectionSummary.value.portions).toBe(avant - 2)
-    expect(n.dayPlanFor('2026-08-09', false)).toBeNull() // un dimanche
+    // La journée existe toujours — elle a une date, une dépense, une pesée
+    // éventuelle — mais elle ne propose aucun repas. Renvoyer `null` obligeait
+    // chaque écran à se protéger d'un cas rare, et un oubli suffisait pour une
+    // page blanche.
+    const off = n.dayPlanFor('2026-08-09', false) // un dimanche
+    expect(off.off).toBe(true)
+    expect(off.meals).toEqual([])
   })
 
   it('modifier une semaine livrée en fait une copie, l\'originale reste intacte', async () => {
@@ -336,7 +343,5 @@ describe('la semaine type pilote tout', () => {
     const ids = n.cookSessions.value.map(s => s.id)
     expect(ids[0]).toBe('dim')
     expect(new Set(ids).size).toBe(ids.length)
-  })
-})
   })
 })

@@ -1,4 +1,3 @@
-// @vitest-environment nuxt
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 // Ces tests couvrent le CÂBLAGE (localStorage, migrations, aller-retour d'écriture),
