@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { CYCLE_LENGTH, SUPPLEMENTS } from '~/data/nutritionProgram'
+import { SUPPLEMENTS } from '~/data/nutritionProgram'
 import { useNutrition } from '~/composables/useNutrition'
-import { DEFAULT_TRAINED, microCoverage } from '~/lib/nutritionStats'
+import { microCoverage, weekDayPlans } from '~/lib/nutritionStats'
 
 // Vue « Micros » : ce que le plan couvre réellement en micronutriments, et les seuls
 // compléments qui se justifient. L'intérêt est de montrer ce qui va BIEN autant que
 // ce qui manque — c'est ce qui évite d'empiler des gélules par précaution.
-const { library } = useNutrition()
-const cycle = Array.from({ length: CYCLE_LENGTH }, (_, i) => i)
-// La couverture suit la bibliothèque : si un plat est modifié, les micros suivent.
-const coverage = computed(() => microCoverage(cycle, DEFAULT_TRAINED, library.value.foods))
+const { library, activeWeek, gymDays } = useNutrition()
+
+// La couverture se calcule sur TA semaine, pas sur les quatorze jours livrés. Elle
+// décrivait sinon le plan d'origine, c'est-à-dire l'assiette de personne dès qu'on
+// avait changé un plat.
+const coverage = computed(() => (activeWeek.value
+  ? microCoverage(weekDayPlans(activeWeek.value, gymDays.value, library.value), library.value.foods)
+  : []))
 const gaps = computed(() => coverage.value.filter(c => c.status !== 'ok'))
 
 // Barre plafonnée : au-delà de 200 % l'information utile est « largement couvert ».
@@ -20,10 +24,11 @@ const width = (pct: number) => Math.min(100, pct / 2)
 <template>
   <div class="stack">
     <div class="card">
-      <div class="section-label">Couverture sur les 14 jours</div>
+      <div class="section-label">Couverture de ta semaine</div>
       <p class="mt-6 muted">
-        Calculé à partir des quantités réelles du plan, vitamine C des légumes minorée
-        de 35 % pour la cuisson. Comparé aux références ANSES pour un homme adulte.
+        Moyenne par jour sur les sept jours de la semaine que tu as choisie — les jours
+        d'absence ne comptent pas. Vitamine C des légumes minorée de 35 % pour la cuisson.
+        Comparé aux références ANSES pour un homme adulte.
       </p>
     </div>
 

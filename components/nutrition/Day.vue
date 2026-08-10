@@ -6,8 +6,8 @@ import { useWorkout } from '~/composables/useWorkout'
 import type { DayMeal, DayStatus } from '~/lib/nutritionStats'
 import {
   DAY_NAMES, STATUS_LABELS, adjustRemaining, applySteps, bmrMifflin, buildDay, dayBurn,
-  dayEnergy, dayIntake, dayStatus, dowIndex, extraFromRecipe, isDayPlayed, macroSplit,
-  proteinTarget, quickExtra, roundMacros, sessionsOn, sumMacros,
+  dayEnergy, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
+  isDayPlayed, macroSplit, proteinTarget, quickExtra, roundMacros, sessionsOn, sumMacros,
 } from '~/lib/nutritionStats'
 
 // Vue « Aujourd'hui » : le tableau de bord du jour.
@@ -100,6 +100,14 @@ const intake = computed(() => (energy.value
   : null))
 const split = computed(() => (intake.value ? macroSplit(intake.value.eaten) : null))
 const pTarget = computed(() => (kg.value ? proteinTarget(kg.value) : null))
+
+/**
+ * Les fibres ne vivaient que dans la moyenne des micronutriments, sur quatorze
+ * jours. C'est pourtant un poste qui se juge au jour le jour : on ne ressent pas une
+ * moyenne, on ressent la journée où l'on est passé de 20 à 45 g d'un coup.
+ */
+const fiber = computed(() => fiberIntake(day.value, eatenSlots(props.todayIso), library.value.foods))
+const fiberSaid = computed(() => fiberVerdict(fiber.value.planned))
 
 // Plus de « semaine A / B » : le cycle de 14 jours n'est qu'un pré-remplissage,
 // l'afficher revenait à mettre en scène une mécanique interne.
@@ -324,7 +332,16 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
         <span><i class="nu-sw p" />Protéines {{ intake.eaten.p }} g<template v-if="pTarget"> / {{ pTarget }}</template></span>
         <span><i class="nu-sw g" />Glucides {{ intake.eaten.g }} g</span>
         <span><i class="nu-sw l" />Lipides {{ intake.eaten.l }} g</span>
+        <span class="nu-fib" :class="fiberSaid.tone">
+          <i class="nu-sw f" />Fibres {{ fiber.eaten }} g / {{ fiberSaid.ref }}
+        </span>
       </div>
+      <!-- Le conseil ne s'affiche que quand il y a quelque chose à faire : une
+           journée dans la fourchette n'a pas besoin d'un paragraphe pour le dire. -->
+      <p v-if="fiberSaid.tone !== 'ok'" class="nu-note mt-6">
+        <b>{{ fiberSaid.tone === 'low' ? 'Peu de fibres' : 'Beaucoup de fibres' }}</b>
+        — {{ fiberSaid.grams }} g prévus aujourd'hui. {{ fiberSaid.advice }}
+      </p>
     </div>
 
     <!-- Une seule fiche de plat dans toute l'appli : celle-ci montre la photo, les

@@ -435,16 +435,28 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   -webkit-overflow-scrolling: touch;
 }
 .sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--bg-accent); margin: 4px auto 2px; flex: 0 0 auto; }
-.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+/* L'en-tête reste COLLÉ en haut pendant le défilement.
+   Depuis que la feuille défile en entier, le titre et la croix partaient hors champ
+   au premier geste : on se retrouvait dans un contenu sans savoir dans quoi on
+   était, ni comment en sortir. Les marges négatives compensent le padding de la
+   feuille pour que le fond couvre toute la largeur. */
+.sheet-head {
+  position: sticky; top: -10px; z-index: 3;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  margin: 0 -18px; padding: 10px 18px 12px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--bg-accent);
+}
 .sheet-title { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
 .sheet-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: 0 0 auto; }
 .sheet-close { width: 32px; height: 32px; border-radius: 999px; border: 1px solid var(--bg-accent); background: var(--bg-primary); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; flex: 0 0 auto; }
 .sheet-body {
   display: flex; flex-direction: column; gap: 2px;
-  border-top: 1px solid var(--bg-accent); padding-top: 10px;
-  /* Plus de défilement propre : c'est la feuille entière qui défile désormais. Deux
-     zones défilantes imbriquées produisaient un ascenseur interne minuscule sous un
-     en-tête figé, et le geste se perdait de l'une à l'autre. */
+  /* Ni défilement propre ni trait de séparation : c'est la feuille ENTIÈRE qui
+     défile, et le trait est porté par l'en-tête collant. Deux zones défilantes
+     imbriquées produisaient un ascenseur interne minuscule sous un en-tête figé,
+     et le geste se perdait de l'une à l'autre. */
+  padding-top: 8px;
 }
 
 .sheet-edit { padding: 13px; font-size: 15px; margin-top: 2px; }

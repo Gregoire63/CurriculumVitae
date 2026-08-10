@@ -57,7 +57,6 @@ onUnmounted(unlock)
            une sans passer par l'éditeur. -->
       <div class="rs-cover">
         <NutritionPhoto :id="recipe.id" :label="recipe.name" size="cover" />
-        <button class="sheet-close rs-close" aria-label="Fermer" @click="emit('close')">×</button>
       </div>
 
       <div class="sheet-head">
@@ -72,6 +71,7 @@ onUnmounted(unlock)
             <template v-if="keeps"> · se garde {{ keeps }} j au frigo</template>
           </div>
         </div>
+        <button class="sheet-close" aria-label="Fermer" @click="emit('close')">×</button>
       </div>
 
       <div class="sheet-body">

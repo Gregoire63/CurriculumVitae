@@ -13,7 +13,8 @@ import {
   adjustPlanFor, applySteps, LEAVE_MAX, removalSteps, adjustRemaining, upcomingPlan, ADJUST_MAX,
   FAT_PER_KG, KCAL_L, KCAL_P, MACRO_BAND, donutArcs, macroGaps, macroTargets,
   builtinWeeks, cookPlaceFor, cookPlan, cookSelection, cookSlotFor, cookSteps, freezableOf, freshItemsOf,
-  cookIngredients, expandItems, keepsOf, listDays,
+  cookIngredients, expandItems, isStarchy, keepsOf, listDays,
+  FIBER_HIGH, FIBER_MIN, fiberIntake, fiberOf, fiberVerdict,
   normalizeWeek,
   selectionTotals, shoppingFrom, shoppingFromWeek, stockOf, weekDayPlans, weekDaysOn, weekGrams,
   sessionBurn, sessionsOn, targetFor, targetOf, tdeeOf, usableDuration,
@@ -263,7 +264,9 @@ describe('budget', () => {
 // Le but de cette vue est de dire ce qui manque VRAIMENT, pas de justifier des gélules :
 // ces tests verrouillent le constat (seule la vitamine D est sous la référence).
 describe('micronutriments', () => {
-  const cov = microCoverage(Array.from({ length: CYCLE_LENGTH }, (_, i) => i), DEFAULT_TRAINED)
+  // La couverture se lit désormais sur des journées construites, et non sur des
+  // index de cycle : c'est ce qui lui permet de suivre la semaine réellement choisie.
+  const cov = microCoverage(Array.from({ length: CYCLE_LENGTH }, (_, i) => buildDay(i, DEFAULT_TRAINED(i))))
 
   it('couvre chaque nutriment de la table de référence', () => {
     expect(cov.map(c => c.key).sort()).toEqual(Object.keys(MICRO_REFS).sort())
@@ -1160,6 +1163,97 @@ describe('cookPlan', () => {
   it('estime une durée pour les sessions, pas pour le jour même', () => {
     expect(byId.dim.minutes).toBeGreaterThan(0)
     expect(byId.minute?.minutes ?? 0).toBe(0)
+  })
+})
+
+describe('les fibres, au jour le jour', () => {
+  it('comptent ce qui est réellement coché, pas la journée entière', () => {
+    const day = buildDay(0, true)
+    const rien = fiberIntake(day, [])
+    const tout = fiberIntake(day, day.meals.map(m => m.slot))
+    expect(rien.eaten).toBe(0)
+    expect(rien.planned).toBe(tout.planned)
+    expect(tout.eaten).toBe(tout.planned)
+  })
+
+  it('la journée du plan tient la référence sans exploser le seuil de vigilance', () => {
+    for (let i = 0; i < CYCLE_LENGTH; i++) {
+      const g = fiberIntake(buildDay(i, DEFAULT_TRAINED(i)), []).planned
+      expect(g).toBeGreaterThanOrEqual(FIBER_MIN)
+      expect(g).toBeLessThanOrEqual(FIBER_HIGH)
+    }
+  })
+
+  it('dit ce qu\'il faut faire, dans les deux sens', () => {
+    expect(fiberVerdict(15).tone).toBe('low')
+    expect(fiberVerdict(15).advice).toMatch(/complète/)
+    expect(fiberVerdict(30).tone).toBe('ok')
+    expect(fiberVerdict(60).tone).toBe('high')
+    // Le conseil qui compte au-dessus du seuil : boire.
+    expect(fiberVerdict(60).advice).toMatch(/bois/i)
+  })
+
+  it('ne compte pas les repas hors plan : on n\'en connaît que les calories', () => {
+    // Inventer les fibres d'un extra donnerait un chiffre faux avec l'air d'être juste.
+    const day = buildDay(0, true)
+    expect(fiberIntake(day, ['pdj']).eaten).toBe(fiberOf(day.meals.find(m => m.slot === 'pdj')!.items))
+  })
+})
+
+describe('l\'ajustement sur des plats faits maison', () => {
+  // Le vrai test de l'ajustement du soir : il doit continuer de marcher sur des
+  // repas que le plan ne connaît pas. Sinon la mécanique tombe le jour où l'on
+  // commence à saisir ses propres plats — c'est-à-dire dès qu'on s'approprie l'outil.
+  const lib = {
+    foods: {
+      ...FOOD_BY_ID,
+      quinoa: { id: 'quinoa', name: 'Quinoa', cat: 'feculents' as const, kcal: 368, p: 14, g: 64, l: 6 },
+      seitan: { id: 'seitan', name: 'Seitan', cat: 'viandes' as const, kcal: 140, p: 25, g: 6, l: 2 },
+    },
+    recipes: {
+      ...RECIPE_BY_ID,
+      'mon-diner': {
+        id: 'mon-diner',
+        name: 'Mon dîner',
+        kind: 'diner' as const,
+        batch: false,
+        steps: '',
+        items: [{ food: 'seitan', g: 180 }, { food: 'quinoa', g: 100 }, { food: 'courgettes', g: 200 }],
+      },
+    },
+  }
+
+  it('reconnaît un féculent hors de la liste livrée', () => {
+    expect(isStarchy(lib.foods.quinoa)).toBe(true)
+    expect(isStarchy(lib.foods.seitan)).toBe(false)
+    expect(isStarchy(undefined)).toBe(false)
+  })
+
+  it('rogne le quinoa d\'un plat maison pour tenir la cible', () => {
+    const day = buildDay(0, true, lib, { slots: { dinner: 'mon-diner' } })
+    const dinner = day.meals.find(m => m.slot === 'dinner')!
+    expect(dinner.recipeId).toBe('mon-diner')
+    // Journée volontairement trop chargée : l'ajustement doit trouver une prise.
+    const plan = adjustRemaining(day, day.total.kcal - 200, [], 0, 'separate', lib.foods)
+    expect(plan).not.toBeNull()
+    const after = applySteps(day, plan, lib.foods)
+    const q = (d: typeof day) => d.meals.flatMap(m => m.items).find(i => i.food === 'quinoa')?.g ?? 0
+    expect(q(after)).toBeLessThan(q(day))
+  })
+
+  it('module aussi un féculent maison les jours sans séance', () => {
+    const gym = buildDay(0, true, lib, { slots: { dinner: 'mon-diner' } })
+    const rest = buildDay(0, false, lib, { slots: { dinner: 'mon-diner' } })
+    const q = (d: typeof gym) => d.meals.flatMap(m => m.items).find(i => i.food === 'quinoa')!.g
+    expect(q(rest)).toBeLessThan(q(gym))
+  })
+
+  it('ne touche jamais à la protéine ni aux légumes', () => {
+    const gym = buildDay(0, true, lib, { slots: { dinner: 'mon-diner' } })
+    const rest = buildDay(0, false, lib, { slots: { dinner: 'mon-diner' } })
+    const g = (d: typeof gym, f: string) => d.meals.flatMap(m => m.items).find(i => i.food === f)!.g
+    expect(g(rest, 'seitan')).toBe(g(gym, 'seitan'))
+    expect(g(rest, 'courgettes')).toBe(g(gym, 'courgettes'))
   })
 })
 
