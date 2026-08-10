@@ -126,13 +126,14 @@ const fmtMin = (m: number) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 6
 
 /**
  * Le petit-déjeuner et les collations n'apparaissent dans la cuisine que s'ils se
- * préparent à l'avance. Le porridge se fait le matin même, le shaker se remplit sur
+ * préparent à l'avance. Un smoothie se mixe sur le moment, un shaker se remplit sur
  * place : les faire figurer dans une session de préparation serait mentir.
  *
- * Mais leur absence ressemble à un oubli. On dit donc pourquoi, et on propose la
- * bascule — c'est un geste, pas une explication à comprendre.
+ * Le cas ne se présente plus par défaut — le petit-déjeuner livré se prépare la
+ * veille — mais il revient dès qu'on choisit une variante minute, et son absence
+ * ressemble alors à un oubli. On dit donc pourquoi, et on propose la bascule.
  */
-const MAKE_AHEAD = { pdj: 'pdj-overnight', snack: 'col-oeufs' } as const
+const MAKE_AHEAD = { pdj: 'pdj-croquant', snack: 'col-oeufs' } as const
 const hasMakeAhead = computed(() => cookSessions.value
   .some(s => s.dishes.some(d => {
     const k = library.value.recipes[d.recipeId]?.kind
@@ -382,10 +383,10 @@ function useMakeAhead() {
       <!-- Pourquoi le petit-déjeuner n'est pas dans la liste, et comment l'y mettre. -->
       <div v-if="!hasMakeAhead" class="card nu-freeze">
         <b>Ton petit-déjeuner et tes collations ne sont pas là ?</b>
-        C'est normal : le porridge se fait le matin même et le shaker se remplit sur place,
-        donc il n'y a rien à préparer le dimanche. Si tu préfères ne rien avoir à faire à
-        10 h, bascule sur les versions qui se préparent d'avance — <b>overnight oats</b>
-        (trois bocaux, prêts la veille) et <b>œufs durs</b> (six d'un coup, ils tiennent
+        C'est normal : ceux que tu as choisis se font sur le moment, donc il n'y a rien à
+        préparer le dimanche. Si tu préfères ne rien avoir à faire à 10 h, bascule sur les
+        versions qui se préparent d'avance — <b>yaourt, fruits et avoine croquante</b>
+        (trois pots, prêts la veille) et <b>œufs durs</b> (six d'un coup, ils tiennent
         cinq jours). Elles apparaîtront alors ici avec leurs étapes.
         <button class="btn nu-freeze-btn" @click="useMakeAhead()">Préparer aussi mes matins →</button>
       </div>

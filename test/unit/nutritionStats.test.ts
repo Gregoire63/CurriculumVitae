@@ -768,10 +768,22 @@ describe('horaires des repas', () => {
     }
   })
 
-  it('la banane est passée avec le petit-déjeuner, pas en prise séparée à 11 h', () => {
+  it('la banane se détache du petit-déjeuner et se rapproche de la séance', () => {
+    // Collée au bol de 10 h, elle ne passait tout simplement pas — et son sucre
+    // sert à l'effort, donc plus elle en est proche, mieux c'est. Elle reste
+    // néanmoins à distance de la séance de midi : avalée sur le pas de la porte,
+    // elle ne serait pas digérée.
     const pdj = minutes(SLOTS_GYM.find(s => s.id === 'pdj')!.time)
     const pre = minutes(SLOTS_GYM.find(s => s.id === 'pre')!.time)
-    expect(pre - pdj).toBeLessThanOrEqual(15)
+    expect(pre - pdj).toBeGreaterThanOrEqual(60)
+    expect(pre).toBeLessThan(minutes(SLOTS_GYM.find(s => s.id === 'post')!.time))
+  })
+
+  it('la créatine, elle, reste collée au petit-déjeuner : c\'est ce qui en fait une habitude', () => {
+    for (const slots of [SLOTS_GYM, SLOTS_REST]) {
+      const pdj = minutes(slots.find(s => s.id === 'pdj')!.time)
+      expect(minutes(slots.find(s => s.id === 'creatine')!.time) - pdj).toBeLessThanOrEqual(15)
+    }
   })
 
   it('« 10 h » sans minutes est bien ordonné par la frise', () => {
@@ -1106,15 +1118,17 @@ describe('cookPlan', () => {
   })
 
   it('ne cuisine deux fois aucune portion', () => {
+    // 7 midis + 7 dîners + 7 petits-déjeuners : celui par défaut se prépare
+    // désormais à l'avance, il entre donc dans les sessions comme le reste.
     const total = sessions.reduce((n, s) => n + s.dishes.reduce((m, d) => m + d.n, 0), 0)
-    expect(total).toBe(14)
+    expect(total).toBe(21)
   })
 
   it('met au dimanche tout ce que la conservation autorise', () => {
-    // Cinq portions seulement : les viandes cuites tiennent trois jours, pas sept.
-    // Le chiffre est bas, mais c'est le vrai — d'où la sortie par le congélateur.
+    // Huit portions sur vingt et une : les viandes cuites tiennent trois jours, pas
+    // sept. Le chiffre reste bas, et c'est le vrai — d'où la sortie par le congélateur.
     const dim = byId.dim.dishes.reduce((n, d) => n + d.n, 0)
-    expect(dim).toBe(5)
+    expect(dim).toBe(8)
     for (const d of byId.dim.dishes) expect(Math.max(...d.days)).toBeLessThanOrEqual(d.keeps - 1)
   })
 
@@ -1156,10 +1170,10 @@ describe('les variantes de petit-déjeuner et de collation', () => {
   it('chaque petit-déjeuner tient les macros du porridge à 10 % près', () => {
     // C'est la condition pour qu'en changer soit un vrai choix : une option qui
     // pèse 200 kcal de plus n'est pas une alternative, c'est un piège.
-    const ref = kcalOf('pdj')
+    const ref = kcalOf('pdj-croquant')
     for (const r of Object.values(RECIPE_BY_ID).filter(x => x.kind === 'pdj')) {
       expect(Math.abs(kcalOf(r.id) - ref) / ref).toBeLessThan(0.1)
-      expect(pOf(r.id)).toBeGreaterThanOrEqual(pOf('pdj') * 0.9)
+      expect(pOf(r.id)).toBeGreaterThanOrEqual(pOf('pdj-croquant') * 0.9)
     }
   })
 
@@ -1167,6 +1181,15 @@ describe('les variantes de petit-déjeuner et de collation', () => {
     const pdj = Object.values(RECIPE_BY_ID).filter(r => r.kind === 'pdj')
     expect(pdj.some(r => r.batch)).toBe(true)
     expect(pdj.some(r => /boire|smoothie/i.test(r.name))).toBe(true)
+  })
+
+  it('le petit-déjeuner PAR DÉFAUT se prépare à l\'avance', () => {
+    // Il se mange à 10 h au bureau : un défaut qui réclame un micro-ondes et deux
+    // minutes debout n'est pas un défaut, c'est un obstacle.
+    for (const slots of [SLOTS_GYM, SLOTS_REST]) {
+      const id = slots.find(s => s.id === 'pdj')!.recipe!
+      expect(RECIPE_BY_ID[id].batch).toBe(true)
+    }
   })
 
   it('les collations restent sous 180 kcal', () => {
@@ -1222,7 +1245,7 @@ describe('ce qui se prépare à l\'avance entre dans la session', () => {
     const oats = dim.steps.find(st => st.title.startsWith('Overnight oats'))!
     expect(oats.title).toMatch(/pots/)
     expect(oats.lines[0]).toMatch(/par pot/)
-    expect(oats.hint).toMatch(/la veille au soir/i)
+    expect(oats.hint).toMatch(/LA VEILLE/)
   })
 
   it('n\'applique pas aux collations les consignes de cuisson des plats', () => {
