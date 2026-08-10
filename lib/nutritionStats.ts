@@ -68,8 +68,40 @@ export const PAL_REST = 1.25 // télétravail, peu de déplacements
 export const PAL_GYM = 1.48 // séance de musculation + déplacement
 /** 1 kg de masse grasse ≈ 7 700 kcal. Sert à convertir un déficit en perte attendue. */
 export const KCAL_PER_KG_FAT = 7700
-/** Cible protéique, en grammes par kilo de poids de corps. */
+/**
+ * Cible protéique de REPLI, en grammes par kilo de poids de corps. Elle ne sert que
+ * tant que la composition corporelle est inconnue : calculer les protéines sur le
+ * poids total revient à en prescrire pour du tissu adipeux, qui n'en demande pas.
+ * Plus il reste de gras à perdre, plus ce repli surestime.
+ */
 export const PROTEIN_PER_KG = 2.1
+
+/**
+ * Cible protéique calculée sur la MASSE MAIGRE, en g/kg de masse maigre.
+ *
+ * Les bornes viennent des recommandations de déficit calorique chez le sportif de
+ * force (Helms et al., 2014) : 2,3 à 3,1 g/kg de masse maigre, le haut de la
+ * fourchette pour les sujets déjà secs et/ou en déficit agressif — c'est là que le
+ * muscle devient la variable d'ajustement, faute de réserves de gras à mobiliser.
+ *
+ * Entre les deux, on interpole linéairement sur le taux de masse grasse. Cette
+ * interpolation est un choix d'ingénierie, PAS une donnée d'étude : elle n'existe
+ * que pour éviter les marches d'escalier. Un barème par paliers ferait sauter la
+ * cible de plusieurs grammes d'un jour à l'autre au gré du bruit de mesure de
+ * l'impédancemétrie, qui est loin d'être négligeable.
+ *
+ * Le plancher est fixé à 2,4 et non 2,3 : la borne basse de la littérature suppose
+ * un déficit modéré et un apport parfaitement réparti, deux hypothèses qu'aucune
+ * vraie semaine ne tient tout à fait.
+ */
+export const PROTEIN_LEAN_MIN = 2.4 // g/kg de masse maigre, à PROTEIN_FAT_HIGH % et au-delà
+export const PROTEIN_LEAN_MAX = 3.1 // g/kg de masse maigre, à PROTEIN_FAT_LOW % et en deçà
+export const PROTEIN_FAT_LOW = 10 // % de masse grasse : en dessous, on plafonne
+export const PROTEIN_FAT_HIGH = 32 // % de masse grasse : au-dessus, on plancher
+
+/** Bornes de plausibilité d'un taux de masse grasse mesuré. Au-delà, la balance ment. */
+export const FAT_RATIO_MIN = 3
+export const FAT_RATIO_MAX = 70
 /** Fourchette de perte hebdomadaire visée : en dessous on stagne, au-dessus on perd du muscle. */
 export const LOSS_MIN_KG = 0.4
 export const LOSS_MAX_KG = 0.8
@@ -318,7 +350,91 @@ export function dayEnergy(opts: {
   }
 }
 
-export const proteinTarget = (kg: number) => Math.round(kg * PROTEIN_PER_KG)
+/**
+ * Ce qu'une pesée peut apprendre sur la composition corporelle. Les trois champs
+ * sont redondants entre eux — une balance à impédance en renvoie souvent deux ou
+ * trois — et `leanMassOf` sait retomber de l'un sur l'autre.
+ *
+ * Attention au vocabulaire : la MASSE MAIGRE (`leanMass`) est tout ce qui n'est pas
+ * du gras — muscle, os, organes, eau. Elle n'est PAS la « masse musculaire » que
+ * Withings affiche, qui en exclut l'os et vaut donc quelques kilos de moins. C'est
+ * la masse maigre qui sert de base au calcul : le muscle seul sous-estimerait.
+ */
+export interface BodyComp {
+  fatRatio?: number | null // %
+  fatMass?: number | null // kg
+  leanMass?: number | null // kg
+}
+
+const plausibleFat = (f: unknown): f is number =>
+  typeof f === 'number' && Number.isFinite(f) && f >= FAT_RATIO_MIN && f <= FAT_RATIO_MAX
+
+/**
+ * Masse maigre en kg, dans l'ordre de fiabilité décroissante : la valeur donnée par
+ * la balance, sinon poids − masse grasse, sinon déduite du pourcentage. `null` quand
+ * rien d'exploitable n'est disponible — et ce `null` compte : il fait retomber le
+ * calcul sur le poids de corps au lieu d'inventer une composition.
+ */
+export function leanMassOf(kg: number, comp?: BodyComp | null): number | null {
+  if (!comp || !(kg > 0)) return null
+  const round = (n: number) => Math.round(n * 100) / 100
+  if (typeof comp.leanMass === 'number' && comp.leanMass > 0 && comp.leanMass < kg) return round(comp.leanMass)
+  if (typeof comp.fatMass === 'number' && comp.fatMass > 0 && comp.fatMass < kg) return round(kg - comp.fatMass)
+  if (plausibleFat(comp.fatRatio)) return round(kg * (1 - comp.fatRatio / 100))
+  return null
+}
+
+/** Taux de masse grasse exploitable, mesuré ou recalculé depuis la masse grasse en kg. */
+export function fatRatioOf(kg: number, comp?: BodyComp | null): number | null {
+  if (!comp || !(kg > 0)) return null
+  if (plausibleFat(comp.fatRatio)) return comp.fatRatio
+  if (typeof comp.fatMass === 'number' && comp.fatMass > 0 && comp.fatMass < kg) {
+    const r = Math.round(comp.fatMass / kg * 1000) / 10
+    return plausibleFat(r) ? r : null
+  }
+  return null
+}
+
+/** g de protéines par kg de masse maigre, interpolés sur le taux de masse grasse. */
+export function proteinPerKgLean(fatRatio: number): number {
+  const f = Math.min(PROTEIN_FAT_HIGH, Math.max(PROTEIN_FAT_LOW, fatRatio))
+  const t = (f - PROTEIN_FAT_LOW) / (PROTEIN_FAT_HIGH - PROTEIN_FAT_LOW)
+  return Math.round((PROTEIN_LEAN_MAX - (PROTEIN_LEAN_MAX - PROTEIN_LEAN_MIN) * t) * 100) / 100
+}
+
+export interface ProteinPlan {
+  /** La cible du jour, en grammes. */
+  g: number
+  /** Sur quoi elle a été calculée. `weight` = repli, faute de mesure exploitable. */
+  basis: 'lean' | 'weight'
+  /** Masse maigre retenue, en kg. `null` en repli. */
+  leanKg: number | null
+  /** Taux de masse grasse retenu, en %. `null` en repli. */
+  fatRatio: number | null
+  /** Le coefficient appliqué, g/kg de la base ci-dessus. */
+  perKg: number
+}
+
+/**
+ * Cible protéique du jour, calculée sur la masse maigre dès que la balance en donne
+ * assez pour la connaître, et sur le poids de corps sinon.
+ *
+ * Le repli n'est pas un détail d'implémentation : sans mesure, mieux vaut une cible
+ * un peu haute qu'une cible basse calculée sur une composition supposée. En déficit,
+ * le coût d'un excès de protéines est un coût d'opportunité ; celui d'un manque est
+ * du muscle perdu.
+ */
+export function proteinPlan(kg: number, comp?: BodyComp | null): ProteinPlan {
+  const lean = leanMassOf(kg, comp)
+  const fat = fatRatioOf(kg, comp)
+  if (lean === null || fat === null) {
+    return { g: Math.round(kg * PROTEIN_PER_KG), basis: 'weight', leanKg: null, fatRatio: null, perKg: PROTEIN_PER_KG }
+  }
+  const perKg = proteinPerKgLean(fat)
+  return { g: Math.round(lean * perKg), basis: 'lean', leanKg: lean, fatRatio: fat, perKg }
+}
+
+export const proteinTarget = (kg: number, comp?: BodyComp | null) => proteinPlan(kg, comp).g
 
 // ─── Cibles par macronutriment ──────────────────────────────────────────────
 
@@ -338,14 +454,19 @@ export interface MacroTargets { p: number, g: number, l: number, kcal: number }
 /**
  * Répartition de la cible calorique entre les trois macros.
  *
- * Protéines et lipides sont des PLANCHERS, calculés sur le poids de corps : ils
- * protègent l'un la masse maigre, l'autre l'équilibre hormonal, et ne se négocient
- * pas quand les calories baissent. Les glucides prennent ce qui reste — c'est la
- * variable d'ajustement, celle qui absorbe le déficit et qu'on module autour des
- * séances. C'est aussi pour ça que le plan ne touche qu'aux féculents.
+ * Protéines et lipides sont des PLANCHERS : ils protègent l'un la masse maigre,
+ * l'autre l'équilibre hormonal, et ne se négocient pas quand les calories baissent.
+ * Les glucides prennent ce qui reste — c'est la variable d'ajustement, celle qui
+ * absorbe le déficit et qu'on module autour des séances. C'est aussi pour ça que le
+ * plan ne touche qu'aux féculents.
+ *
+ * Les protéines suivent la masse maigre quand la balance la donne (voir
+ * `proteinPlan`). Les lipides restent sur le poids de corps : leur rôle est
+ * hormonal et digestif, pas contractile, et rien ne justifie de les indexer sur le
+ * muscle.
  */
-export function macroTargets(kg: number, kcalTarget: number): MacroTargets {
-  const p = Math.round(kg * PROTEIN_PER_KG)
+export function macroTargets(kg: number, kcalTarget: number, comp?: BodyComp | null): MacroTargets {
+  const p = proteinTarget(kg, comp)
   const l = Math.round(kg * FAT_PER_KG)
   const rest = kcalTarget - p * KCAL_P - l * KCAL_L
   // Un plancher à 0 : sur une cible très basse, les glucides peuvent théoriquement
@@ -977,6 +1098,26 @@ export interface AdjustPlan {
   steps: AdjustStep[]
   /** Portion pesée (mode « féculents à part » uniquement). */
   portion: DinnerAdjustment | null
+}
+
+/**
+ * Empreinte stable d'un ajustement, pour savoir si celui qu'on a confirmé est encore
+ * celui qu'on propose.
+ *
+ * Le besoin : on coche « oui, j'ai pesé 250 g de riz », puis on ajoute un extra à
+ * 300 kcal. L'ajustement devient « 180 g de riz ». Garder la confirmation
+ * reviendrait à afficher des chiffres que personne n'a validés ; la jeter à chaque
+ * recalcul obligerait à reconfirmer pour un arrondi. On compare donc le CONTENU de
+ * l'action — l'aliment et le poids visé, ou les étapes — et pas le nombre de kcal,
+ * qui bouge au moindre souffle.
+ *
+ * Chaîne vide quand il n'y a rien à ajuster : rien à confirmer, donc rien à retenir.
+ */
+export function adjustSignature(plan: AdjustPlan | null): string {
+  if (!plan) return ''
+  if (plan.portion) return `p:${plan.portion.foodId ?? plan.portion.foodName}:${plan.portion.toG}`
+  if (!plan.steps.length) return ''
+  return `s:${plan.steps.map(st => `${st.slot}:${st.kind}:${Math.round(st.kcal)}`).join('|')}`
 }
 
 /** Ce qu'on accepte de laisser dans une boîte : au-delà, autant ne pas l'avoir cuisiné. */

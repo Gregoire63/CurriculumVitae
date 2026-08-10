@@ -217,6 +217,69 @@ export function weeklySlope(points: Point[], days = 14): number | null {
 
 export type LossQuality = 'unknown' | 'good' | 'mixed' | 'poor'
 
+/**
+ * Au-delà de deux mois, un taux de masse grasse ne dit plus rien du corps
+ * d'aujourd'hui : à 0,5 kg de perte par semaine, deux mois valent 4 kg.
+ */
+export const COMP_MAX_AGE_DAYS = 60
+
+/** Un taux de masse grasse exploitable. Hors de ces bornes, la balance s'est trompée. */
+const usableFat = (e: BodyEntry) => typeof e.fatRatio === 'number' && e.fatRatio >= 3 && e.fatRatio <= 70
+
+export interface CarriedComp {
+  kg: number
+  fatRatio?: number
+  fatMass?: number
+  leanMass?: number
+  /** Date de la mesure de composition retenue, `null` si aucune n'est exploitable. */
+  measuredOn: string | null
+  /** Vrai quand le taux vient d'une pesée ANTÉRIEURE à celle qui donne le poids. */
+  carried: boolean
+}
+
+/**
+ * Le poids le plus récent, associé au taux de masse grasse le plus récent qui existe.
+ *
+ * Le piège que ça évite : une balance sans impédance, ou une pesée notée à la main
+ * sans le pourcentage, ferait retomber la cible protéique sur le poids de corps du
+ * jour au lendemain — une vingtaine de grammes de protéines en plus d'un coup, pour
+ * une composition qui n'a pas bougé d'un pouce.
+ *
+ * On garde donc le POIDS de la dernière pesée et le TAUX de la dernière pesée qui en
+ * avait un. Le poids fluctue au jour le jour (eau, sel, transit), le taux évolue en
+ * semaines : les mélanger dans ce sens-là est le bon compromis, l'inverse serait faux.
+ *
+ * On ne reporte QUE le pourcentage, jamais la masse grasse ni la masse maigre en
+ * kilos : celles-là appartiennent à la pesée qui les a mesurées, et les recopier
+ * fabriquerait une composition qui n'a jamais existé. Elles se recalculent depuis le
+ * taux et le poids du jour.
+ *
+ * Passé `maxAgeDays`, on cesse de reporter et on laisse la cible retomber sur le
+ * poids de corps — qui surestime. C'est délibéré : en déficit, une cible protéique
+ * trop haute coûte des calories, une cible trop basse coûte du muscle.
+ */
+export function carriedComp(entries: BodyEntry[], maxAgeDays = COMP_MAX_AGE_DAYS): CarriedComp | null {
+  const last = entries.at(-1)
+  if (!last) return null
+  if (usableFat(last)) {
+    return {
+      kg: last.kg,
+      fatRatio: last.fatRatio,
+      fatMass: last.fatMass,
+      leanMass: last.leanMass,
+      measuredOn: last.date,
+      carried: false,
+    }
+  }
+  const source = [...entries].reverse().find(usableFat)
+  if (!source) return { kg: last.kg, measuredOn: null, carried: false }
+  const ageDays = Math.round(
+    (Date.parse(`${last.date}T00:00:00Z`) - Date.parse(`${source.date}T00:00:00Z`)) / 86400000,
+  )
+  if (ageDays > maxAgeDays) return { kg: last.kg, measuredOn: null, carried: false }
+  return { kg: last.kg, fatRatio: source.fatRatio, measuredOn: source.date, carried: true }
+}
+
 export interface Composition {
   days: number
   kg: number // variation de poids

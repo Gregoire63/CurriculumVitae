@@ -1,7 +1,9 @@
 import { computed, ref } from 'vue'
+import { useNutrition } from './useNutrition'
 import { useWorkout } from './useWorkout'
 import type { ActivityDay, BodyEntry } from '../lib/withings'
-import { composition, dailySeries, mergeEntries, parseActivity, parseGroup, suspectsOf, weeklySlope } from '../lib/withings'
+import { carriedComp, composition, dailySeries, mergeEntries, parseActivity, parseGroup, suspectsOf, weeklySlope } from '../lib/withings'
+import { defaultSteps } from '../lib/nutritionStats'
 
 // Connexion à la balance Withings Body Smart.
 //
@@ -16,6 +18,8 @@ const SYNC_KEY = 'gr-withings-sync-v1'
 // Clé de l'ancien suivi de poids du module séances, absorbée une fois pour toutes.
 const LEGACY_BW_KEY = 'gr-bodyweight-v1'
 const MIGRATED_KEY = 'gr-withings-migr-v1'
+/** Délai minimum entre deux synchronisations d'ouverture. Une pesée par jour suffit. */
+const AUTO_SYNC_MIN_S = 3600
 
 export interface WithingsTokens {
   accessToken: string
@@ -133,13 +137,74 @@ export function useWithings() {
     // Les mesures déjà récupérées restent : elles sont à toi, pas à Withings.
   }
 
-  /** Saisie manuelle, pour les jours sans balance ou avant de l'avoir reçue. */
-  function addManual(kg: number, date: string, at?: string) {
+  /**
+   * Saisie manuelle, pour les jours sans balance ou avant de l'avoir reçue.
+   *
+   * Le taux de masse grasse est optionnel mais compte : sans
+   * lui, la cible protéique retombe sur le poids de corps, ce qui la surestime tant
+   * qu'il reste du gras à perdre. La masse grasse en kg et la masse maigre sont
+   * déduites, jamais demandées — trois champs à remplir pour une seule information.
+   */
+  function addManual(kg: number, date: string, at?: string, fatRatio?: number | null) {
     if (!(kg > 0)) return
     const stamp = at || `${date}T07:00`
-    entries.value = mergeEntries(entries.value, [{ date, at: stamp, kg: Math.round(kg * 100) / 100, source: 'manual' }])
+    const entry: BodyEntry = { date, at: stamp, kg: Math.round(kg * 100) / 100, source: 'manual' }
+    if (typeof fatRatio === 'number' && fatRatio >= 3 && fatRatio <= 70) {
+      entry.fatRatio = Math.round(fatRatio * 10) / 10
+      entry.fatMass = Math.round(entry.kg * entry.fatRatio) / 100
+      entry.leanMass = Math.round((entry.kg - entry.fatMass) * 100) / 100
+    }
+    entries.value = mergeEntries(entries.value, [entry])
     write(BODY_KEY, entries.value)
     mirror()
+  }
+
+  /**
+   * Reverse les données là où le reste de l'appli les attend : le poids dans le
+   * journal des séances (il sert au métabolisme de base), les pas dans la nutrition
+   * (ils entrent dans la dépense du jour, donc dans la cible calorique).
+   *
+   * Vivait dans le composant Body, ce qui voulait dire : pas de pas tant qu'on
+   * n'ouvrait pas l'onglet Rapport. La cible du jour tournait donc sur une estimation
+   * forfaitaire chez quelqu'un qui n'allait jamais sur cet écran.
+   */
+  function pushToJournal(todayIso: string) {
+    const { setSteps, dayFor, hydrate: hydrateNutrition } = useNutrition()
+    hydrateNutrition()
+    const { addBodyWeight } = useWorkout()
+    for (const a of activity.value) {
+      if (a.steps <= 0) continue
+      // Le compteur du jour est PARTIEL : à 9 h il affiche 800 pas, et l'écrire tel
+      // quel ferait tomber la cible sous l'estimation — l'appli conseillerait de
+      // moins manger au petit-déjeuner parce qu'on n'a pas encore marché. Pour la
+      // journée en cours, on ne révise donc que vers le haut, quand le réel dépasse
+      // l'estimation. Les jours passés, eux, sont complets et s'écrivent tels quels.
+      if (a.date === todayIso && a.steps <= defaultSteps(dayFor(todayIso).tt)) continue
+      setSteps(a.date, a.steps)
+    }
+    if (latest.value && latest.value.date === todayIso) addBodyWeight(latest.value.kg)
+  }
+
+  /** Synchronisation suivie du reversement. C'est le geste complet, jamais l'un sans l'autre. */
+  async function syncAndPush(todayIso: string, opts: { full?: boolean } = {}) {
+    const ok = await sync(opts)
+    if (ok) pushToJournal(todayIso)
+    return ok
+  }
+
+  /**
+   * Synchronisation d'ouverture. Appelée au démarrage de l'application, pas seulement
+   * quand on visite le Rapport.
+   *
+   * Le pas de temps d'une heure n'est pas une optimisation réseau : c'est ce qui
+   * évite de repartir en requête à chaque navigation entre onglets. Les pas de la
+   * matinée ne changent pas la cible du dîner à la minute près.
+   */
+  async function autoSync(todayIso: string) {
+    hydrate()
+    if (!connected.value) return false
+    if (Date.now() / 1000 - lastSync.value < AUTO_SYNC_MIN_S) return false
+    return syncAndPush(todayIso)
   }
 
   function removeEntry(at: string) {
@@ -230,6 +295,13 @@ export function useWithings() {
   const latest = computed<BodyEntry | null>(
     () => [...entries.value].reverse().find(e => !suspectAts.value.has(e.at)) ?? null,
   )
+  /**
+   * De quoi calculer une cible protéique sur la masse maigre : le poids le plus
+   * récent, et le taux de masse grasse le plus récent qui existe. Voir `carriedComp`
+   * pour le détail du report — les pesées en quarantaine en sont exclues, comme
+   * partout ailleurs.
+   */
+  const bodyComp = computed(() => carriedComp(entries.value.filter(e => !suspectAts.value.has(e.at))))
   const weightSeries = computed(() => dailySeries(entries.value, 'kg'))
   const slope = computed(() => weeklySlope(weightSeries.value))
   const comp = computed(() => composition(entries.value))
@@ -261,8 +333,9 @@ export function useWithings() {
 
   return {
     hydrate, connected, tokens, connect, disconnect, adoptFromQuery,
-    entries, activity, latest, syncing, syncError, lastSync,
-    sync, addManual, removeEntry, confirmEntry, suspects, suspectAts, mirror,
+    entries, activity, latest, bodyComp, syncing, syncError, lastSync,
+    sync, syncAndPush, autoSync, pushToJournal, addManual, removeEntry, confirmEntry,
+    suspects, suspectAts, mirror,
     weightSeries, slope, comp, weightAt,
     snapshot, restore,
   }

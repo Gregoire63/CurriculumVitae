@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, MICRO_REFS, RATIO_DINNER_GYM, RATIO_REST,
+  CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, GYM_BAG, KEEPS_DEFAULT, MICRO_REFS,
+  RATIO_DINNER_GYM, RATIO_REST,
   KEEPS_FRESH, RECIPE_BY_ID, STARCHY_IDS, SLOTS_GYM, SLOTS_REST,
 } from '../../data/nutritionProgram'
 import {
@@ -9,9 +10,12 @@ import {
   carryAdjustedTarget, dayEnergy, dayIntake, mergeFoods, mergeRecipes, nextMeal,
   resolveDay, slugify, timelineOf, validateFood, validateRecipe, weekBalance,
   CYCLE_EPOCH, cycleIndexOf, dayBurn, dayStatus, DEFAULT_TRAINED, dinnerAdjustment, fmtQty, isDayPlayed,
+  adjustSignature,
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
+  fatRatioOf, leanMassOf, proteinPerKgLean, proteinPlan,
+  PROTEIN_FAT_HIGH, PROTEIN_FAT_LOW, PROTEIN_LEAN_MAX, PROTEIN_LEAN_MIN,
   adjustPlanFor, applySteps, LEAVE_MAX, removalSteps, adjustRemaining, upcomingPlan, ADJUST_MAX,
-  FAT_PER_KG, KCAL_L, KCAL_P, MACRO_BAND, donutArcs, macroGaps, macroTargets,
+  FAT_PER_KG, KCAL_G, KCAL_L, KCAL_P, MACRO_BAND, donutArcs, macroGaps, macroTargets,
   builtinWeeks, cookPlaceFor, cookPlan, cookSelection, cookSlotFor, cookSteps, freezableOf, freshItemsOf,
   cookIngredients, expandItems, isStarchy, keepsOf, listDays,
   FIBER_HIGH, FIBER_MIN, fiberIntake, fiberOf, fiberVerdict,
@@ -85,12 +89,20 @@ describe('journée', () => {
     expect(gym).toBeGreaterThan(rest)
   })
 
-  // Régression : la séance annulée doit retirer la banane ET le shaker, sinon on garde
-  // ~220 kcal d'un effort qui n'a pas eu lieu.
-  it('retire la banane et le shaker quand la séance saute', () => {
-    const slots = buildDay(0, false).meals.map(m => m.slot)
-    expect(slots).not.toContain('pre')
-    expect(slots).not.toContain('post')
+  // Régression : la séance annulée doit retirer la banane ET la whey de la collation,
+  // sinon on garde ~220 kcal d'un effort qui n'a pas eu lieu. Depuis que le shaker est
+  // passé de 13 h 20 à 17 h, c'est la collation de l'après-midi qui porte la whey :
+  // c'est donc elle qu'il faut surveiller, pas un créneau `post` qui n'existe plus.
+  it('retire la banane et la whey de l\'après-midi quand la séance saute', () => {
+    const off = buildDay(0, false)
+    expect(off.meals.map(m => m.slot)).not.toContain('pre')
+
+    const snackOff = off.meals.find(m => m.slot === 'snack')!
+    expect(snackOff.items.map(i => i.food)).not.toContain('whey-poudre')
+
+    const snackGym = buildDay(0, true).meals.find(m => m.slot === 'snack')!
+    expect(snackGym.items.map(i => i.food)).toContain('whey-poudre')
+    expect(snackGym.macros.kcal).toBeGreaterThan(snackOff.macros.kcal - 100)
   })
 
   it('garde la créatine les jours sans séance', () => {
@@ -765,21 +777,34 @@ describe('horaires des repas', () => {
     }
   })
 
-  it('le déjeuner tombe à 13 h 40 les deux types de jours — c\'est une contrainte, pas un choix', () => {
+  it('le déjeuner tombe à 13 h 45 les deux types de jours — c\'est une contrainte, pas un choix', () => {
+    // Départ à la salle entre 12 h et 12 h 25, retour au bureau entre 13 h 30 et
+    // 13 h 50, boîte mangée dans la foulée : 13 h 45 est le milieu de la fourchette.
     for (const slots of [SLOTS_GYM, SLOTS_REST]) {
-      expect(slots.find(s => s.id === 'lunch')!.time).toBe('13 h 40')
+      expect(slots.find(s => s.id === 'lunch')!.time).toBe('13 h 45')
     }
+  })
+
+  it('plus aucun créneau ne tombe pendant la séance ou le trajet', () => {
+    // Entre le départ (12 h au plus tôt) et le retour (13 h 30 au plus tôt), Grégoire
+    // est en salle, en vestiaire ou dans la rue : rien ne peut y être avalé. C'est ce
+    // qui condamnait l'ancien shaker de 13 h 20.
+    const dansLeTrou = SLOTS_GYM
+      .map(s => ({ id: s.id, m: minutes(s.time) }))
+      .filter(s => s.m > minutes('12 h') && s.m < minutes('13 h 30'))
+    expect(dansLeTrou).toEqual([])
   })
 
   it('la banane se détache du petit-déjeuner et se rapproche de la séance', () => {
     // Collée au bol de 10 h, elle ne passait tout simplement pas — et son sucre
     // sert à l'effort, donc plus elle en est proche, mieux c'est. Elle reste
-    // néanmoins à distance de la séance de midi : avalée sur le pas de la porte,
-    // elle ne serait pas digérée.
+    // néanmoins à distance du départ : avalée sur le pas de la porte, elle ne
+    // serait pas digérée.
     const pdj = minutes(SLOTS_GYM.find(s => s.id === 'pdj')!.time)
     const pre = minutes(SLOTS_GYM.find(s => s.id === 'pre')!.time)
     expect(pre - pdj).toBeGreaterThanOrEqual(60)
-    expect(pre).toBeLessThan(minutes(SLOTS_GYM.find(s => s.id === 'post')!.time))
+    expect(minutes('12 h') - pre).toBeGreaterThanOrEqual(10)
+    expect(pre).toBeLessThan(minutes(SLOTS_GYM.find(s => s.id === 'lunch')!.time))
   })
 
   it('la créatine, elle, reste collée au petit-déjeuner : c\'est ce qui en fait une habitude', () => {
@@ -801,6 +826,112 @@ describe('horaires des repas', () => {
 })
 
 // ─── Ajustement sur ce qui reste ─────────────────────────────────────────────
+describe('adjustSignature — ce qu\'on a confirmé est-il encore ce qu\'on propose ?', () => {
+  const day = buildDay(0, true)
+
+  it('rend une chaîne vide quand il n\'y a rien à ajuster', () => {
+    expect(adjustSignature(null)).toBe('')
+  })
+
+  it('donne la même empreinte pour le même conseil, recalculé', () => {
+    const target = Math.round(day.total.kcal) - 250
+    const a = adjustRemaining(day, target, [], 0, 'separate')
+    const b = adjustRemaining(day, target, [], 0, 'separate')
+    expect(adjustSignature(a)).toBe(adjustSignature(b))
+    expect(adjustSignature(a)).not.toBe('')
+  })
+
+  it('change d\'empreinte quand la portion visée change', () => {
+    // C'est tout l'intérêt : on confirme « 250 g de riz », puis un extra de 300 kcal
+    // rend le conseil caduc. La confirmation doit expirer d'elle-même.
+    const petit = adjustRemaining(day, Math.round(day.total.kcal) - 60, [], 0, 'separate')
+    const gros = adjustRemaining(day, Math.round(day.total.kcal) - 150, [], 0, 'separate')
+    expect(petit!.portion!.toG).not.toBe(gros!.portion!.toG)
+    expect(adjustSignature(petit)).not.toBe(adjustSignature(gros))
+  })
+
+  it('ne dépend pas des kcal en mode portion : seuls l\'aliment et le poids comptent', () => {
+    // Passé le plancher de portion (40 % de l'assiette), creuser l'écart ne change
+    // plus les grammes. Redemander une confirmation pour un conseil identique au
+    // gramme près serait du bruit — et le bruit finit par faire ignorer le bouton.
+    const a = adjustRemaining(day, Math.round(day.total.kcal) - 200, [], 0, 'separate')
+    const b = adjustRemaining(day, Math.round(day.total.kcal) - 400, [], 0, 'separate')
+    expect(a!.delta).not.toBe(b!.delta) // l'écart à combler, lui, a bien doublé
+    expect(a!.portion!.toG).toBe(b!.portion!.toG)
+    expect(adjustSignature(a)).toBe(adjustSignature(b))
+  })
+
+  it('distingue les étapes du mode assemblé', () => {
+    const a = adjustRemaining(day, Math.round(day.total.kcal) - 400, [], 0, 'assembled')
+    const sig = adjustSignature(a)
+    if (a && a.steps.length) {
+      expect(sig.startsWith('s:')).toBe(true)
+      expect(sig).toContain(a.steps[0].slot)
+    }
+  })
+})
+
+describe('applySteps — le contrat sur lequel repose le bouton de confirmation', () => {
+  const day = buildDay(0, true)
+
+  it('un ajustement non confirmé laisse le plan RIGOUREUSEMENT intact', () => {
+    // C'est l'invariant qui fait tenir toute la confirmation : tant que le bouton
+    // n'est pas pressé, l'écran passe `null` et le plan doit ressortir identique.
+    // Si `applySteps` se mettait un jour à normaliser, arrondir ou recalculer quoi
+    // que ce soit au passage, le compteur bougerait sans que personne n'ait rien
+    // validé — exactement le comportement qu'on vient de retirer.
+    const intact = applySteps(day, null)
+    expect(intact.total).toEqual(day.total)
+    expect(intact.meals).toHaveLength(day.meals.length)
+    for (const [i, m] of intact.meals.entries()) {
+      expect(m.macros).toEqual(day.meals[i].macros)
+      expect(m.items).toEqual(day.meals[i].items)
+      expect(m.adjusted).toBeFalsy()
+    }
+  })
+
+  it('un ajustement confirmé rapproche bien le plan de la cible', () => {
+    const target = Math.round(day.total.kcal) - 200
+    const plan = adjustRemaining(day, target, [], 0, 'separate')
+    const avant = Math.abs(day.total.kcal - target)
+    const apres = Math.abs(applySteps(day, plan).total.kcal - target)
+    expect(apres).toBeLessThan(avant)
+  })
+
+  it('marque le repas touché, et lui seul', () => {
+    // L'étiquette « ajusté » sur la carte est la seule trace visible du changement :
+    // la coller sur un repas intact ferait douter de tous les autres.
+    const plan = adjustRemaining(day, Math.round(day.total.kcal) - 200, [], 0, 'separate')
+    const out = applySteps(day, plan)
+    const touches = out.meals.filter(m => m.adjusted)
+    expect(touches).toHaveLength(1)
+    expect(touches[0].slot).toBe('dinner')
+  })
+
+  it('va chercher les calories dans les glucides, pas dans les protéines', () => {
+    // La règle du plan : les protéines protègent la masse maigre, les lipides
+    // l'équilibre hormonal, les glucides absorbent le déficit.
+    //
+    // Le compte n'est pas exactement nul côté protéines, et il ne peut pas l'être :
+    // un féculent en contient un peu, donc retirer 100 g de riz emporte ses ~2 g. Ce
+    // que ce test garde, c'est que la réduction vient des GLUCIDES — le jour où
+    // l'ajustement irait piocher dans la collation protéinée, ce rapport s'effondre.
+    const plan = adjustRemaining(day, Math.round(day.total.kcal) - 200, [], 0, 'separate')
+    const out = applySteps(day, plan)
+
+    const perduKcal = day.total.kcal - out.total.kcal
+    const perduP = day.total.p - out.total.p
+    const perduG = day.total.g - out.total.g
+
+    expect(perduKcal).toBeGreaterThan(0)
+    expect(perduP).toBeLessThan(5) // quelques grammes, pas une prise entière
+    expect(perduG * KCAL_G / perduKcal).toBeGreaterThan(0.8) // l'essentiel vient de là
+    // Les lipides ne bougent quasiment pas : la trace de gras d'un féculent, rien de
+    // plus. Ils ne sont jamais la variable d'ajustement.
+    expect(day.total.l - out.total.l).toBeLessThan(1)
+  })
+})
+
 describe('adjustRemaining', () => {
   const day = buildDay(0, true)
   const slots = day.meals.map(m => m.slot)
@@ -826,9 +957,9 @@ describe('adjustRemaining', () => {
     // plus rien à corriger le soir.
     const lunch = day.meals.find(m => m.slot === 'lunch')!
     const eatenSoFar = day.meals
-      .filter(m => ['pdj', 'pre', 'post', 'lunch'].includes(m.slot))
+      .filter(m => ['pdj', 'pre', 'lunch'].includes(m.slot))
       .reduce((n, m) => n + m.macros.kcal, 0) - 400
-    const reste = adjustRemaining(day, target, ['pdj', 'pre', 'post', 'lunch'], eatenSoFar, 'assembled')
+    const reste = adjustRemaining(day, target, ['pdj', 'pre', 'lunch'], eatenSoFar, 'assembled')
     expect(lunch).toBeTruthy()
     expect(reste).toBeNull()
   })
@@ -865,6 +996,90 @@ describe('macroTargets', () => {
   it('ne propose jamais de glucides négatifs sur une cible très basse', () => {
     const t = macroTargets(94, 900) // protéines + lipides dépassent déjà 900 kcal
     expect(t.g).toBe(0)
+  })
+
+  it('suit la masse maigre quand la balance la donne, et rend les calories aux glucides', () => {
+    const comp = { fatRatio: 26.5, fatMass: 24.53, leanMass: 68.07 }
+    const sans = macroTargets(92.6, 2000)
+    const avec = macroTargets(92.6, 2000, comp)
+    expect(avec.p).toBeLessThan(sans.p)
+    // Les lipides restent indexés sur le poids de corps : leur rôle est hormonal,
+    // pas contractile.
+    expect(avec.l).toBe(sans.l)
+    // Ce que les protéines rendent, les glucides le reprennent : la cible calorique
+    // ne bouge pas d'un gramme.
+    expect(avec.g).toBeGreaterThan(sans.g)
+    const kcal = avec.p * KCAL_P + avec.g * 4 + avec.l * KCAL_L
+    expect(Math.abs(kcal - 2000)).toBeLessThan(8)
+  })
+})
+
+describe('cible protéique sur la masse maigre', () => {
+  // Les vraies mesures de la balance : 92,6 kg, 26,5 % de masse grasse, 24,53 kg de
+  // gras. La « masse musculaire » de 64,63 kg n'est PAS la masse maigre — elle exclut
+  // l'os. C'est 92,6 − 24,53 = 68,07 kg qui sert de base.
+  const REAL = { fatRatio: 26.5, fatMass: 24.53, leanMass: 68.07, muscleMass: 64.63 }
+
+  it('ne confond pas masse maigre et masse musculaire', () => {
+    expect(leanMassOf(92.6, REAL)).toBe(68.07)
+    expect(leanMassOf(92.6, REAL)).toBeGreaterThan(REAL.muscleMass)
+  })
+
+  it('retombe sur la masse maigre par deux chemins différents', () => {
+    // Sans la valeur de la balance, poids − masse grasse doit donner la même chose.
+    expect(leanMassOf(92.6, { fatMass: 24.53 })).toBe(68.07)
+    // Et depuis le seul pourcentage, à l'arrondi près.
+    expect(leanMassOf(92.6, { fatRatio: 26.5 })!).toBeCloseTo(68.06, 1)
+  })
+
+  it('interpole entre les bornes de la littérature, sans marche d\'escalier', () => {
+    expect(proteinPerKgLean(PROTEIN_FAT_LOW)).toBe(PROTEIN_LEAN_MAX)
+    expect(proteinPerKgLean(PROTEIN_FAT_HIGH)).toBe(PROTEIN_LEAN_MIN)
+    // Hors bornes, on plafonne au lieu d'extrapoler.
+    expect(proteinPerKgLean(3)).toBe(PROTEIN_LEAN_MAX)
+    expect(proteinPerKgLean(55)).toBe(PROTEIN_LEAN_MIN)
+    // Monotone décroissante : plus on est sec, plus le coefficient monte.
+    for (let f = 10; f < 32; f++) expect(proteinPerKgLean(f)).toBeGreaterThan(proteinPerKgLean(f + 1))
+  })
+
+  it('donne une cible plus basse que le calcul sur le poids de corps', () => {
+    const plan = proteinPlan(92.6, REAL)
+    expect(plan.basis).toBe('lean')
+    expect(plan.leanKg).toBe(68.07)
+    expect(plan.g).toBeLessThan(proteinTarget(92.6))
+    // Reste dans la fourchette admise rapportée au poids de corps (1,6 - 2,2 g/kg).
+    expect(plan.g / 92.6).toBeGreaterThan(1.6)
+    expect(plan.g / 92.6).toBeLessThan(2.2)
+  })
+
+  it('la cible baisse à mesure qu\'on sèche, à masse maigre constante', () => {
+    // Même masse maigre, moins de gras : le coefficient monte, donc la cible aussi.
+    // C'est le comportement voulu — c'est quand il n'y a plus de gras à brûler que le
+    // muscle devient la variable d'ajustement.
+    const gras = proteinPlan(92.6, { fatRatio: 26.5, leanMass: 68.07 })
+    const sec = proteinPlan(78, { fatRatio: 12.7, leanMass: 68.07 })
+    expect(sec.g).toBeGreaterThan(gras.g)
+  })
+
+  it('retombe sur le poids de corps quand la balance ne mesure rien', () => {
+    for (const comp of [null, undefined, {}, { fatRatio: 0 }, { fatRatio: 99 }]) {
+      const plan = proteinPlan(94, comp)
+      expect(plan.basis).toBe('weight')
+      expect(plan.g).toBe(197)
+      expect(plan.leanKg).toBeNull()
+    }
+  })
+
+  it('écarte une masse grasse impossible plutôt que de la croire', () => {
+    // Une masse grasse supérieure au poids, ou nulle : la balance s'est trompée de
+    // personne ou de mesure. Mieux vaut le repli qu'une masse maigre inventée.
+    expect(leanMassOf(92.6, { fatMass: 120 })).toBeNull()
+    expect(leanMassOf(92.6, { leanMass: 200 })).toBeNull()
+    expect(fatRatioOf(92.6, { fatRatio: 1 })).toBeNull()
+  })
+
+  it('vise toujours 2,1 g/kg sans mesure — la rétrocompatibilité tient', () => {
+    expect(proteinTarget(94)).toBe(197)
   })
 })
 
@@ -981,7 +1196,7 @@ describe('ce que la semaine impose', () => {
   it('les collations restent hors sélection : on ne choisit pas son porridge', () => {
     const sel = cookSelection(A(), GYM_WEEK)
     expect(Object.keys(sel)).not.toContain('pdj')
-    expect(Object.keys(sel)).not.toContain('col-post')
+    expect(Object.keys(sel)).not.toContain('col-aprem-salle')
   })
 
   it('un jour d\'absence ne coûte ni portion ni course', () => {
@@ -1022,6 +1237,15 @@ describe('les courses de la semaine', () => {
     const sans = weekGrams(A(), NO_GYM)
     expect(sans['banane']).toBeUndefined()
     expect(avec['banane']).toBe(4 * 120)
+  })
+
+  it('le sac de sport ne contient que ce qui doit vraiment voyager', () => {
+    // Régression : le shaker en est sorti quand la whey est passée à 17 h, au bureau.
+    // Une liste qui mentionne un objet resté sur le plan de travail perd sa raison
+    // d'être — on cesse de la lire.
+    expect(GYM_BAG.some(i => /shaker/i.test(i))).toBe(false)
+    expect(GYM_BAG.length).toBe(2)
+    for (const item of GYM_BAG) expect(item.trim()).not.toBe('')
   })
 
   it('achète moins de féculents quand les séances sautent', () => {
@@ -1320,11 +1544,12 @@ describe('ce qui se prépare à l\'avance entre dans la session', () => {
   })
 
   it('laisse dehors ce qui se fait sur le moment', () => {
-    // Le porridge et le shaker n'ont rien à faire dans une session de préparation.
+    // Le petit-déjeuner et la collation-shaker se montent sur le moment : ils n'ont rien
+    // à faire dans une session de préparation.
     const w = builtinWeeks()[0]
     const ids = cookPlan(w, GYM_WEEK).flatMap(s => s.dishes.map(d => d.recipeId))
     expect(ids).not.toContain('pdj')
-    expect(ids).not.toContain('col-post')
+    expect(ids).not.toContain('col-aprem-salle')
   })
 
   it('respecte la conservation déclarée sur la recette, pas celle des ingrédients', () => {

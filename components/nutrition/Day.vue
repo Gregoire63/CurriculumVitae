@@ -2,13 +2,15 @@
 import { computed, ref } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
 import { useProfile } from '~/composables/useProfile'
+import { useWithings } from '~/composables/useWithings'
 import { useWorkout } from '~/composables/useWorkout'
 import type { DayMeal, DayStatus } from '~/lib/nutritionStats'
 import {
-  DAY_NAMES, STATUS_LABELS, adjustRemaining, applySteps, bmrMifflin, buildDay, dayBurn,
+  DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, dayBurn,
   dayEnergy, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
-  isDayPlayed, macroSplit, proteinTarget, quickExtra, roundMacros, sessionsOn, sumMacros,
+  isDayPlayed, macroSplit, proteinPlan, quickExtra, roundMacros, sessionsOn, sumMacros,
 } from '~/lib/nutritionStats'
+import { GYM_BAG } from '~/data/nutritionProgram'
 
 // Vue « Aujourd'hui » : le tableau de bord du jour.
 // Trois postes de dépense explicites — métabolisme, pas, séance — au lieu d'un
@@ -18,10 +20,12 @@ const props = defineProps<{ todayIso: string }>()
 
 const {
   dayPlanFor, dayFor, stepsFor, isEaten, toggleEaten, eatenSlots, pickedFor, setPicked, stock,
-  extrasFor, addExtra, removeExtra, prepMode, library,
+  extrasFor, addExtra, removeExtra, prepMode, library, isPacked, togglePacked, packedCount,
+  isAdjustApplied, setAdjustApplied, clearAdjustApplied,
 } = useNutrition()
 const { profile } = useProfile()
 const { bodyWeight, sessionLog } = useWorkout()
+const { bodyComp } = useWithings()
 
 const sheet = ref<DayMeal | null>(null)
 const adding = ref(false)
@@ -49,6 +53,14 @@ const status = computed<DayStatus>(() => dayStatus({
 }))
 /** Dépense d'une séance moyenne, tant que la vraie n'est pas connue. */
 const DEFAULT_BURN = 440
+
+// ─── Sac de sport ───────────────────────────────────────────────────────────
+// Visible seulement tant que la séance est à venir : une fois qu'elle est
+// enregistrée, la liste n'a plus rien à dire et n'occuperait que le haut de l'écran.
+// On compte les éléments cochés en repartant de GYM_BAG, pas du stockage : si la
+// liste change un jour, une case cochée pour un objet disparu ne doit pas compter.
+const showBag = computed(() => status.value === 'pending')
+const bagPacked = computed(() => GYM_BAG.filter(item => isPacked(props.todayIso, item)).length)
 
 const burn = computed(() => {
   if (!kg.value || bmr.value === null) return 0
@@ -91,7 +103,27 @@ const adjustment = computed(() => {
     prepMode.value, library.value.foods,
   )
 })
-const day = computed(() => applySteps(base.value, adjustment.value, library.value.foods))
+/**
+ * L'ajustement n'est plus appliqué d'office : c'est un conseil tant qu'il n'est pas
+ * confirmé.
+ *
+ * Avant, l'app retirait 100 g de riz dans ses calculs et affichait des kcal
+ * corrigées, que l'assiette réelle les reflète ou non. Un compteur qui suppose un
+ * geste qu'on n'a pas fait ment doucement toute la soirée. Maintenant, on ne touche
+ * à rien tant que « C'est fait » n'a pas été pressé — et la confirmation expire
+ * d'elle-même si le conseil change (voir `adjustSignature`).
+ */
+const adjustSig = computed(() => adjustSignature(adjustment.value))
+const adjustDone = computed(() => isAdjustApplied(props.todayIso, adjustSig.value))
+const day = computed(() =>
+  applySteps(base.value, adjustDone.value ? adjustment.value : null, library.value.foods))
+
+function confirmAdjust() {
+  if (adjustSig.value) setAdjustApplied(props.todayIso, adjustSig.value)
+}
+function undoAdjust() {
+  clearAdjustApplied(props.todayIso)
+}
 
 // ─── Ce qui a été mangé ──────────────────────────────────────────────────────
 const extras = computed(() => extrasFor(props.todayIso))
@@ -99,7 +131,21 @@ const intake = computed(() => (energy.value
   ? dayIntake(day.value, eatenSlots(props.todayIso), extras.value, energy.value.target)
   : null))
 const split = computed(() => (intake.value ? macroSplit(intake.value.eaten) : null))
-const pTarget = computed(() => (kg.value ? proteinTarget(kg.value) : null))
+/**
+ * Cible protéique. Elle suit la masse maigre dès que la balance la donne : calculer
+ * sur le poids total revient à prescrire des protéines pour du tissu adipeux, qui
+ * n'en demande pas.
+ *
+ * `bodyComp` fait le travail délicat : poids du jour, taux de masse grasse de la
+ * dernière pesée qui en avait un. Une pesée sans impédance ne fait donc plus bondir
+ * la cible du jour au lendemain.
+ */
+const pPlan = computed(() => {
+  const c = bodyComp.value
+  if (c?.kg) return proteinPlan(c.kg, c)
+  return kg.value ? proteinPlan(kg.value) : null
+})
+const pTarget = computed(() => pPlan.value?.g ?? null)
 
 /**
  * Les fibres ne vivaient que dans la moyenne des micronutriments, sur quatorze
@@ -207,6 +253,29 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
 
 
 
+    <!-- Le sac de sport. Trois secondes le matin ; une boîte oubliée, c'est un
+         déjeuner improvisé après la séance, soit ~300 kcal de plus. -->
+    <div v-if="showBag" class="card nu-bag" :class="{ full: bagPacked === GYM_BAG.length }">
+      <div class="row-between">
+        <div class="section-label">Dans le sac</div>
+        <span class="nu-bag-count mono">{{ bagPacked }}/{{ GYM_BAG.length }}</span>
+      </div>
+      <ul class="nu-bag-list">
+        <li v-for="item in GYM_BAG" :key="item">
+          <button
+            type="button" class="nu-bag-item" :class="{ on: isPacked(todayIso, item) }"
+            :aria-pressed="isPacked(todayIso, item)" @click="togglePacked(todayIso, item)"
+          >
+            <span class="nu-bag-box" aria-hidden="true" />
+            <span>{{ item }}</span>
+          </button>
+        </li>
+      </ul>
+      <p v-if="bagPacked < GYM_BAG.length" class="nu-bag-note">
+        Le shaker n'y est plus : la whey se prend à 17 h, au bureau.
+      </p>
+    </div>
+
     <div v-if="todaySessions.length" class="card nu-sessions">
       <div v-for="(s, i) in todaySessions" :key="i" class="nu-session">
         <span class="mono">{{ s.at.slice(11, 16) }}</span>
@@ -227,6 +296,24 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
       <ul v-else class="nu-adjust-steps">
         <li v-for="(st, i) in adjustment.steps" :key="i">{{ st.label }}</li>
       </ul>
+      <!-- Rien n'est appliqué tant que ce bouton n'a pas été pressé. Un compteur qui
+           suppose un geste qu'on n'a pas fait ment doucement toute la soirée. -->
+      <div v-if="adjustSig" class="nu-adjust-confirm">
+        <template v-if="adjustDone">
+          <span class="nu-adjust-ok">✓ Pris en compte</span>
+          <button type="button" class="btn nu-adjust-undo" @click="undoAdjust">
+            Finalement non
+          </button>
+        </template>
+        <template v-else>
+          <button type="button" class="btn-primary" @click="confirmAdjust">
+            {{ adjustment.covered > 0 ? 'C\'est noté, je mange plus' : 'C\'est fait, j\'ai réduit' }}
+          </button>
+          <span class="nu-adjust-hint">
+            Tant que tu ne confirmes pas, le compteur reste sur les quantités prévues.
+          </span>
+        </template>
+      </div>
     </div>
 
     <!-- Les repas à valider -->
@@ -336,6 +423,21 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
           <i class="nu-sw f" />Fibres {{ fiber.eaten }} g / {{ fiberSaid.ref }}
         </span>
       </div>
+      <!-- D'où sort la cible protéique. Un chiffre qui bouge quand la balance bouge
+           doit dire sur quoi il s'appuie, sinon il passe pour arbitraire. -->
+      <p v-if="pPlan" class="nu-basis mt-6">
+        <template v-if="pPlan.basis === 'lean'">
+          Cible <b>{{ pPlan.g }} g</b> — {{ pPlan.perKg }} g par kilo de masse maigre,
+          soit <b>{{ pPlan.leanKg }} kg</b> ({{ pPlan.fatRatio }} % de masse grasse<template
+            v-if="bodyComp?.carried"
+          >, mesurés le {{ bodyComp.measuredOn }} et reportés sur ton poids d'aujourd'hui</template>).
+        </template>
+        <template v-else>
+          Cible <b>{{ pPlan.g }} g</b>, calculée sur le poids de corps faute de mesure de
+          masse grasse. Une pesée à impédance la recalculera sur ta masse maigre, ce qui
+          est plus juste tant qu'il reste du gras à perdre.
+        </template>
+      </p>
       <!-- Le conseil ne s'affiche que quand il y a quelque chose à faire : une
            journée dans la fourchette n'a pas besoin d'un paragraphe pour le dire. -->
       <p v-if="fiberSaid.tone !== 'ok'" class="nu-note mt-6">

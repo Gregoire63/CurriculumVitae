@@ -2,9 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
 import { useProfile } from '~/composables/useProfile'
+import { useWithings } from '~/composables/useWithings'
 import { useWorkout } from '~/composables/useWorkout'
 import {
-  adjustRemaining, applySteps, bmrMifflin, buildDay, carryAdjustedTarget, dayBurn, dayEnergy, dayIntake, donutArcs, hhmm, isDayPlayed, macroTargets, mondayOf, nextMeal, proteinTarget, sessionsOn, sumMacros, timelineOf, weekBalance,
+  adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, carryAdjustedTarget, dayBurn, dayEnergy, dayIntake, donutArcs, hhmm, isDayPlayed, macroTargets, mondayOf, nextMeal, proteinPlan, sessionsOn, sumMacros, timelineOf, weekBalance,
 } from '~/lib/nutritionStats'
 import { shiftIso } from '~/utils/sportStats'
 
@@ -18,13 +19,14 @@ const props = defineProps<{ todayIso: string }>()
 
 const {
   hydrate, dayPlanFor, dayFor, stepsFor, toggleEaten, eatenSlots, extrasFor, addExtra,
-  removeExtra, prepMode, library,
+  removeExtra, prepMode, library, isAdjustApplied,
 } = useNutrition()
 
 // Le bandeau peut être monté sans passer par l'onglet Nutrition : il hydrate lui-même.
 onMounted(hydrate)
 const { profile } = useProfile()
 const { bodyWeight, sessionLog } = useWorkout()
+const { bodyComp } = useWithings()
 
 const open = ref(false)
 const eatSheet = ref(false)
@@ -64,14 +66,33 @@ const eatenSoFar = computed(() => {
   return sumMacros([...meals, ...ex]).kcal
 })
 
+/**
+ * Séance prévue mais pas encore enregistrée. Tant qu'on est dans cet état, la
+ * dépense du jour est une estimation (DEFAULT_BURN) : ajuster les repas dessus
+ * reviendrait à retirer du riz ce soir sur la foi d'une séance qui n'a pas eu lieu.
+ * L'écran Jour s'en garde déjà ; Hero ne le faisait pas, et les deux affichaient
+ * donc des « kcal restantes » différentes au même moment.
+ */
+const pending = computed(() => {
+  const t = today.value
+  if (!t) return false
+  return t.r.gym
+    && sessionsOn(sessionLog(), props.todayIso).length === 0
+    && !isDayPlayed(props.todayIso, props.todayIso, nowHour)
+})
+
 const day = computed(() => {
   const base = planOf(props.todayIso, (today.value?.burn ?? 0) > 0)
-  if (!today.value) return base
+  if (!today.value || pending.value) return base
   const adj = adjustRemaining(
     base, today.value.energy.target,
     eatenSlots(props.todayIso), eatenSoFar.value,
     prepMode.value, library.value.foods,
   )
+  // Même règle que l'écran Jour : un ajustement non confirmé reste un conseil. Sans
+  // ce garde-fou, le bandeau afficherait des kcal restantes déjà corrigées pendant
+  // que l'écran Jour attend encore la confirmation — deux chiffres, une seule journée.
+  if (!isAdjustApplied(props.todayIso, adjustSignature(adj))) return base
   return applySteps(base, adj, library.value.foods)
 })
 
@@ -105,7 +126,7 @@ const R = 52
 const C = 2 * Math.PI * R
 const over = computed(() => intake.value.progress > 1)
 
-const targets = computed(() => (kg.value && target.value ? macroTargets(kg.value, target.value) : null))
+const targets = computed(() => (kg.value && target.value ? macroTargets(kg.value, target.value, bodyComp.value) : null))
 
 /**
  * Un arc par macro, bout à bout : leur somme est la progression totale, donc le
@@ -124,7 +145,12 @@ const arcs = computed(() => {
 })
 
 // ─── Statistiques de tête ───────────────────────────────────────────────────
-const pTarget = computed(() => (kg.value ? proteinTarget(kg.value) : null))
+// Même source que dans Day.vue, pour que les deux écrans ne se contredisent jamais.
+const pTarget = computed(() => {
+  const c = bodyComp.value
+  if (c?.kg) return proteinPlan(c.kg, c).g
+  return kg.value ? proteinPlan(kg.value).g : null
+})
 const stepsToday = computed(() => stepsFor(props.todayIso))
 const doneCount = computed(() => line.value.filter(e => e.done).length)
 const totalMeals = computed(() => line.value.filter(e => e.kind === 'plan').length)

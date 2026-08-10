@@ -29,6 +29,8 @@ const ACTIVE_KEY = 'gr-nutri-menu-active-v1' // semaine type en cours
 const ASSIGN_KEY = 'gr-nutri-menu-map-v1' // semaine appliquée, par lundi
 const FREEZER_KEY = 'gr-nutri-freezer-v1' // ai-je de la place au congélateur ?
 const PICKED_KEY = 'gr-nutri-picked-v1' // plat réellement pris, quand il diffère
+const BAG_KEY = 'gr-nutri-bag-v1' // sac de sport : ce qui est déjà dedans, par date
+const ADJUST_KEY = 'gr-nutri-adjust-v1' // ajustement du soir confirmé, par date
 // Clé de l'ancienne sélection « plat → portions », remplacée par la semaine type.
 // Les portions ne se saisissent plus à la main : elles se comptent dans la semaine.
 const LEGACY_SEL_KEY = 'gr-nutri-selection-v1'
@@ -61,6 +63,22 @@ const menuAssign = ref<Record<string, string>>({})
 const freezer = ref(false)
 // Plat réellement pris quand il diffère de celui proposé — « j'ai pris autre chose ».
 const picked = ref<Record<string, Record<string, string>>>({})
+/**
+ * Le sac de sport, coché par date. Stocké et pas seulement gardé en mémoire : la
+ * liste se consulte le matin, souvent en rouvrant l'app deux ou trois fois entre
+ * la cuisine et la porte. Une case qui se décoche au rechargement ne servirait à rien.
+ */
+const bag = ref<Record<string, string[]>>({})
+/**
+ * L'ajustement du soir réellement appliqué, par date : on stocke la SIGNATURE de
+ * l'ajustement confirmé, pas un simple booléen.
+ *
+ * La différence compte. Un booléen dirait « j'ai ajusté ce soir » et resterait vrai
+ * même après qu'un extra de 300 kcal a changé le conseil : l'app afficherait alors
+ * des chiffres corrigés que personne n'a validés. La signature fait expirer la
+ * confirmation dès que l'action proposée change vraiment.
+ */
+const adjustOk = ref<Record<string, string>>({})
 const extras = ref<Record<string, Extra[]>>({})
 const userFoods = ref<Food[]>([])
 const foodPatches = ref<Record<string, Partial<Food>>>({})
@@ -97,6 +115,8 @@ export function useNutrition() {
     overrides.value = safeParse(localStorage.getItem(OVER_KEY), {})
     loadMenus()
     picked.value = safeParse(localStorage.getItem(PICKED_KEY), {})
+    bag.value = safeParse(localStorage.getItem(BAG_KEY), {})
+    adjustOk.value = safeParse(localStorage.getItem(ADJUST_KEY), {})
     extras.value = safeParse(localStorage.getItem(EXTRA_KEY), {})
     userFoods.value = safeParse(localStorage.getItem(FOODS_KEY), [])
     foodPatches.value = safeParse(localStorage.getItem(FOODPATCH_KEY), {})
@@ -431,6 +451,30 @@ export function useNutrition() {
   }
   const eatenSlots = (iso: string) => eaten.value[iso] ?? []
   const eatenCount = (iso: string) => eatenSlots(iso).length
+  // ─── Sac de sport ─────────────────────────────────────────────────────────
+  const isPacked = (iso: string, item: string) => (bag.value[iso] ?? []).includes(item)
+  function togglePacked(iso: string, item: string) {
+    const cur = bag.value[iso] ?? []
+    const next = cur.includes(item) ? cur.filter(s => s !== item) : [...cur, item]
+    bag.value = { ...bag.value, [iso]: next }
+    write(BAG_KEY, bag.value)
+  }
+  const packedCount = (iso: string) => (bag.value[iso] ?? []).length
+  // ─── Ajustement du soir ───────────────────────────────────────────────────
+  /** L'ajustement proposé aujourd'hui a-t-il été confirmé, dans cette forme-là ? */
+  const isAdjustApplied = (iso: string, signature: string) =>
+    !!signature && adjustOk.value[iso] === signature
+  function setAdjustApplied(iso: string, signature: string) {
+    if (!signature) return
+    adjustOk.value = { ...adjustOk.value, [iso]: signature }
+    write(ADJUST_KEY, adjustOk.value)
+  }
+  function clearAdjustApplied(iso: string) {
+    const next = { ...adjustOk.value }
+    delete next[iso]
+    adjustOk.value = next
+    write(ADJUST_KEY, adjustOk.value)
+  }
   const extrasFor = (iso: string) => extras.value[iso] ?? []
   function addExtra(iso: string, extra: Omit<Extra, 'id'>) {
     const e: Extra = { ...extra, id: nextId('x') }
@@ -486,7 +530,7 @@ export function useNutrition() {
       // semaines. Sauvegarder les deux, c'était exporter deux fois le même chiffre
       // et laisser une restauration partielle les faire diverger.
       menus: menus.value.filter(m => !m.builtin), activeMenu: activeMenu.value, menuAssign: menuAssign.value,
-      picked: picked.value,
+      picked: picked.value, bag: bag.value, adjustOk: adjustOk.value,
       prepMode: prepMode.value, freezer: freezer.value, week: week.value, overrides: overrides.value,
       extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
@@ -507,6 +551,8 @@ export function useNutrition() {
     if (typeof n.activeMenu === 'string' && menus.value.some(m => m.id === n.activeMenu)) setActiveMenu(n.activeMenu)
     if (n.menuAssign) { menuAssign.value = n.menuAssign; write(ASSIGN_KEY, menuAssign.value) }
     if (n.picked) { picked.value = n.picked; write(PICKED_KEY, picked.value) }
+    if (n.bag) { bag.value = n.bag; write(BAG_KEY, bag.value) }
+    if (n.adjustOk) { adjustOk.value = n.adjustOk; write(ADJUST_KEY, adjustOk.value) }
     if (n.eaten) { eaten.value = n.eaten; write(EATEN_KEY, eaten.value) }
     if (Array.isArray(n.baskets)) { baskets.value = n.baskets; write(BASKETS_KEY, baskets.value) }
     if (n.prepMode === 'assembled' || n.prepMode === 'separate') setPrepMode(n.prepMode)
@@ -534,7 +580,9 @@ export function useNutrition() {
     duplicateMenu, renameMenu, removeMenu, blankMenu,
     selection, selectionSummary, selectionShopping, cookSessions, daysCovered, stock, pickedFor, setPicked,
     freezer, setFreezer,
-    isEaten, toggleEaten, eatenSlots, eatenCount, extrasFor, addExtra, removeExtra,
+    isEaten, toggleEaten, eatenSlots, eatenCount, isPacked, togglePacked, packedCount,
+    isAdjustApplied, setAdjustApplied, clearAdjustApplied,
+    extrasFor, addExtra, removeExtra,
     addFood, patchFood, removeFood, resetFood, isCustomFood,
     addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,
     toggleRecipeActive, isRecipeActive,

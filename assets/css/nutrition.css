@@ -38,6 +38,12 @@
   margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-secondary, var(--text-primary));
   background: var(--bg-secondary); border-radius: 10px; padding: 10px 12px;
 }
+/* D'où sort la cible protéique : une note discrète, en retrait du bilan lui-même. */
+.nu-basis {
+  margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-muted);
+  border-left: 2px solid var(--bg-accent); padding-left: 10px;
+}
+.nu-basis b { color: var(--text-primary); }
 
 /* ─── Séances du jour + ajustement dynamique ────────────────────────────── */
 .nu-sessions { display: flex; flex-direction: column; gap: 4px; }
@@ -71,6 +77,13 @@
   background: var(--bg-secondary); border-radius: 10px; padding: 10px 12px;
   border-left: 3px solid var(--accent-primary);
 }
+/* La confirmation de l'ajustement. Le conseil se lit d'abord, le geste se confirme
+   ensuite : l'app ne compte rien tant que le bouton n'a pas été pressé. */
+.nu-adjust-confirm { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nu-adjust-confirm .btn-primary { flex: 0 0 auto; }
+.nu-adjust-hint { font-size: 11.5px; line-height: 1.4; color: var(--text-muted); flex: 1 1 140px; }
+.nu-adjust-ok { font-size: 13.5px; font-weight: 700; color: #3f7a4f; }
+.nu-adjust-undo { font-size: 12px; padding: 5px 10px; }
 .nu-prep { display: flex; flex-direction: column; gap: 8px; }
 .nu-prep .nav-row .btn { flex: 1 1 45%; font-size: 12px; line-height: 1.35; padding: 10px 10px; }
 
@@ -217,8 +230,30 @@
 }
 .nu-fresh:last-child { border-bottom: none; }
 .nu-fresh .mono { min-width: 68px; color: var(--text-muted); font-size: 11.5px; }
+/* Le sac de sport. Les puces sont devenues des cases cochables : la liste se lit
+   le matin en trois secondes, et une case qui reste vide est un oubli visible. */
 .nu-bag { display: flex; flex-direction: column; gap: 8px; }
-.nu-bag-list { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.8; }
+.nu-bag.full { opacity: 0.6; }
+.nu-bag-list { margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+.nu-bag-count { font-size: 12px; font-weight: 700; color: var(--accent-primary); }
+.nu-bag-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 0;
+  background: none; border: none; border-bottom: 1px dotted var(--bg-accent);
+  font: inherit; font-size: 13.5px; color: inherit; text-align: left; cursor: pointer;
+}
+.nu-bag-list li:last-child .nu-bag-item { border-bottom: none; }
+.nu-bag-box {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 5px;
+  border: 1.5px solid var(--bg-accent); background: var(--bg-secondary);
+  position: relative; transition: background 0.15s, border-color 0.15s;
+}
+.nu-bag-item.on .nu-bag-box { background: var(--accent-primary); border-color: var(--accent-primary); }
+.nu-bag-item.on .nu-bag-box::after {
+  content: ''; position: absolute; left: 5px; top: 1px; width: 5px; height: 10px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.nu-bag-item.on span:last-child { text-decoration: line-through; color: var(--text-muted); }
+.nu-bag-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
 
 /* ─── Micronutriments ───────────────────────────────────────────────────── */
 .nu-gap { border-left: 4px solid #b5502f; display: flex; flex-direction: column; gap: 8px; }

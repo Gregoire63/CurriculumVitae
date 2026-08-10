@@ -7,7 +7,7 @@ import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
-import { warmupLoad, EFFORT_OPTIONS, isEffort } from '~/utils/sportStats'
+import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf } from '~/utils/sportStats'
 import type { Effort, PrKind } from '~/utils/sportStats'
 import '~/assets/css/sport.css'
 import '~/assets/css/nutrition.css'
@@ -627,6 +627,13 @@ onMounted(() => {
   hydrateProfile()
   restoreDraft() // rouvre la séance en cours après un refresh accidentel
   adoptWithings()
+  // Les pas de la balance à l'OUVERTURE de l'app, plus seulement en visitant le
+  // Rapport. Tant que c'était accroché à cet écran, la cible du jour tournait sur une
+  // estimation forfaitaire pour qui n'y allait jamais — et c'est justement la cible
+  // qui décide de ce qu'on met dans l'assiette du soir.
+  // Volontairement non attendu : rien de ce qui s'affiche n'en dépend, et une balance
+  // injoignable ne doit pas retarder le premier écran d'une milliseconde.
+  useWithings().autoSync(isoOf(new Date())).catch(() => { /* hors ligne : ce sera pour la prochaine ouverture */ })
   // Données de démo UNIQUEMENT en environnement local/test (jamais en prod) :
   // actif en `nuxt dev`, ou si NUXT_PUBLIC_SEED_TEST_DATA=true. En prod → rien.
   try {

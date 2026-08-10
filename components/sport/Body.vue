@@ -5,7 +5,7 @@ import { useNutrition } from '~/composables/useNutrition'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import { IMPEDANCE_CAVEAT, dailySeries, weeklySlope } from '~/lib/withings'
-import { STEPS_ONSITE, STEPS_TT, defaultSteps } from '~/lib/nutritionStats'
+import { STEPS_ONSITE, STEPS_TT } from '~/lib/nutritionStats'
 import { isoOf, shiftIso } from '~/utils/sportStats'
 
 // Suivi du corps, affiché en tête du Rapport : ce que la balance mesure et ce qu'on
@@ -18,13 +18,13 @@ import { isoOf, shiftIso } from '~/utils/sportStats'
 // glissante, sa pente, et la répartition gras / muscle de ce qui a été perdu.
 
 const {
-  hydrate, connected, entries, activity, latest,
-  syncing, syncError, lastSync, sync, addManual, removeEntry, confirmEntry,
+  hydrate, connected, entries, latest,
+  syncing, syncError, lastSync, syncAndPush, autoSync, addManual, removeEntry, confirmEntry,
   weightSeries, slope, comp, suspects, suspectAts,
 } = useWithings()
 // stepsFor vient de la NUTRITION, pas de Withings : c'est la copie persistée.
 // Celle de Withings lit le tampon de synchronisation, vide après un rechargement.
-const { setSteps, dayFor, overrides, stepsFor } = useNutrition()
+const { dayFor, overrides, stepsFor } = useNutrition()
 const { addBodyWeight } = useWorkout()
 const { profile } = useProfile()
 
@@ -33,43 +33,27 @@ const emit = defineEmits<{ navigate: [view: string] }>()
 const today = isoOf(new Date())
 const yesterday = shiftIso(today, -1)
 const manualKg = ref<number | null>(null)
+// Optionnel, et c'est voulu : une pesée sans impédance reste une pesée utile.
+const manualFat = ref<number | null>(null)
 const manualDate = ref(today)
 
-onMounted(async () => {
+onMounted(() => {
   hydrate()
-  // Synchro à l'ouverture, au plus une fois par heure : une pesée par jour, ça suffit.
-  if (connected.value && Date.now() / 1000 - lastSync.value > 3600) await runSync()
+  // La synchro d'ouverture vit maintenant dans la page : elle ne doit plus dépendre
+  // du fait qu'on passe par cet écran. On la redemande quand même ici — elle se
+  // court-circuite d'elle-même si elle a déjà tourné dans l'heure.
+  autoSync(today).catch(() => { /* hors ligne */ })
 })
 
-async function runSync(full = false) {
-  const ok = await sync({ full })
-  if (ok) pushToJournal()
-}
-
-/**
- * Reverse les données là où le reste de l'appli les attend : le poids dans le
- * journal des séances (il sert au calcul du métabolisme de base), les pas dans
- * la nutrition (ils entrent dans la dépense du jour).
- */
-function pushToJournal() {
-  for (const a of activity.value) {
-    if (a.steps <= 0) continue
-    // Le compteur du jour est PARTIEL : à 9 h il affiche 800 pas, et l'écrire tel
-    // quel ferait tomber la cible sous l'estimation — l'appli conseillerait de
-    // moins manger au petit-déjeuner parce qu'on n'a pas encore marché. Pour la
-    // journée en cours, on ne révise donc que vers le haut, quand le réel dépasse
-    // l'estimation. Les jours passés, eux, sont complets et s'écrivent tels quels.
-    if (a.date === today && a.steps <= defaultSteps(dayFor(today).tt)) continue
-    setSteps(a.date, a.steps)
-  }
-  if (latest.value && latest.value.date === today) addBodyWeight(latest.value.kg)
-}
+/** Le bouton « Synchroniser » : forcé, sans le pas de temps d'une heure. */
+const runSync = (full = false) => syncAndPush(today, { full })
 
 function submitManual() {
   if (!manualKg.value || manualKg.value <= 0) return
-  addManual(manualKg.value, manualDate.value)
+  addManual(manualKg.value, manualDate.value, undefined, manualFat.value)
   if (manualDate.value === today) addBodyWeight(manualKg.value)
   manualKg.value = null
+  manualFat.value = null
 }
 
 const series = computed(() => weightSeries.value)
@@ -322,10 +306,20 @@ const fmt = (n: number, d = 1) => (n > 0 ? '+' : '') + n.toFixed(d)
         </label>
         <label class="field nu-kgfield">
           <span>Poids</span>
-          <input v-model.number="manualKg" type="number" inputmode="decimal" step="0.1" min="30" max="250" placeholder="94,0">
+          <input v-model.number="manualKg" type="number" inputmode="decimal" step="0.1" min="30" max="250" placeholder="92,6">
+        </label>
+        <label class="field nu-kgfield">
+          <span>Masse grasse</span>
+          <input v-model.number="manualFat" type="number" inputmode="decimal" step="0.1" min="3" max="70" placeholder="26,5 %">
         </label>
         <button class="btn-primary nu-wi-go" :disabled="!manualKg" @click="submitManual">Ajouter</button>
       </div>
+      <p class="nu-note mt-6">
+        La masse grasse est facultative, mais c'est elle qui permet de calculer les
+        protéines sur la <b>masse maigre</b> plutôt que sur le poids total — plus juste
+        tant qu'il reste du gras à perdre. La masse grasse en kg et la masse maigre en
+        sont déduites.
+      </p>
       <!-- Raccourcis : neuf pesées sur dix sont celle du jour ou celle d'hier soir
            qu'on avait oublié de noter. -->
       <div class="nu-wi-shortcuts">

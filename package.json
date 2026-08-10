@@ -12,6 +12,7 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:nuxt": "vitest --project nuxt",
+    "test:coverage": "vitest run --coverage",
     "check:css": "node scripts/check-css-dupes.mjs",
     "check:data": "node scripts/check-data-dupes.mjs",
     "check": "npm run check:css && npm run check:data"
@@ -38,6 +39,7 @@
     "@nuxtjs/robots": "^5.7.0",
     "@nuxtjs/sitemap": "^7.6.0",
     "@types/node": "^25.2.1",
+    "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.6",
     "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",

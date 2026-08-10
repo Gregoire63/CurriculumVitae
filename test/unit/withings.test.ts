@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   IMPEDANCE_CAVEAT, LEAN_LOSS_ALERT, MEAS, SMOOTH_DAYS,
   SUSPECT_BASE_KG, SUSPECT_MAX_KG,
-  composition, dailySeries, decode, flagOutliers, mergeEntries, parseActivity, parseGroup,
+  carriedComp, composition, dailySeries, decode, flagOutliers, mergeEntries, parseActivity, parseGroup,
   suspectThreshold, suspectsOf, weeklySlope,
 } from '../../lib/withings'
 import type { BodyEntry, RawGroup } from '../../lib/withings'
@@ -353,5 +353,74 @@ describe('les statistiques ignorent les pesées écartées', () => {
     entries[20].confirmed = true
     const fausse = weeklySlope(dailySeries(entries))!
     expect(Math.abs(fausse - -0.7)).toBeGreaterThan(1) // des kilos par semaine d'erreur
+  })
+})
+
+describe('carriedComp — le taux de masse grasse survit à une pesée sans impédance', () => {
+  const e = (date: string, kg: number, fatRatio?: number): BodyEntry => ({
+    date,
+    at: `${date}T07:00`,
+    kg,
+    source: 'manual',
+    ...(fatRatio === undefined
+      ? {}
+      : {
+          fatRatio,
+          fatMass: Math.round(kg * fatRatio) / 100,
+          leanMass: Math.round((kg - Math.round(kg * fatRatio) / 100) * 100) / 100,
+        }),
+  })
+
+  it('prend tout de la dernière pesée quand elle mesure la composition', () => {
+    const c = carriedComp([e('2026-08-01', 93.4, 26.8), e('2026-08-08', 92.6, 26.5)])!
+    expect(c.carried).toBe(false)
+    expect(c.kg).toBe(92.6)
+    expect(c.fatRatio).toBe(26.5)
+    expect(c.measuredOn).toBe('2026-08-08')
+  })
+
+  it('reporte le dernier taux connu sur le poids du jour', () => {
+    // Le cas qui compte : balance d'hôtel, pèse-personne d'un ami, pesée notée à la
+    // main. Sans report, la cible protéique bondirait d'une vingtaine de grammes du
+    // jour au lendemain pour un corps qui n'a pas bougé.
+    const c = carriedComp([e('2026-08-08', 92.6, 26.5), e('2026-08-10', 92.1)])!
+    expect(c.carried).toBe(true)
+    expect(c.kg).toBe(92.1) // le poids d'aujourd'hui
+    expect(c.fatRatio).toBe(26.5) // le taux d'avant-hier
+    expect(c.measuredOn).toBe('2026-08-08')
+  })
+
+  it('ne recopie JAMAIS la masse grasse ni la masse maigre en kilos lors d\'un report', () => {
+    // Elles appartiennent à la pesée qui les a mesurées. Les transporter telles quelles
+    // sur un autre poids fabriquerait une composition qui n'a jamais existé ; elles se
+    // recalculent depuis le taux et le poids du jour.
+    const c = carriedComp([e('2026-08-08', 92.6, 26.5), e('2026-08-10', 88)])!
+    expect(c.fatMass).toBeUndefined()
+    expect(c.leanMass).toBeUndefined()
+  })
+
+  it('cesse de reporter une mesure trop vieille', () => {
+    const c = carriedComp([e('2026-01-05', 99, 31), e('2026-08-10', 92.1)])!
+    expect(c.carried).toBe(false)
+    expect(c.fatRatio).toBeUndefined()
+    expect(c.measuredOn).toBeNull()
+    expect(c.kg).toBe(92.1) // le poids reste utilisable, lui
+  })
+
+  it('respecte la limite d\'âge au jour près', () => {
+    const vieux = carriedComp([e('2026-06-11', 95, 28), e('2026-08-10', 92.1)])! // 60 jours
+    expect(vieux.carried).toBe(true)
+    const trop = carriedComp([e('2026-06-10', 95, 28), e('2026-08-10', 92.1)])! // 61 jours
+    expect(trop.carried).toBe(false)
+  })
+
+  it('écarte les taux impossibles au lieu de les reporter', () => {
+    const c = carriedComp([e('2026-08-08', 92.6, 1), e('2026-08-10', 92.1)])!
+    expect(c.measuredOn).toBeNull()
+    expect(c.fatRatio).toBeUndefined()
+  })
+
+  it('rend null sans aucune pesée', () => {
+    expect(carriedComp([])).toBeNull()
   })
 })
