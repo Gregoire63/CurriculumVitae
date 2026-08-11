@@ -157,17 +157,82 @@ export function nextLoad(opts: {
   return out(base, 'keep')
 }
 
+// ─── Changement de matériel ──────────────────────────────────────────────────
+/**
+ * Une séance marquée `swap` déclare : « à partir d'ici, la charge n'est plus
+ * comparable à ce qui précède ».
+ *
+ * Le cas est banal et le code ne pouvait pas le voir : la machine habituelle est
+ * prise, on en prend une autre, et le chiffre sur la pile ne veut plus dire la
+ * même chose — le bras de levier a changé. Même chose quand on baisse
+ * volontairement la charge pour reprendre le mouvement en main et mieux sentir le
+ * muscle. Dans les deux cas, l'app lisait une chute de charge comme une
+ * régression : `crunch-cable` est passé de 72,5 à 47,5 kg alors que les reps
+ * propres, elles, ont doublé.
+ *
+ * Ce qui est enregistré ne bouge pas — l'historique, le volume, le tonnage de la
+ * semaine restent entiers. Seules les COMPARAISONS repartent de zéro : records,
+ * stagnation, et détection de baisse de performance.
+ */
+export interface SwapLike { sets: SetLike[], swap?: boolean }
+
+/**
+ * Baisse minimale de tonnage pour qu'on parle de baisse : 5 %.
+ *
+ * Sans ce plancher, la mesure ramassait du bruit. Sur les vraies données : `ecartes`
+ * -0,9 %, `face-pull` -2,5 %, `ss-bras` -3,1 % — soit une rep en moins sur une série,
+ * ce qui arrive un jour sur deux sans rien vouloir dire. Ils faisaient passer le
+ * compteur de 1 à 4 exercices « en baisse » et gonflaient le score d'autant.
+ *
+ * 5 %, c'est l'ordre de grandeur de DEUX reps perdues sur un exercice de 3 × 8 :
+ * au-delà, ce n'est plus la variation d'un jour. `dev-mil` (-12,5 %) reste seul.
+ */
+export const PERF_DROP_MIN = 0.05
+
+/** L'historique depuis le dernier changement de matériel (celui-ci inclus). */
+export function sinceSwap<T extends SwapLike>(history: T[]): T[] {
+  for (let i = history.length - 1; i >= 0; i--) if (history[i].swap) return history.slice(i)
+  return history
+}
+
 /** Nb de séances récentes consécutives à la même charge max (stagnation). */
-export function sameWeightStreak(history: { sets: SetLike[] }[]): number {
-  if (!history.length) return 0
-  const target = topWeight(history[history.length - 1].sets)
+export function sameWeightStreak(history: SwapLike[]): number {
+  const h = sinceSwap(history)
+  if (!h.length) return 0
+  const target = topWeight(h[h.length - 1].sets)
   if (!target) return 0
   let n = 0
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (topWeight(history[i].sets) === target) n++
+  for (let i = h.length - 1; i >= 0; i--) {
+    if (topWeight(h[i].sets) === target) n++
     else break
   }
   return n
+}
+
+/**
+ * La performance a-t-elle baissé À CHARGE IDENTIQUE entre les deux dernières
+ * séances ? C'est le marqueur objectif du surmenage — le seul que le ressenti ne
+ * peut pas fabriquer.
+ *
+ * Deux garde-fous portent tout le sens de cette fonction :
+ *
+ * 1. **Charge identique obligatoire.** Une charge qui baisse est presque toujours
+ *    un choix (matériel occupé, technique reprise) ; ce n'est pas un symptôme.
+ * 2. **On compare le TONNAGE, pas les reps de la série la plus lourde.** Sur
+ *    `dc-barre`, les reps à 70 kg sont passées de 4+4 à 4 — ça ressemble à une
+ *    chute. Mais la série retirée a été remplacée par un 65 × 8, et le tonnage est
+ *    monté de 1 760 à 2 000. Ce n'est pas une baisse, c'est un meilleur choix de
+ *    charges. Seul `dev-mil` baisse vraiment : 40 kg les deux fois, 960 → 840.
+ * 3. **Il faut dépasser le bruit** (cf. `PERF_DROP_MIN`).
+ */
+export function perfRegressed(history: SwapLike[]): boolean {
+  const h = sinceSwap(history).filter(s => workSets(s.sets).length)
+  if (h.length < 2) return false
+  const prev = h[h.length - 2], last = h[h.length - 1]
+  if (topWeight(prev.sets) !== topWeight(last.sets)) return false
+  const before = volumeOf(prev.sets)
+  if (!before) return false
+  return volumeOf(last.sets) < before * (1 - PERF_DROP_MIN)
 }
 
 // ─── Records ─────────────────────────────────────────────────────────────────
@@ -177,8 +242,10 @@ export type PrKind = 'charge' | 'reps' | 'e1rm'
 
 /** Compare une nouvelle séance à l'historique de l'exercice et renvoie les
  *  records battus. Historique vide → aucun PR (pas de « record » au 1er passage). */
-export function detectPRs(history: { sets: SetLike[] }[], newSets: SetLike[]): PrKind[] {
-  const prev = history.filter(h => workSets(h.sets).length)
+export function detectPRs(history: SwapLike[], newSets: SetLike[]): PrKind[] {
+  // Depuis le dernier changement de matériel seulement : un record établi sur une
+  // autre machine n'est pas un record qu'on peut battre sur celle-ci.
+  const prev = sinceSwap(history).filter(h => workSets(h.sets).length)
   if (!prev.length) return []
   const out: PrKind[] = []
 
@@ -285,9 +352,12 @@ export interface WeekStats {
   hard: number // …dont « dur » ou « à l'échec » : les séries menées au bout
 }
 
-// Sous ce nombre de ressentis, le ratio n'est pas fiable.
+// Sous ce nombre de ressentis, le ratio n'est pas fiable. Il n'entre plus dans le
+// score (voir assessFatigue), il reste affiché comme description.
 export const HARD_SAMPLE_MIN = 5
-export const HARD_RATIO_ALERT = 0.5
+// Sous ce nombre d'exercices suivis, la part de baisses n'est pas fiable.
+export const DROP_SAMPLE_MIN = 4
+export const DROP_RATIO_ALERT = 0.3
 export const RAMP_ALERT = 3 // semaines de hausse consécutives avant alerte
 export const RECOVERY_COOLDOWN = 6 // on ne redemande pas une décharge avant N semaines
 export const RECOVERY_VOLUME_RATIO = 0.7 // semaine allégée = ≤ 70 % du volume habituel
@@ -328,7 +398,10 @@ export interface FatigueVerdict {
   reasons: string[]
   advice: string
   ramp: number
-  hardRatio: number | null
+  hardRatio: number | null // affiché seulement : plus compté dans le score, voir assessFatigue
+  dropRatio: number | null // part des exercices en baisse à charge identique
+  dropped: number
+  tracked: number // exercices comparables (au moins deux séances)
   stalled: number
   sinceRecovery: number | null
 }
@@ -337,18 +410,41 @@ const LEVEL_ADVICE: Record<FatigueLevel, string> = {
   unknown: 'Continue à enregistrer tes séances et à noter le ressenti : il faut environ 3 semaines pour que la tendance soit lisible.',
   fresh: 'Charge bien absorbée. Tu peux continuer à monter les charges normalement.',
   building: 'Accumulation normale. Garde le cap, mais surveille le ressenti sur les gros exercices.',
-  high: 'Fatigue marquée. Cette semaine : ne monte pas les charges, arrête chaque série 2 reps avant l\'échec, et allège les sprints.',
+  high: 'Fatigue marquée. Cette semaine : ne monte pas les charges, garde une rep en réserve sur les gros exercices, et allège les sprints.',
   deload: 'Semaine de décharge conseillée : garde les mêmes charges mais coupe ~40 % des séries de travail (4 → 2), stoppe 3 reps avant l\'échec, et remplace les sprints par du footing léger. Tu reprendras plus fort la semaine suivante.',
 }
 
-/** Évalue la fatigue accumulée. `weeks` = semaines TERMINÉES (ancienne → récente),
- *  `current` = semaine en cours, utilisée seulement pour le ressenti récent. */
+/**
+ * Évalue la fatigue accumulée. `weeks` = semaines TERMINÉES (ancienne → récente),
+ * `current` = semaine en cours.
+ *
+ * `dropped` / `tracked` = exercices dont la performance a BAISSÉ à charge identique
+ * (cf. `perfRegressed`), sur le nombre d'exercices comparables.
+ *
+ * Ce couple a remplacé le ressenti dans le calcul du score, et c'est le cœur du
+ * changement. L'ancienne version comptait la part d'exercices notés « dur » ou
+ * « à l'échec ». Pour quelqu'un qui mène ses séries au bout par principe — ce qui
+ * est le but de l'entraînement, pas un accident — ce ratio vaut 100 % en
+ * permanence : il contribuait 40 points fixes au score et ne distinguait plus rien.
+ * Un indicateur toujours au maximum n'indique rien, et son conseil (« arrête
+ * chaque série 2 reps avant l'échec ») contredisait la façon de s'entraîner qu'il
+ * était censé surveiller.
+ *
+ * La baisse de performance à charge identique, elle, ne se fabrique pas : soit le
+ * tonnage est là, soit il n'y est pas. `hardRatio` reste calculé et affiché — il
+ * décrit la façon de s'entraîner, ce qui a son intérêt — mais ne pèse plus.
+ */
 export function assessFatigue(opts: {
   weeks: WeekStats[]
   current: WeekStats
   stalled: number
+  dropped?: number
+  tracked?: number
 }): FatigueVerdict {
   const { weeks, current, stalled } = opts
+  const dropped = opts.dropped ?? 0
+  const tracked = opts.tracked ?? 0
+  const dropRatio = tracked >= DROP_SAMPLE_MIN ? Math.round((dropped / tracked) * 100) / 100 : null
   const ramp = rampWeeks(weeks)
   const sinceRecovery = weeksSinceRecovery(weeks)
 
@@ -361,7 +457,7 @@ export function assessFatigue(opts: {
 
   const trained = weeks.filter(w => w.sessions > 0).length
   if (trained < MIN_WEEKS_FOR_TREND) {
-    return { level: 'unknown', score: 0, reasons: [], advice: LEVEL_ADVICE.unknown, ramp, hardRatio, stalled, sinceRecovery }
+    return { level: 'unknown', score: 0, reasons: [], advice: LEVEL_ADVICE.unknown, ramp, hardRatio, dropRatio, dropped, tracked, stalled, sinceRecovery }
   }
 
   const reasons: string[] = []
@@ -370,13 +466,17 @@ export function assessFatigue(opts: {
   const rampPts = Math.min(50, Math.max(0, ramp - 1) * 25)
   if (rampPts) { score += rampPts; reasons.push(`Volume en hausse depuis ${ramp} semaines d'affilée`) }
 
-  if (hardRatio !== null && hardRatio > 0) {
-    score += Math.round(hardRatio * 40)
-    // Formulation : « poussés au bout » et non « en échec ». `fail` veut dire
-    // qu'on est allé à l'échec musculaire, ce qui est une FIN de série voulue, pas
-    // un incident. Le compteur, lui, reste juste : une série menée au bout coûte
-    // en récupération, qu'elle ait été choisie ou subie.
-    if (hardRatio >= HARD_RATIO_ALERT) reasons.push(`${Math.round(hardRatio * 100)} % des exercices poussés au bout récemment (« dur » ou « à l'échec »)`)
+  // Baisse de performance à charge identique : le seul signal objectif du lot, donc
+  // le mieux payé (50 points au maximum, à égalité avec la rampe de volume). Le
+  // ressenti qu'il remplace plafonnait à 40 alors qu'il ne mesurait qu'une façon de
+  // s'entraîner.
+  if (dropRatio !== null && dropRatio > 0) {
+    score += Math.round(dropRatio * 50)
+    if (dropRatio >= DROP_RATIO_ALERT) {
+      reasons.push(dropped === 1
+        ? '1 exercice en baisse à charge identique'
+        : `${dropped} exercices en baisse à charge identique`)
+    }
   }
 
   const stallPts = Math.min(30, stalled * 10)
@@ -397,7 +497,7 @@ export function assessFatigue(opts: {
     reasons.push('Semaine allégée récente prise en compte')
   }
 
-  return { level, score, reasons, advice: LEVEL_ADVICE[level], ramp, hardRatio, stalled, sinceRecovery }
+  return { level, score, reasons, advice: LEVEL_ADVICE[level], ramp, hardRatio, dropRatio, dropped, tracked, stalled, sinceRecovery }
 }
 
 export const FATIGUE_LABELS: Record<FatigueLevel, string> = {

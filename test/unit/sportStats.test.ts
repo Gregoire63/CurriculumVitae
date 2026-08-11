@@ -3,7 +3,7 @@ import {
   setTop, setVolume, setE1rm, topWeight, volumeOf, e1rmOf,
   warmupLoad, roundToStep,
   avgSessionDuration, plausibleDurations, DURATION_MIN, DURATION_MAX,
-  nextLoad, sameWeightStreak,
+  nextLoad, sameWeightStreak, sinceSwap, perfRegressed,
   detectPRs,
   muscleSetCounts, weeklyStatus, withProgramMuscles,
   rampWeeks, recoveryWeeks, weeksSinceRecovery, assessFatigue,
@@ -299,18 +299,39 @@ describe('évaluation de la fatigue', () => {
     expect(v.reasons.join(' ')).toMatch(/hausse/)
   })
 
-  it('monte le niveau quand le ressenti se dégrade', () => {
-    const weeks = [wk('a', 1000), wk('b', 1000), wk('c', 1000, { rated: 6, hard: 5 })]
-    const v = assessFatigue({ weeks, current: wk('d', 500, { rated: 4, hard: 4 }), stalled: 2 })
-    expect(v.hardRatio).toBeCloseTo(0.9, 1)
+  it('monte le niveau quand la performance baisse à charge identique', () => {
+    const weeks = [wk('a', 1000), wk('b', 1000), wk('c', 1000)]
+    const v = assessFatigue({ weeks, current: wk('d', 500), stalled: 2, dropped: 4, tracked: 6 })
+    expect(v.dropRatio).toBeCloseTo(0.67, 1)
     expect(['high', 'deload']).toContain(v.level)
-    expect(v.reasons.join(' ')).toMatch(/dur/)
+    expect(v.reasons.join(' ')).toMatch(/baisse à charge identique/)
+  })
+
+  it('ne compte PLUS le ressenti dans le score', () => {
+    // Le point de bascule du 11/08. Quelqu'un qui mène toutes ses séries au bout
+    // affiche 100 % de « dur ou à l'échec » en permanence : l'ancien calcul lui
+    // collait 40 points fixes et le classait « fatigue marquée » à vie, avec le
+    // conseil de s'arrêter avant l'échec — l'inverse de ce qu'il fait exprès.
+    const weeks = [wk('a', 1000), wk('b', 1000), wk('c', 1000, { rated: 6, hard: 6 })]
+    const aFond = assessFatigue({ weeks, current: wk('d', 500, { rated: 6, hard: 6 }), stalled: 0 })
+    const tranquille = assessFatigue({ weeks: [wk('a', 1000), wk('b', 1000), wk('c', 1000, { rated: 6, hard: 0 })], current: wk('d', 500, { rated: 6, hard: 0 }), stalled: 0 })
+    expect(aFond.score).toBe(tranquille.score)
+    expect(aFond.level).toBe('fresh')
+    // …mais il reste affiché : il décrit la façon de s'entraîner.
+    expect(aFond.hardRatio).toBe(1)
   })
 
   it('ignore un ratio de ressenti calculé sur trop peu de données', () => {
     const weeks = [wk('a', 1000), wk('b', 1000), wk('c', 1000, { rated: 2, hard: 2 })]
     const v = assessFatigue({ weeks, current: noCurrent, stalled: 0 })
     expect(v.hardRatio).toBeNull() // 2 ressentis < seuil de fiabilité
+  })
+
+  it('ignore une part de baisses calculée sur trop peu d\'exercices', () => {
+    const weeks = [wk('a', 1000), wk('b', 1000), wk('c', 1000)]
+    const v = assessFatigue({ weeks, current: noCurrent, stalled: 0, dropped: 2, tracked: 2 })
+    expect(v.dropRatio).toBeNull()
+    expect(v.score).toBe(0)
   })
 
   it('ne redemande pas de décharge juste après en avoir pris une', () => {
@@ -325,7 +346,7 @@ describe('évaluation de la fatigue', () => {
 
   it('neutralise l\'alerte quand la décharge vient d\'avoir lieu', () => {
     const weeks = [wk('a', 1000), wk('b', 1000), wk('c', 1000), wk('d', 1000), wk('e', 200)]
-    const v = assessFatigue({ weeks, current: wk('f', 300, { rated: 8, hard: 8 }), stalled: 3 })
+    const v = assessFatigue({ weeks, current: wk('f', 300), stalled: 3, dropped: 5, tracked: 6 })
     expect(v.sinceRecovery).toBe(0)
     expect(v.level).toBe('building')
     expect(v.reasons.join(' ')).toMatch(/allégée récente/)
@@ -392,5 +413,89 @@ describe('bornes de la fourchette de reps', () => {
     // même cas. Ce test vérifie qu'aucun AUTRE exercice ne se glisse dans le trou.
     const regules = ALL_EXERCISES.filter(ex => !ex.bodyweight && !ex.superset)
     for (const ex of regules) expect(bottomOfRange(ex.reps), ex.id).not.toBeNull()
+  })
+})
+
+
+// ─── Changement de matériel ──────────────────────────────────────────────────
+describe('changement de machine', () => {
+  const s = (w: number, r: number) => ({ w, r })
+
+  it('ne coupe rien tant que rien n\'est marqué', () => {
+    const h = [{ sets: [s(70, 8)] }, { sets: [s(70, 8)] }]
+    expect(sinceSwap(h)).toHaveLength(2)
+  })
+
+  it('repart de la séance marquée, celle-ci incluse', () => {
+    const h = [{ sets: [s(70, 8)] }, { sets: [s(45, 12)], swap: true }, { sets: [s(45, 12)] }]
+    expect(sinceSwap(h)).toHaveLength(2)
+    expect(topWeight(sinceSwap(h)[0].sets)).toBe(45)
+  })
+
+  it('ne compte pas comme stagnation les séances d\'avant le changement', () => {
+    // 3 séances à 70 kg, puis machine différente à 45 : la stagnation ne doit pas
+    // traîner un chiffre gagné sur un autre engin.
+    const h = [
+      { sets: [s(70, 8)] }, { sets: [s(70, 8)] }, { sets: [s(70, 8)] },
+      { sets: [s(45, 12)], swap: true }, { sets: [s(45, 12)] },
+    ]
+    expect(sameWeightStreak(h)).toBe(2)
+  })
+
+  it('ne fait plus courir un record établi sur une autre machine', () => {
+    // 72,5 kg sur l'ancienne poulie : sur la nouvelle, 50 kg est un premier repère,
+    // pas un échec. Sans la coupure, aucun PR n'était atteignable avant des mois.
+    const avant = [{ sets: [s(72.5, 6)] }, { sets: [s(50, 10)], swap: true }]
+    expect(detectPRs(avant, [s(55, 10)])).toContain('charge')
+    const sansMarqueur = [{ sets: [s(72.5, 6)] }, { sets: [s(50, 10)] }]
+    expect(detectPRs(sansMarqueur, [s(55, 10)])).not.toContain('charge')
+  })
+})
+
+// ─── Baisse de performance ───────────────────────────────────────────────────
+describe('baisse de performance à charge identique', () => {
+  const s = (w: number, r: number) => ({ w, r })
+
+  it('repère une baisse de tonnage à charge identique', () => {
+    // dev-mil, cas réel : 40 kg les deux fois, 8/8/8 puis 8/7/6 → 960 → 840.
+    const h = [{ sets: [s(40, 8), s(40, 8), s(40, 8)] }, { sets: [s(40, 8), s(40, 7), s(40, 6)] }]
+    expect(perfRegressed(h)).toBe(true)
+  })
+
+  it('ne crie pas à la baisse quand le tonnage monte', () => {
+    // dc-barre, cas réel : les reps à 70 kg passent de 4+4 à 4, mais la série
+    // retirée devient un 65 × 8 et le tonnage monte de 1 760 à 2 000. Compter les
+    // reps de la série la plus lourde aurait déclenché une fausse alerte ici.
+    const h = [
+      { sets: [s(60, 10), s(60, 10), s(70, 4), s(70, 4)] },
+      { sets: [s(60, 10), s(60, 10), s(65, 8), s(70, 4)] },
+    ]
+    expect(perfRegressed(h)).toBe(false)
+  })
+
+  it('ignore une baisse quand la charge a changé : c\'est un choix, pas un symptôme', () => {
+    const h = [{ sets: [s(72.5, 3)] }, { sets: [s(47.5, 5)] }]
+    expect(perfRegressed(h)).toBe(false)
+  })
+
+  it('ne compare pas par-dessus un changement de machine', () => {
+    const h = [{ sets: [s(45, 12), s(45, 12)] }, { sets: [s(45, 8)], swap: true }]
+    expect(perfRegressed(h)).toBe(false)
+  })
+
+  it('ignore une baisse trop faible pour être un signal', () => {
+    // face-pull, cas réel : 788 → 768, soit -2,5 %. C'est une rep en moins sur une
+    // série. Sans plancher, ce bruit faisait passer le compteur de 1 à 4 exercices
+    // « en baisse » et gonflait le score de fatigue d'autant.
+    const h = [
+      { sets: [s(25, 10), s(25, 10), s(28.75, 10)] }, // 787,5
+      { sets: [s(25, 10), s(28.75, 10), s(28.75, 8)] }, // 767,5
+    ]
+    expect(perfRegressed(h)).toBe(false)
+  })
+
+  it('ne conclut rien sur une seule séance', () => {
+    expect(perfRegressed([{ sets: [s(40, 8)] }])).toBe(false)
+    expect(perfRegressed([])).toBe(false)
   })
 })

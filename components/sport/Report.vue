@@ -206,9 +206,10 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
         </div>
         <div class="muted">
           Volume par semaine (la dernière barre est la semaine en cours, encore incomplète — elle ne compte pas dans la tendance).
-          <template v-if="fat.hardRatio !== null"><br>Ressenti récent : {{ Math.round(fat.hardRatio * 100) }} % des exercices poussés au bout (« dur » ou « à l'échec »).</template>
+          <template v-if="fat.dropRatio !== null"><br><b>{{ fat.dropped }}</b> exercice{{ fat.dropped > 1 ? 's' : '' }} sur {{ fat.tracked }} en baisse à charge identique — c'est ce qui pèse dans le score.</template>
+          <template v-if="fat.hardRatio !== null"><br>Façon de t'entraîner : {{ Math.round(fat.hardRatio * 100) }} % des exercices poussés au bout (« dur » ou « à l'échec »). Descriptif, pas compté dans le score.</template>
           <template v-else><br>Note le ressenti de tes exercices pour affiner cet indicateur.</template>
-          <br><span class="fat-caveat">Indicateur composite construit sur ton volume, ton ressenti et ta stagnation — un repère pour décider, pas une mesure physiologique.</span>
+          <br><span class="fat-caveat">Indicateur composite construit sur ton volume, tes baisses de performance à charge identique et ta stagnation — un repère pour décider, pas une mesure physiologique.</span>
         </div>
       </div>
       <!-- Les courbes de charge, ex-onglet « Progrès ». Chargées à la demande :

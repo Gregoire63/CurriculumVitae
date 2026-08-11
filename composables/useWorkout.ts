@@ -3,7 +3,7 @@ import { ALL_EXERCISES, PROGRAM, bottomOfRange, topOfRange, suggestedIncrement }
 import type { Exercise } from '~/data/sportProgram'
 import {
   workSets, topWeight, volumeOf, e1rmOf, setTop, detectPRs, sameWeightStreak, nextLoad,
-  muscleSetCounts, withProgramMuscles, isEffort, assessFatigue, startOfWeek, shiftIso, STALL_SESSIONS,
+  muscleSetCounts, withProgramMuscles, isEffort, assessFatigue, perfRegressed, startOfWeek, shiftIso, STALL_SESSIONS,
 } from '~/utils/sportStats'
 import type { Effort, PrKind, SetLike, WeekStats } from '~/utils/sportStats'
 
@@ -12,12 +12,14 @@ import type { Effort, PrKind, SetLike, WeekStats } from '~/utils/sportStats'
 export type SetLog = SetLike
 const working = <T extends SetLike>(sets: T[]) => workSets(sets)
 // effort : ressenti de l'exercice sur cette séance (sert à auto-réguler la charge)
-export interface SessionLog { date: string; sets: SetLog[]; durationMin?: number; effort?: Effort }
+// swap : « matériel différent de la fois d'avant ». La séance compte normalement
+// dans le volume et l'historique, mais les COMPARAISONS de charge repartent d'ici.
+export interface SessionLog { date: string; sets: SetLog[]; durationMin?: number; effort?: Effort; swap?: boolean }
 export type Logs = Record<string, SessionLog[]>
 export interface BodyWeightEntry { date: string; kg: number }
 // Effort de sprint (course) : ex. « 3 × 20 s @ 16 km/h »
 export interface SprintEffort { kind: 'echauffement' | 'sprint'; count: number; duration: string; intensity: string }
-export interface SessionEntry { exId: string; sets: SetLog[]; effort?: Effort }
+export interface SessionEntry { exId: string; sets: SetLog[]; effort?: Effort; swap?: boolean }
 // Enregistrement au niveau séance : garde l'ordre, la date ET l'heure
 export interface SessionRecord {
   at: string // ISO complet (date + heure)
@@ -157,7 +159,7 @@ export function useWorkout() {
     const at = localDateTime(now) // heure locale
     const date = localDate(now)
     const prs: { name: string; kinds: PrKind[] }[] = []
-    for (const { exId, sets, effort } of entries) {
+    for (const { exId, sets, effort, swap } of entries) {
       if (!sets.length) continue
       const kinds = detectPRs(logs.value[exId] || [], sets)
       if (kinds.length) {
@@ -165,7 +167,7 @@ export function useWorkout() {
         prs.push({ name: ex ? ex.name : exId, kinds })
       }
       if (!logs.value[exId]) logs.value[exId] = []
-      logs.value[exId].push({ date, sets, durationMin, ...(effort ? { effort } : {}) })
+      logs.value[exId].push({ date, sets, durationMin, ...(effort ? { effort } : {}), ...(swap ? { swap } : {}) })
     }
     persistLogs()
 
@@ -179,7 +181,7 @@ export function useWorkout() {
         sessionId: meta?.sessionId ?? null,
         name: meta?.name ?? 'Séance',
         durationMin,
-        entries: recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}) })),
+        entries: recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}) })),
         ...(sprintClean.length ? { sprint: sprintClean } : {}),
         ...(note ? { note } : {}),
       })
@@ -213,12 +215,12 @@ export function useWorkout() {
     const recorded = entries.filter(e => e.sets.length)
     for (const e of recorded) {
       if (!logs.value[e.exId]) logs.value[e.exId] = []
-      logs.value[e.exId].push({ date, sets: e.sets, durationMin, ...(e.effort ? { effort: e.effort } : {}) })
+      logs.value[e.exId].push({ date, sets: e.sets, durationMin, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}) })
     }
     // 3) met à jour l'enregistrement séance en place
     const sprintClean = (sprint ?? []).filter(s => s.duration.trim() || s.intensity.trim())
     rec.durationMin = durationMin
-    rec.entries = recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}) }))
+    rec.entries = recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}) }))
     if (sprintClean.length) rec.sprint = sprintClean
     else delete rec.sprint
     const cleanNote = note?.trim()
@@ -332,10 +334,27 @@ export function useWorkout() {
     return n
   }
 
+  /** Exercices dont la performance a baissé À CHARGE IDENTIQUE, sur ceux qui sont
+   *  comparables. C'est ce couple qui pilote le score de fatigue depuis qu'on ne
+   *  compte plus le ressenti — cf. `assessFatigue`. Même filtre que `stalledCount` :
+   *  un exercice qu'on ne fait plus ne doit pas peser éternellement. */
+  function perfDrops(sinceIso: string): { dropped: number, tracked: number } {
+    let dropped = 0, tracked = 0
+    for (const [exId, ss] of Object.entries(logs.value)) {
+      if (!ss.length || !ALL_EXERCISES.some(e => e.id === exId)) continue
+      if (ss[ss.length - 1].date < sinceIso) continue
+      if (ss.length < 2) continue // rien à comparer
+      tracked++
+      if (perfRegressed(ss)) dropped++
+    }
+    return { dropped, tracked }
+  }
+
   /** Verdict de fatigue + les semaines qui ont servi à le calculer (pour l'affichage). */
   function fatigue(todayIso: string, todayDow: number) {
     const { weeks, current } = weeklyStats(todayIso, todayDow)
-    const verdict = assessFatigue({ weeks, current, stalled: stalledCount(shiftIso(todayIso, -21)) })
+    const since = shiftIso(todayIso, -21)
+    const verdict = assessFatigue({ weeks, current, stalled: stalledCount(since), ...perfDrops(since) })
     return { ...verdict, weeks, current }
   }
 

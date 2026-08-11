@@ -213,6 +213,15 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .effort-chip.ok.sel { background: #4a6fa5; }
 .effort-chip.hard.sel { background: #a97b1e; }
 .effort-chip.fail.sel { background: #b5502f; }
+/* Matériel différent : ce n'est pas un ressenti, c'est une rupture de comparaison —
+   d'où la ligne à part plutôt qu'une 5e puce dans la rangée au-dessus. */
+.swap-chip { display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box; text-align: left; background: var(--bg-secondary); border: 1px dashed var(--bg-accent); color: var(--text-muted); border-radius: 10px; padding: 9px 11px; font-family: var(--font-body); cursor: pointer; transition: all 0.15s; }
+.swap-chip:hover { border-color: var(--accent-secondary); color: var(--text-primary); }
+.swap-chip.sel { border-style: solid; border-color: #4a6fa5; background: #eef2f9; color: var(--text-primary); }
+.swap-ico { font-size: 16px; line-height: 1; flex: 0 0 auto; }
+.swap-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.swap-txt b { font-size: 13px; font-weight: 600; }
+.swap-txt small { font-size: 11.5px; color: var(--text-muted); }
 .hint-pill.keep { background: #f6ecd6; border: 1px solid #e6d3a8; color: #a97b1e; }
 /* Note libre de fin de séance */
 .note-card { margin-top: 4px; }

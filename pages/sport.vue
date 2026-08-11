@@ -108,6 +108,9 @@ const draft = reactive<Record<string, { w: string; r: string; done: boolean; war
 // Ressenti déclaré par exercice (facile / correct / dur / échec) : c'est lui qui
 // permet d'auto-réguler la charge conseillée à la séance suivante.
 const draftEffort = reactive<Record<string, Effort>>({})
+// Matériel différent de la fois d'avant : la charge n'est plus comparable, les
+// records et la stagnation repartent d'ici. Cf. `sinceSwap` dans utils/sportStats.
+const draftSwap = reactive<Record<string, true>>({})
 // Note libre de la séance (douleur, sommeil, machine occupée…) : c'est ce qui
 // explique une mauvaise séance quand on la relit des semaines plus tard.
 const sessionNote = ref('')
@@ -303,6 +306,7 @@ function startSession(s: Session) {
   editingRecord.value = null
   for (const k of Object.keys(draft)) delete draft[k]
   for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+  for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   sessionNote.value = ''
   const bw = latestWeight.value ?? 0 // poids de corps (profil) pour les exos au poids du corps
   for (const e of s.exercises) {
@@ -348,11 +352,13 @@ function editSession(rec: SessionRecord) {
   editReturn.value = view.value
   for (const k of Object.keys(draft)) delete draft[k]
   for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+  for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   sessionNote.value = rec.note ?? ''
   const bw = latestWeight.value ?? 0
   for (const e of s.exercises) {
     const entry = rec.entries.find(en => en.exId === e.id)
     if (entry && isEffort(entry.effort)) draftEffort[e.id] = entry.effort
+    if (entry?.swap) draftSwap[e.id] = true
     if (entry && entry.sets.length) {
       draft[e.id] = entry.sets.map(st => ({
         w: st.w != null ? String(st.w) : '',
@@ -394,6 +400,10 @@ const finishReady = computed(() => {
 function setEffort(exId: string, v: Effort) {
   if (draftEffort[exId] === v) delete draftEffort[exId]
   else draftEffort[exId] = v
+}
+function toggleSwap(exId: string) {
+  if (draftSwap[exId]) delete draftSwap[exId]
+  else draftSwap[exId] = true
 }
 function addSet(exId: string) { const rows = draft[exId]; const lastW = [...rows].reverse().find(s => !s.warm); rows.push({ w: lastW?.w ?? '', r: '', done: false, warm: false, w2: lastW?.w2 ?? '', r2: '' }) }
 function addWarmup(exId: string) { const wu = warmupFor(exId); draft[exId].unshift({ w: wu !== null ? String(wu) : '', r: '', done: false, warm: true, w2: '', r2: '' }) }
@@ -453,6 +463,7 @@ function clearActive() {
   sheetOpen.value = false; sheetClosing.value = false; dragY.value = 0
   for (const k of Object.keys(draft)) delete draft[k]
   for (const k of Object.keys(draftEffort)) delete draftEffort[k]
+  for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   sessionNote.value = ''
   sprintDraft.value = []
   if (import.meta.client) { try { localStorage.removeItem(DRAFT_KEY) } catch { /* stockage indispo */ } }
@@ -469,6 +480,7 @@ function finishSession() {
       ...(s.warm ? { warm: true } : {}),
     })),
     ...(draftEffort[e.id] ? { effort: draftEffort[e.id] } : {}),
+    ...(draftSwap[e.id] ? { swap: true as const } : {}),
   }))
   const sprintEfforts = sprintDraft.value
     .filter(r => r.duration.trim() || r.intensity.trim())
@@ -542,6 +554,7 @@ if (import.meta.client) {
           id: activeSession.value.id,
           draft,
           draftEffort,
+          draftSwap,
           note: sessionNote.value,
           sprintDraft: sprintDraft.value,
           sessionStart: sessionStart.value,
@@ -573,6 +586,10 @@ function restoreDraft() {
     for (const k of Object.keys(draftEffort)) delete draftEffort[k]
     if (s.draftEffort && typeof s.draftEffort === 'object') {
       for (const [k, v] of Object.entries(s.draftEffort)) if (isEffort(v)) draftEffort[k] = v
+    }
+    for (const k of Object.keys(draftSwap)) delete draftSwap[k]
+    if (s.draftSwap && typeof s.draftSwap === 'object') {
+      for (const k of Object.keys(s.draftSwap)) draftSwap[k] = true
     }
     sessionNote.value = typeof s.note === 'string' ? s.note : ''
     sprintDraft.value = Array.isArray(s.sprintDraft) ? s.sprintDraft : []
@@ -909,6 +926,20 @@ onUnmounted(() => {
                 >{{ o.icon }} {{ o.label }}</button>
               </div>
             </div>
+            <!-- Matériel différent : la charge du jour n'est pas comparable à la précédente -->
+            <button
+              class="swap-chip" :class="{ sel: draftSwap[e.id] }"
+              :aria-pressed="!!draftSwap[e.id]"
+              @click="toggleSwap(e.id)"
+            >
+              <span class="swap-ico">🔀</span>
+              <span class="swap-txt">
+                <b>Autre machine / mouvement repris</b>
+                <small>{{ draftSwap[e.id]
+                  ? 'Records et progression repartent de cette séance.'
+                  : 'Coche si la charge du jour n\'est pas comparable à la dernière fois.' }}</small>
+              </span>
+            </button>
           </div>
         </div>
         <div v-if="activeSession.sprint" class="card no-pad exercise sprint-exercise">
