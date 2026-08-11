@@ -304,13 +304,14 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
     </Teleport>
 
     <transition name="sheet">
-      <div v-if="draft" class="sheet-overlay" @click.self="draft = null">
-        <div class="sheet">
-          <div class="sheet-handle" />
-          <div class="sheet-head">
-            <div class="sheet-title">{{ draftId ? 'Modifier le plat' : 'Nouveau plat' }}</div>
-            <button class="sheet-close" aria-label="Fermer" @click="draft = null">×</button>
-          </div>
+      <!-- `persistent` : un formulaire à moitié rempli ne doit pas disparaître sur un
+           clic à côté. On en sort par la croix, Échap ou le glissement — trois gestes
+           délibérés. -->
+      <Sheet
+        v-if="draft" persistent
+        :title="draftId ? 'Modifier le plat' : 'Nouveau plat'"
+        @close="draft = null"
+      >
 
           <div class="field"><span>Nom</span><input v-model="draft.name" type="text" placeholder="Poulet, riz, brocolis"></div>
           <div class="field">
@@ -353,19 +354,12 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
             <div v-for="(e, i) in errors" :key="i">⚠️ {{ e }}</div>
           </div>
           <button class="btn-primary" @click="saveRecipe()">Enregistrer</button>
-        </div>
-      </div>
+      </Sheet>
     </transition>
 
     <!-- ─── Éditeur d'aliment ─────────────────────────────────────────── -->
     <transition name="sheet">
-      <div v-if="foodDraft" class="sheet-overlay" @click.self="foodDraft = null">
-        <div class="sheet">
-          <div class="sheet-handle" />
-          <div class="sheet-head">
-            <div class="sheet-title">Nouvel aliment</div>
-            <button class="sheet-close" aria-label="Fermer" @click="foodDraft = null">×</button>
-          </div>
+      <Sheet v-if="foodDraft" persistent title="Nouvel aliment" @close="foodDraft = null">
           <div class="field"><span>Nom</span><input v-model="foodDraft.name" type="text" placeholder="Skyr nature"></div>
           <div class="field">
             <span>Rayon</span>
@@ -385,8 +379,7 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
             c'est le meilleur moyen d'attraper une faute de frappe sur l'étiquette.
           </p>
           <button class="btn-primary" @click="saveFood()">Enregistrer</button>
-        </div>
-      </div>
+      </Sheet>
     </transition>
   </div>
 </template>

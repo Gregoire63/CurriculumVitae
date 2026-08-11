@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
 import { expandItems, keepsOf, macrosOf, roundMacros } from '~/lib/nutritionStats'
-import { useScrollLock } from '~/composables/useScrollLock'
 
 // LA fiche d'un plat : photo, ingrédients, recette. Une seule, ouverte depuis
 // n'importe quelle carte de l'application.
@@ -40,26 +39,18 @@ const sauceMacros = computed(() => (sauce.value
   ? roundMacros(macrosOf(sauce.value.items, library.value.foods))
   : null))
 const keeps = computed(() => (recipe.value ? keepsOf(recipe.value, library.value) : null))
-
-// La page derrière ne doit pas bouger pendant qu'on lit cette feuille.
-const { lock, unlock } = useScrollLock()
-onMounted(lock)
-onUnmounted(unlock)
 </script>
 
 <template>
-  <div class="sheet-overlay" @click.self="emit('close')">
-    <div v-if="recipe" class="sheet rs">
-      <div class="sheet-handle" />
-
-      <!-- La photo en premier, pleine largeur : c'est elle qu'on cherche quand on
-           ouvre une fiche, et c'est aussi le seul endroit où l'on peut en prendre
-           une sans passer par l'éditeur. -->
-      <div class="rs-cover">
+  <Sheet v-if="recipe" sheet-class="rs" @close="emit('close')">
+      <!-- La photo occupe le bord haut de la feuille et lui sert de poignée : on la
+           tire vers le bas pour fermer. Le composant Sheet porte le découpage aux
+           coins arrondis et le geste. -->
+      <template #cover>
         <NutritionPhoto :id="recipe.id" :label="recipe.name" size="cover" />
-      </div>
+      </template>
 
-      <div class="sheet-head">
+      <template #head>
         <div>
           <div class="rs-kind mono">
             {{ KIND_LABELS[recipe.kind] ?? recipe.kind }}
@@ -71,10 +62,9 @@ onUnmounted(unlock)
             <template v-if="keeps"> · se garde {{ keeps }} j au frigo</template>
           </div>
         </div>
-        <button class="sheet-close" aria-label="Fermer" @click="emit('close')">×</button>
-      </div>
+      </template>
 
-      <div class="sheet-body">
+      <template #default>
         <div class="section-label">Ingrédients</div>
         <ul class="rs-items">
           <li v-for="it in recipe.items" :key="it.food" class="rs-item">
@@ -108,7 +98,6 @@ onUnmounted(unlock)
         <p class="nu-steps rs-steps">{{ recipe.steps }}</p>
 
         <button class="btn rs-done" @click="emit('close')">Fermer</button>
-      </div>
-    </div>
-  </div>
+    </template>
+  </Sheet>
 </template>

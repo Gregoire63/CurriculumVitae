@@ -431,10 +431,50 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25);
   display: flex; flex-direction: column; gap: 12px;
-  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  overflow-y: auto; overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* Suit le doigt quand on tire la feuille par la photo (voir useSheetDrag), et
+     revient en douceur si on relâche trop tôt. Les transitions d'ouverture et de
+     fermeture restent portées par `.sheet-enter-active` / `.sheet-leave-active`,
+     plus spécifiques, donc prioritaires au bon moment. */
+  transition: transform 0.22s var(--ease-out);
+  /* Ascenseur natif MASQUÉ.
+     La feuille est arrondie en haut et défile elle-même. Or la barre de défilement
+     n'est pas découpée par `border-radius` : elle se dessinait droite dans le coin
+     rond, et ce bout de barre qui dépassait faisait un angle disgracieux. Il n'y a
+     pas de moyen CSS de la clipper sans remettre le défilement dans un enfant — ce
+     qui reprendrait à la photo sa capacité à sortir du champ.
+     Sur téléphone, où cette feuille vit, l'ascenseur est de toute façon un survol
+     transitoire : le masquer ne retire rien. La poignée du haut dit déjà que ça
+     s'attrape et que ça défile. */
+  scrollbar-width: none;
 }
+.sheet::-webkit-scrollbar { width: 0; height: 0; }
+/* Pendant le geste, aucune transition : la feuille doit coller au doigt. */
+.sheet.dragging { transition: none; }
 .sheet-handle { width: 40px; height: 4px; border-radius: 999px; background: var(--bg-accent); margin: 4px auto 2px; flex: 0 0 auto; }
+/* La zone qu'on attrape pour tirer la feuille vers le bas. La poignée fait 4 px de
+   haut : sans cette bande autour, il faudrait viser au pixel près. Le geste étant
+   vertical, `touch-action` doit le laisser passer — sinon le navigateur le prend
+   pour un défilement et le suivi du doigt ne reçoit jamais rien. */
+.sheet-grip { flex: 0 0 auto; padding: 6px 0 2px; margin: -6px 0 0; touch-action: pan-x; cursor: grab; }
+.sheet-grip:active { cursor: grabbing; }
+/* Un visuel qui occupe le bord haut de la feuille : il en épouse les coins arrondis
+   et sert lui-même de poignée. */
+.sheet-cover {
+  position: relative; margin: 0 -18px; flex: 0 0 auto;
+  border-radius: 20px 20px 0 0; overflow: hidden;
+  touch-action: pan-x; cursor: grab;
+}
+.sheet-cover:active { cursor: grabbing; }
+/* La poignée passe PAR-DESSUS le visuel, en blanc translucide pour rester lisible
+   quelle que soit l'image. Au-dessus, elle réintroduirait la bande de fond qu'on
+   cherche justement à supprimer entre le bord arrondi et la photo. */
+.sheet-handle-over {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  margin: 0; background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.25);
+}
 /* L'en-tête reste COLLÉ en haut pendant le défilement.
    Depuis que la feuille défile en entier, le titre et la croix partaient hors champ
    au premier geste : on se retrouvait dans un contenu sans savoir dans quoi on

@@ -481,3 +481,39 @@ describe('plats modifiés localement', () => {
     expect(n.isRecipePatched(id)).toBe(false)
   })
 })
+
+describe('rattrapage d\'une journée passée', () => {
+  it('coche un repas sur n\'importe quelle date, pas seulement aujourd\'hui', async () => {
+    // Les repas ne se cochaient que le jour même, alors qu'une séance passée se
+    // corrige depuis le journal. L'asymétrie n'avait pas de raison d'être : c'est en
+    // relisant sa semaine qu'on se rend compte qu'on a oublié de cocher.
+    const n = await load()
+    n.toggleEaten('2026-08-05', 'lunch')
+    expect(n.isEaten('2026-08-05', 'lunch')).toBe(true)
+    expect(n.eatenSlots('2026-08-05')).toEqual(['lunch'])
+  })
+
+  it('ne mélange jamais deux journées', async () => {
+    const n = await load()
+    n.toggleEaten('2026-08-05', 'lunch')
+    n.toggleEaten('2026-08-06', 'dinner')
+    expect(n.eatenSlots('2026-08-05')).toEqual(['lunch'])
+    expect(n.eatenSlots('2026-08-06')).toEqual(['dinner'])
+    expect(n.isEaten('2026-08-06', 'lunch')).toBe(false)
+  })
+
+  it('le rattrapage survit à un rechargement', async () => {
+    const n = await load()
+    n.toggleEaten('2026-08-05', 'pdj')
+    vi.resetModules()
+    const again = await load()
+    expect(again.isEaten('2026-08-05', 'pdj')).toBe(true)
+  })
+
+  it('décocher rend bien la journée à son état initial', async () => {
+    const n = await load()
+    n.toggleEaten('2026-08-05', 'snack')
+    n.toggleEaten('2026-08-05', 'snack')
+    expect(n.eatenSlots('2026-08-05')).toEqual([])
+  })
+})

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
@@ -10,7 +10,6 @@ import { EFFORT_OPTIONS } from '~/utils/sportStats'
 import {
   bmrMifflin, buildDay, dayBurn, dayEnergy, roundMacros, sessionsOn,
 } from '~/lib/nutritionStats'
-import { useScrollLock } from '~/composables/useScrollLock'
 
 // Ce qui s'est passé une journée donnée — et deux façons d'y revenir : rouvrir la
 // séance, ou rouvrir les repas.
@@ -77,30 +76,35 @@ const doneCount = computed(() => plan.value?.meals.filter(m => done.value.has(m.
 const weighIns = computed(() =>
   bodyEntries.value.filter(e => e.date === props.iso && !suspectAts.value.has(e.at)))
 
-// La page derrière ne doit pas bouger pendant qu'on lit cette feuille.
-const { lock, unlock } = useScrollLock()
-onMounted(lock)
-onUnmounted(unlock)
+/**
+ * Une journée PASSÉE se complète comme une séance passée se corrige.
+ *
+ * Les repas ne se cochaient que le jour même. C'était une asymétrie sans raison : on
+ * peut rouvrir la séance de mardi dernier pour corriger une charge, mais pas dire
+ * qu'on avait bien mangé la boîte. Or c'est exactement là qu'on s'en rend compte —
+ * en relisant sa semaine.
+ *
+ * Le futur reste fermé : on ne coche pas un repas qu'on n'a pas encore mangé.
+ */
+const isFuture = computed(() => !!props.todayIso && props.iso > props.todayIso)
+const canEatEdit = computed(() => !isFuture.value && !plan.value?.off)
 </script>
 
 <template>
-  <div class="sheet-overlay" @click.self="emit('close')">
-    <div class="sheet day-sheet">
-      <div class="sheet-handle" />
-      <div class="sheet-head">
-        <div>
-          <div class="sheet-title">
-            {{ title }}<span v-if="isToday" class="ds-today">aujourd'hui</span>
-          </div>
-          <div class="muted mono">
-            {{ records.length ? `${records.length} séance(s)` : 'aucune séance' }}
-            <template v-if="resolved.tt"> · télétravail</template>
-          </div>
+  <Sheet sheet-class="day-sheet" @close="emit('close')">
+    <template #head>
+      <div>
+        <div class="sheet-title">
+          {{ title }}<span v-if="isToday" class="ds-today">aujourd'hui</span>
         </div>
-        <button class="sheet-close" aria-label="Fermer" @click="emit('close')">×</button>
+        <div class="muted mono">
+          {{ records.length ? `${records.length} séance(s)` : 'aucune séance' }}
+          <template v-if="resolved.tt"> · télétravail</template>
+        </div>
       </div>
+    </template>
 
-      <div class="sheet-body">
+    <template #default>
         <!-- Seul réglage de la feuille : il change la dépense du jour (environ
              4 000 pas d'écart), donc la cible. -->
         <button class="ds-tt" :class="{ on: resolved.tt }" @click="setOverride(iso, { tt: !resolved.tt })">
@@ -167,8 +171,12 @@ onUnmounted(unlock)
             <span class="ds-m-kcal mono">{{ done.has(m.slot) ? '✓' : Math.round(m.macros.kcal) }}</span>
           </div>
         </div>
-        <button v-if="isToday" class="btn-primary ds-open" @click="eatSheet = true">🍽 Compléter les repas</button>
-        <p v-else class="muted ds-empty">Les repas ne se cochent que le jour même.</p>
+        <button v-if="canEatEdit" class="btn-primary ds-open" @click="eatSheet = true">
+          🍽 {{ isToday ? 'Compléter les repas' : 'Corriger les repas de ce jour' }}
+        </button>
+        <p v-else-if="isFuture" class="muted ds-empty">
+          Journée à venir : les repas se cochent une fois mangés.
+        </p>
 
         <!-- Corps -->
         <template v-if="weighIns.length || stepsFor(iso) !== null">
@@ -185,16 +193,22 @@ onUnmounted(unlock)
             </div>
           </div>
         </template>
-      </div>
+    </template>
 
-      <!-- La feuille des repas se superpose : on revient à la journée en la fermant. -->
+    <!-- La feuille des repas se superpose : on revient à la journée en la fermant.
+         Le verrou de défilement compte les feuilles empilées, donc fermer celle du
+         dessus ne rend pas la page mobile sous celle du dessous. -->
+    <template #after>
       <Teleport to="body">
         <div class="sport-app sport-portal">
           <transition name="sheet">
-            <NutritionEatSheet v-if="eatSheet" :today-iso="iso" @close="eatSheet = false" />
+            <NutritionEatSheet
+              v-if="eatSheet" :today-iso="iso" :past="!isToday"
+              @close="eatSheet = false"
+            />
           </transition>
         </div>
       </Teleport>
-    </div>
-  </div>
+    </template>
+  </Sheet>
 </template>

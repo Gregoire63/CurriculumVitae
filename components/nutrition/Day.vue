@@ -16,7 +16,14 @@ import { GYM_BAG } from '~/data/nutritionProgram'
 // Trois postes de dépense explicites — métabolisme, pas, séance — au lieu d'un
 // facteur d'activité opaque. Le télétravail n'est donc pas un coefficient magique :
 // c'est simplement une journée où on marche beaucoup moins.
-const props = defineProps<{ todayIso: string }>()
+/**
+ * `past` : on rattrape une journée finie depuis le journal, on ne la vit pas.
+ *
+ * Deux choses n'ont alors plus de sens et sont masquées : la liste du sac de sport
+ * (elle se prépare le matin) et l'ajustement du soir (on ne réduit pas le riz d'un
+ * dîner déjà mangé). Cocher les repas, en revanche, est tout l'intérêt.
+ */
+const props = withDefaults(defineProps<{ todayIso: string, past?: boolean }>(), { past: false })
 
 const {
   dayPlanFor, dayFor, stepsFor, isEaten, toggleEaten, eatenSlots, pickedFor, setPicked, stock,
@@ -59,7 +66,7 @@ const DEFAULT_BURN = 440
 // enregistrée, la liste n'a plus rien à dire et n'occuperait que le haut de l'écran.
 // On compte les éléments cochés en repartant de GYM_BAG, pas du stockage : si la
 // liste change un jour, une case cochée pour un objet disparu ne doit pas compter.
-const showBag = computed(() => status.value === 'pending')
+const showBag = computed(() => !props.past && status.value === 'pending')
 const bagPacked = computed(() => GYM_BAG.filter(item => isPacked(props.todayIso, item)).length)
 
 const burn = computed(() => {
@@ -96,7 +103,7 @@ const eatenSoFar = computed(() => {
 })
 
 const adjustment = computed(() => {
-  if (!energy.value || status.value === 'pending') return null
+  if (props.past || !energy.value || status.value === 'pending') return null
   return adjustRemaining(
     base.value, energy.value.target,
     eatenSlots(props.todayIso), eatenSoFar.value,

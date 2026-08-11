@@ -824,13 +824,15 @@
 .nu-photo-empty-acts .btn { font-size: 12px; padding: 8px 12px; }
 
 /* La fiche d'un plat, ouverte depuis n'importe quelle carte. */
+/* La fiche d'un plat. La photo au bord haut et la poignée par-dessus sont portées
+   par le composant Sheet (`.sheet-cover`) : ici il ne reste que la mise en forme de
+   la photo elle-même. */
 .rs { padding-top: 0 !important; }
-.rs-cover { position: relative; margin: 0 -18px; }
-.rs-cover .nu-photo { display: block; width: 100%; }
-.rs-cover .nu-photo-thumb, .rs-cover .nu-photo-add {
+.sheet-cover .nu-photo { display: block; width: 100%; }
+.sheet-cover .nu-photo-thumb, .sheet-cover .nu-photo-add {
   width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; border: none;
 }
-.rs-cover .nu-photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sheet-cover .nu-photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .rs-kind { font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
 .rs-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
 .rs-item { display: grid; grid-template-columns: 62px 1fr; gap: 10px; align-items: baseline; font-size: 13.5px; }

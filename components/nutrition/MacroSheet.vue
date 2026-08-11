@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
 import type { Macros, MacroTargets } from '~/lib/nutritionStats'
 import { KCAL_G, KCAL_L, KCAL_P, macroGaps } from '~/lib/nutritionStats'
-import { useScrollLock } from '~/composables/useScrollLock'
 
 // Détail des écarts par macronutriment. Ouvert en touchant le camembert : le cercle
 // dit « de quoi c'est fait », cette feuille dit « ce qu'il manque, et quoi en faire ».
@@ -15,25 +14,16 @@ const eatenKcal = computed(() =>
 
 const TONE_LABEL = { ok: 'dans la cible', low: 'il en manque', high: 'au-dessus' } as const
 
-// La page derrière ne doit pas bouger pendant qu'on lit cette feuille.
-const { lock, unlock } = useScrollLock()
-onMounted(lock)
-onUnmounted(unlock)
 </script>
 
 <template>
-  <div class="sheet-overlay" @click.self="emit('close')">
-    <div class="sheet macro-sheet">
-      <div class="sheet-handle" />
-      <div class="sheet-head">
-        <div>
-          <div class="sheet-title">Où j'en suis</div>
-          <div class="muted mono">{{ eatenKcal }} kcal sur {{ targets.kcal }}</div>
-        </div>
-        <button class="sheet-close" aria-label="Fermer" @click="emit('close')">×</button>
-      </div>
-
-      <div class="sheet-body">
+  <Sheet
+    sheet-class="macro-sheet"
+    title="Où j'en suis"
+    :subtitle="`${eatenKcal} kcal sur ${targets.kcal}`"
+    @close="emit('close')"
+  >
+    <template #default>
         <div v-for="g in gaps" :key="g.key" class="ms-row" :class="[g.key, g.tone]">
           <div class="ms-top">
             <span class="ms-name">{{ g.label }}</span>
@@ -64,7 +54,6 @@ onUnmounted(unlock)
           grammes n'est pas un signal. Seuls les écarts francs, répétés plusieurs jours,
           valent qu'on change quelque chose.
         </p>
-      </div>
-    </div>
-  </div>
+    </template>
+  </Sheet>
 </template>
