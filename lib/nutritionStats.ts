@@ -12,7 +12,7 @@
 import type { DayTemplate, Food, FoodCat, MicroKey, Recipe, RecipeItem, Slot } from '../data/nutritionProgram'
 import {
   CAT_ORDER, COOK_C_LOSS, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, KEEPS_FRESH, MICRO_REFS,
-  RATIO_DINNER_GYM, RATIO_REST, RECIPE_BY_ID, SLOTS_GYM, SLOTS_REST, STARCHY_IDS,
+  RATIO_LUNCH_GYM, RATIO_REST, RECIPE_BY_ID, SLOTS_GYM, SLOTS_REST, STARCHY_IDS,
 } from '../data/nutritionProgram'
 // isoOf et shiftIso viennent de sportStats. Nuxt auto-importe les deux fichiers d'utils :
 // les redéfinir ici provoquait un « Duplicated imports » au build et, plus embêtant,
@@ -60,12 +60,6 @@ export function mergeRecipes(
 export const activeRecipes = (lib: Library, kind: Recipe['kind']) =>
   Object.values(lib.recipes).filter(r => r.kind === kind && !r.disabled)
 
-/** Cibles calculées à partir du profil, arrondies au palier de 10 kcal. */
-export const GYM_DEFICIT = 665 // kcal retirés un jour avec séance
-export const REST_DEFICIT = 465 // kcal retirés un jour sans séance
-/** Facteurs d'activité appliqués au métabolisme de base. */
-export const PAL_REST = 1.25 // télétravail, peu de déplacements
-export const PAL_GYM = 1.48 // séance de musculation + déplacement
 /** 1 kg de masse grasse ≈ 7 700 kcal. Sert à convertir un déficit en perte attendue. */
 export const KCAL_PER_KG_FAT = 7700
 /**
@@ -261,7 +255,7 @@ export const emptyDay = (index: number, trained: boolean): DayPlan =>
 
 const ratioOf = (slot: Slot): number => {
   if (slot.ratio === 'rest') return RATIO_REST
-  if (slot.ratio === 'dinnerGym') return RATIO_DINNER_GYM
+  if (slot.ratio === 'lunchGym') return RATIO_LUNCH_GYM
   return 1
 }
 
@@ -320,15 +314,6 @@ export function bmrMifflin(kg: number | null, cm: number | null, age: number | n
   if (!kg || !cm || !age || !sex) return null
   const base = 10 * kg + 6.25 * cm - 5 * age
   return Math.round(base + (sex === 'h' ? 5 : -161))
-}
-
-/** Dépense totale estimée sur la journée, selon qu'il y a séance ou non. */
-export const tdeeOf = (bmr: number, trained: boolean) => Math.round(bmr * (trained ? PAL_GYM : PAL_REST))
-
-/** Cible calorique du jour = dépense − déficit, arrondie à 10 kcal. */
-export function targetOf(bmr: number, trained: boolean): number {
-  const raw = tdeeOf(bmr, trained) - (trained ? GYM_DEFICIT : REST_DEFICIT)
-  return Math.round(raw / 10) * 10
 }
 
 // ─── Dépense décomposée ─────────────────────────────────────────────────────
@@ -984,18 +969,6 @@ export const sessionsOn = <T extends { at: string }>(sessions: T[], iso: string)
   sessions.filter(s => s.at.slice(0, 10) === iso)
 
 // ─── Cible dynamique ────────────────────────────────────────────────────────
-
-/**
- * Cible calorique du jour à partir de la dépense réellement mesurée.
- * NEAT (métabolisme × facteur d'activité hors séance) + coût de la séance − déficit.
- * `burn = 0` retombe exactement sur la cible d'un jour sans séance : les deux modes
- * de calcul restent cohérents entre eux.
- */
-export function targetFor(bmr: number, burn: number): number {
-  const spend = bmr * PAL_REST + burn
-  const deficit = burn > 0 ? GYM_DEFICIT : REST_DEFICIT
-  return Math.round((spend - deficit) / 10) * 10
-}
 
 export type DayStatus = 'rest' | 'pending' | 'done' | 'bonus' | 'missed' | 'skipped'
 

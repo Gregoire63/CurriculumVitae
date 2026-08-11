@@ -10,6 +10,7 @@ import {
   startOfWeek, shiftIso,
 } from '../../utils/sportStats'
 import type { WeekStats } from '../../utils/sportStats'
+import { ALL_EXERCISES, bottomOfRange, topOfRange } from '../../data/sportProgram'
 
 // ─── Séries, superset inclus ─────────────────────────────────────────────────
 // Régression : le 2e mouvement d'un superset (w2/r2) était ignoré partout, donc
@@ -85,7 +86,8 @@ describe('durée moyenne', () => {
 
 // ─── Charge auto-régulée ─────────────────────────────────────────────────────
 describe('charge conseillée', () => {
-  const base = { plannedSets: 2, topReps: 10, inc: 2.5, streak: 1 }
+  // Fourchette 8-10 : c'est elle qui décide, pas le ressenti.
+  const base = { plannedSets: 2, topReps: 10, bottomReps: 8, inc: 2.5, streak: 1 }
 
   it('monte quand l\'objectif de reps est atteint', () => {
     const r = nextLoad({ ...base, lastSets: [{ w: 60, r: 10 }, { w: 60, r: 10 }] })
@@ -99,10 +101,34 @@ describe('charge conseillée', () => {
     expect(r.weight).toBe(62.5)
   })
 
-  it('redescend après un échec', () => {
+  it('redescend quand l\'échec arrive SOUS la fourchette', () => {
     const r = nextLoad({ ...base, lastSets: [{ w: 60, r: 4 }], effort: 'fail' })
     expect(r.reason).toBe('deload')
     expect(r.weight).toBe(57.5)
+  })
+
+  it('reste quand l\'échec arrive DANS la fourchette', () => {
+    // LA régression du 11/08. « À l'échec » veut dire qu'on est allé au bout de la
+    // série, pas qu'on l'a ratée : 3 × 8 à 40 kg sur du 8-10, c'est exactement la
+    // série demandée. L'app conseillait de redescendre à 37,5 kg — elle punissait
+    // la seule chose qu'on lui demandait de faire.
+    const r = nextLoad({ ...base, lastSets: [{ w: 40, r: 8 }, { w: 40, r: 8 }, { w: 40, r: 8 }], effort: 'fail' })
+    expect(r.reason).toBe('keep')
+    expect(r.weight).toBe(40)
+  })
+
+  it('ne redescend pas sans borne basse connue : dans le doute, on consolide', () => {
+    const r = nextLoad({ ...base, bottomReps: null, lastSets: [{ w: 60, r: 4 }], effort: 'fail' })
+    expect(r.reason).toBe('keep')
+    expect(r.weight).toBe(60)
+  })
+
+  it('ne force PAS la montée de stagnation sur quelqu\'un déjà à l\'échec', () => {
+    // Bloqué depuis 5 séances ET à l'échec dans la fourchette : forcer +2,5 kg,
+    // c'est garantir la série ratée suivante.
+    const r = nextLoad({ ...base, streak: 5, lastSets: [{ w: 60, r: 8 }], effort: 'fail' })
+    expect(r.reason).toBe('keep')
+    expect(r.weight).toBe(60)
   })
 
   it('ne force PAS la montée de stagnation quand c\'était dur', () => {
@@ -128,9 +154,14 @@ describe('charge conseillée', () => {
     expect(nextLoad({ ...base, lastSets: [{ w: 40, r: 10, warm: true }] }).reason).toBe('none')
   })
 
-  it('un échec prime sur l\'objectif de reps atteint', () => {
+  it('l\'objectif de reps atteint prime sur l\'échec', () => {
+    // Toutes les reps visées ET plus de réserve au bout : c'est le moment de
+    // charger, pas de reculer. C'était l'inverse avant le 11/08, et un test
+    // verrouillait cet inverse — d'où l'intérêt de relire les tests quand le
+    // vocabulaire change.
     const r = nextLoad({ ...base, lastSets: [{ w: 60, r: 10 }, { w: 60, r: 10 }], effort: 'fail' })
-    expect(r.reason).toBe('deload')
+    expect(r.reason).toBe('progress')
+    expect(r.weight).toBe(62.5)
   })
 })
 
@@ -329,5 +360,37 @@ describe('semaine', () => {
   it('décale une date en gérant les changements de mois', () => {
     expect(shiftIso('2026-08-02', -7)).toBe('2026-07-26')
     expect(shiftIso('2026-07-31', 1)).toBe('2026-08-01')
+  })
+})
+
+// ─── Bornes de fourchette ────────────────────────────────────────────────────
+describe('bornes de la fourchette de reps', () => {
+  it('lit les deux bornes d\'un intervalle', () => {
+    expect(bottomOfRange('8-10')).toBe(8)
+    expect(topOfRange('8-10')).toBe(10)
+  })
+
+  it('traite une valeur seule comme ses deux bornes', () => {
+    // « 15 » aux élévations latérales : arriver à l'échec à 14 est SOUS la cible,
+    // donc bien une décharge. Sans ce cas, ces exercices n'auraient jamais de
+    // borne basse et resteraient bloqués sur « on consolide ».
+    expect(bottomOfRange('15')).toBe(15)
+  })
+
+  it('renvoie null quand il n\'y a pas de nombre', () => {
+    expect(bottomOfRange('AMRAP')).toBeNull()
+    expect(topOfRange('15')).toBeNull()
+  })
+
+  it('donne une borne basse à tout exercice réellement auto-régulé', () => {
+    // Un exercice sans borne basse ne peut jamais déclencher de décharge : son
+    // conseil resterait « on consolide » même à 4 reps sur du 8-10.
+    //
+    // Deux exceptions légitimes, et une seule en pratique : `tractions` est en
+    // « max » reps, il n'a pas de cible à manquer. Il est au poids du corps, donc
+    // `overloadHint` ne lui propose déjà aucune charge. Les supersets sont dans le
+    // même cas. Ce test vérifie qu'aucun AUTRE exercice ne se glisse dans le trou.
+    const regules = ALL_EXERCISES.filter(ex => !ex.bodyweight && !ex.superset)
+    for (const ex of regules) expect(bottomOfRange(ex.reps), ex.id).not.toBeNull()
   })
 })

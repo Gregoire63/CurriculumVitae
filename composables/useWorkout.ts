@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { ALL_EXERCISES, PROGRAM, topOfRange, suggestedIncrement } from '~/data/sportProgram'
+import { ALL_EXERCISES, PROGRAM, bottomOfRange, topOfRange, suggestedIncrement } from '~/data/sportProgram'
 import type { Exercise } from '~/data/sportProgram'
 import {
   workSets, topWeight, volumeOf, e1rmOf, setTop, detectPRs, sameWeightStreak, nextLoad,
@@ -233,8 +233,10 @@ export function useWorkout() {
   }
 
   // ─── Surcharge progressive auto-régulée ────────────────────────────────
-  // La décision combine la double progression (reps atteintes) ET le ressenti
-  // déclaré sur l'exercice — cf. nextLoad() dans utils/sportStats.
+  // Ce sont les reps qui décident ; le ressenti dit seulement s'il restait de la
+  // réserve. La borne BASSE de la fourchette est ce qui sépare « à l'échec à 8
+  // reps sur du 8-10 » — la série voulue — de « à l'échec à 5 » — trop lourd.
+  // Cf. nextLoad() dans utils/sportStats.
   function suggestWeight(ex: Exercise) {
     const last = lastPerf(ex.id)
     if (!last) return { weight: 0, base: 0, inc: suggestedIncrement(ex), streak: 0, reason: 'none' as const }
@@ -242,6 +244,7 @@ export function useWorkout() {
       lastSets: last.sets,
       plannedSets: ex.sets,
       topReps: topOfRange(ex.reps),
+      bottomReps: bottomOfRange(ex.reps),
       inc: suggestedIncrement(ex),
       streak: sameWeightStreak(logs.value[ex.id] || []),
       effort: lastEffort(ex.id),

@@ -76,11 +76,17 @@ export function avgSessionDuration(mins: (number | undefined | null)[]): number 
 // Un tap par exercice. C'est la seule information qui permet d'auto-réguler la
 // charge : « objectif de reps atteint » ne dit pas si ça a été facile ou une lutte.
 export type Effort = 'easy' | 'ok' | 'hard' | 'fail'
+//
+// « À l'échec » et pas « Échec » : c'est l'ARRIVÉE à l'échec musculaire, la fin
+// normale d'une série de travail — pas l'aveu d'avoir raté quelque chose. La
+// nuance n'est pas cosmétique : tant que le libellé disait « Échec », l'app
+// répondait par une décharge à chaque série poussée au bout, y compris quand les
+// reps visées étaient toutes là. Voir `nextLoad`.
 export const EFFORT_OPTIONS: { value: Effort; label: string; icon: string }[] = [
   { value: 'easy', label: 'Facile', icon: '😀' },
   { value: 'ok', label: 'Correct', icon: '🙂' },
   { value: 'hard', label: 'Dur', icon: '😤' },
-  { value: 'fail', label: 'Échec', icon: '💥' },
+  { value: 'fail', label: 'À l\'échec', icon: '💥' },
 ]
 export const isEffort = (v: unknown): v is Effort =>
   v === 'easy' || v === 'ok' || v === 'hard' || v === 'fail'
@@ -90,19 +96,37 @@ export type LoadReason = 'progress' | 'stall' | 'keep' | 'deload' | 'none'
 export const STALL_SESSIONS = 3
 
 /** Charge conseillée pour la prochaine séance d'un exercice.
- *  Combine la double progression (reps au haut de la fourchette → on monte) avec
- *  le ressenti de la dernière séance : « facile » fait monter même sans avoir
- *  atteint la cible, « dur » empêche la montée forcée, « échec » fait redescendre. */
+ *
+ *  Ce sont les REPS qui décident, pas le ressenti. Le ressenti ne fait que les
+ *  qualifier : il dit s'il restait de la réserve à ce nombre de reps.
+ *
+ *  C'est l'inverse de ce que faisait cette fonction, et l'erreur a coûté cher.
+ *  « À l'échec » court-circuitait tout le reste et déclenchait une décharge —
+ *  y compris quand les reps visées étaient toutes là. Or arriver à l'échec est
+ *  la fin NORMALE d'une série de travail en hypertrophie, pas un incident. Le
+ *  résultat, sur le journal réel : `dev-mil`, 3 × 8 à 40 kg poussées au bout,
+ *  soit exactement la série demandée sur du 8-10 — et l'app conseillait de
+ *  redescendre à 37,5.
+ *
+ *  Ce qui distingue les deux cas n'est pas le ressenti, c'est OÙ tombent les
+ *  reps dans la fourchette :
+ *
+ *    à l'échec à 10 reps sur 8-10  → la charge est mûre, on monte
+ *    à l'échec à  8 reps sur 8-10  → la série voulue, on reste et on gagne une rep
+ *    à l'échec à  5 reps sur 8-10  → là seulement, la charge est trop lourde
+ */
 export function nextLoad(opts: {
   lastSets: SetLike[]
   plannedSets: number
   topReps: number | null
+  /** Borne basse de la fourchette. En dessous, la charge est vraiment trop lourde. */
+  bottomReps?: number | null
   inc: number
   streak: number
   effort?: Effort | null
   stallSessions?: number
 }): { weight: number; base: number; inc: number; streak: number; reason: LoadReason } {
-  const { lastSets, plannedSets, topReps, inc, streak, effort } = opts
+  const { lastSets, plannedSets, topReps, bottomReps, inc, streak, effort } = opts
   const stallAt = opts.stallSessions ?? STALL_SESSIONS
   const work = workSets(lastSets)
   if (!work.length) return { weight: 0, base: 0, inc, streak, reason: 'none' }
@@ -110,16 +134,25 @@ export function nextLoad(opts: {
   const base = topWeight(lastSets)
   const out = (weight: number, reason: LoadReason) => ({ weight, base, inc, streak, reason })
 
-  // 1) Échec la dernière fois → on redescend d'un cran plutôt que d'insister.
-  if (effort === 'fail') return out(Math.max(0, base - inc), 'deload')
-  // 2) Objectif de reps atteint sur toutes les séries → on monte (double progression).
+  // 1) Objectif de reps atteint sur toutes les séries → on monte (double progression).
+  //    Y compris à l'échec : toutes les reps visées + plus de réserve, c'est
+  //    précisément le moment de charger.
   const targetHit = !!topReps && work.length >= plannedSets && work.every(s => s.r >= topReps)
   if (targetHit) return out(base + inc, 'progress')
-  // 3) C'était facile → on monte même sans avoir atteint le haut de la fourchette.
+  // 2) À l'échec SOUS la fourchette → la charge est trop lourde, on redescend.
+  //    Sans borne basse connue, on ne devine pas : on consolide (cas 3).
+  if (effort === 'fail' && !!bottomReps && work.some(s => s.r < bottomReps)) {
+    return out(Math.max(0, base - inc), 'deload')
+  }
+  // 3) À l'échec DANS la fourchette → on reste et on va chercher la rep suivante.
+  if (effort === 'fail') return out(base, 'keep')
+  // 4) C'était facile → on monte même sans avoir atteint le haut de la fourchette.
   if (effort === 'easy') return out(base + inc, 'progress')
-  // 4) C'était dur → on consolide, et surtout on ne force PAS la montée de stagnation.
+  // 5) C'était dur → on consolide, et surtout on ne force PAS la montée de stagnation.
   if (effort === 'hard') return out(base, 'keep')
-  // 5) Bloqué à la même charge depuis trop longtemps → on force la montée.
+  // 6) Bloqué à la même charge depuis trop longtemps → on force la montée.
+  //    Le cas 3 est passé avant : on ne force jamais la montée sur quelqu'un qui
+  //    est déjà à l'échec dans sa fourchette.
   if (streak >= stallAt) return out(base + inc, 'stall')
   return out(base, 'keep')
 }
@@ -249,7 +282,7 @@ export interface WeekStats {
   workSets: number
   volume: number
   rated: number // exercices avec un ressenti déclaré
-  hard: number // …dont « dur » ou « échec »
+  hard: number // …dont « dur » ou « à l'échec » : les séries menées au bout
 }
 
 // Sous ce nombre de ressentis, le ratio n'est pas fiable.
@@ -339,7 +372,11 @@ export function assessFatigue(opts: {
 
   if (hardRatio !== null && hardRatio > 0) {
     score += Math.round(hardRatio * 40)
-    if (hardRatio >= HARD_RATIO_ALERT) reasons.push(`${Math.round(hardRatio * 100)} % des exercices notés « dur » ou « échec » récemment`)
+    // Formulation : « poussés au bout » et non « en échec ». `fail` veut dire
+    // qu'on est allé à l'échec musculaire, ce qui est une FIN de série voulue, pas
+    // un incident. Le compteur, lui, reste juste : une série menée au bout coûte
+    // en récupération, qu'elle ait été choisie ou subie.
+    if (hardRatio >= HARD_RATIO_ALERT) reasons.push(`${Math.round(hardRatio * 100)} % des exercices poussés au bout récemment (« dur » ou « à l'échec »)`)
   }
 
   const stallPts = Math.min(30, stalled * 10)

@@ -965,7 +965,7 @@ export const RECIPES: Recipe[] = [
     name: 'Banane d\'avant-séance',
     kind: 'collation',
     batch: false,
-    steps: 'Une demi-heure avant la séance, au bureau — surtout PAS collée au petit-déjeuner : par-dessus un bol entier elle ne passe pas, et elle sert justement à avoir du sucre disponible pour l\'effort. C\'est ton seul apport entre 10 h et la salle : ne la saute pas, sinon la fin de séance décroche.',
+    steps: 'Une demi-heure avant la séance, au bureau — surtout PAS collée au petit-déjeuner : par-dessus un bol entier elle ne passe pas, et elle sert justement à avoir du sucre disponible pour l\'effort. C\'est ton seul apport entre 9 h et la salle : ne la saute pas, sinon la fin de séance décroche. Elle reste légère — 120 g, 3 g de fibres, aucun lipide — donc elle ne pèse pas au départ, contrairement au petit-déjeuner qui, lui, a reculé d\'une heure.',
     items: [
       { food: 'banane', g: 120 },
     ],
@@ -995,7 +995,7 @@ export const RECIPES: Recipe[] = [
     items: [
       { food: 'fromage-blanc-0', g: 180 },
       { food: 'whey-poudre', g: 18 },
-      { food: 'amandes', g: 12 },
+      { food: 'amandes', g: 27 },
     ],
   },
   {
@@ -1003,11 +1003,11 @@ export const RECIPES: Recipe[] = [
     name: 'Collation + shaker de l\'après-midi',
     kind: 'collation',
     batch: false,
-    steps: 'Vers 16 h - 17 h, quand la faim arrive. Le creux entre le déjeuner et le dîner est le moment où les plans déraillent. C\'est ici qu\'est passé le shaker d\'après-séance : de toutes tes prises de la journée, c\'était la seule sous le seuil utile (16 g de protéines), les autres étaient déjà saturées. Avec la whey et les amandes elle monte à 34 g. Deux façons de faire, au choix : la poudre versée dans le fromage blanc et remuée, ou le shaker à l\'eau bu à côté. Le sachet de whey reste au bureau, à côté de celui du petit-déjeuner — plus rien ne part dans le sac de sport.',
+    steps: 'Vers 16 h - 17 h, quand la faim arrive. Le creux entre le déjeuner et le dîner est le moment où les plans déraillent. C\'est ici qu\'est passé le shaker d\'après-séance : de toutes tes prises de la journée, c\'était la seule sous le seuil utile (16 g de protéines), les autres étaient déjà saturées. Avec la whey et les amandes elle monte à 34 g. Deux façons de faire, au choix : la poudre versée dans le fromage blanc et remuée, ou le shaker à l\'eau bu à côté. Le sachet de whey reste au bureau, à côté de celui du petit-déjeuner — plus rien ne part dans le sac de sport. Les amandes ont rejoint cette collation : elles étaient au petit-déjeuner, où leurs lipides ralentissaient la digestion juste avant la séance. Ici, elles n\'ont plus aucun effort à gêner.',
     items: [
       { food: 'fromage-blanc-0', g: 180 },
       { food: 'whey-poudre', g: 20 },
-      { food: 'amandes', g: 10 },
+      { food: 'amandes', g: 25 },
     ],
   },
   {
@@ -1033,11 +1033,17 @@ export const RECIPES: Recipe[] = [
   },
   // ─── Les petits-déjeuners ─────────────────────────────────────────────────
   //
-  // Tous calés sur les mêmes macros que le porridge : environ 540 kcal et 54 g de
-  // protéines. C'est la condition pour qu'en changer ne décale pas la journée — un
-  // petit-déjeuner « au choix » qui fait 200 kcal de plus n'est pas un choix, c'est
-  // un piège. Deux d'entre eux se préparent la veille, parce que le vrai obstacle à
-  // 10 h au bureau n'est pas l'envie, c'est le temps.
+  // Tous calés sur les mêmes macros : environ 440 kcal et 40 g de protéines. C'est
+  // la condition pour qu'en changer ne décale pas la journée — un petit-déjeuner
+  // « au choix » qui fait 200 kcal de plus n'est pas un choix, c'est un piège. Deux
+  // d'entre eux se préparent la veille, parce que le vrai obstacle à 9 h au bureau
+  // n'est pas l'envie, c'est le temps.
+  //
+  // Aucun ne contient plus d'oléagineux : amandes et beurre de cacahuète sont passés
+  // à la collation de l'après-midi. Ils portaient l'essentiel des lipides du matin,
+  // or les lipides ralentissent la vidange gastrique — parfait pour tenir jusqu'à
+  // midi, désastreux deux heures avant une séance. Le total de la journée n'a pas
+  // bougé d'un gramme : ils sont déplacés, pas retirés.
   {
     id: 'pdj-overnight',
     keeps: 3,
@@ -1052,7 +1058,6 @@ export const RECIPES: Recipe[] = [
       { food: 'fruits-rouges-surgeles', g: 100 },
       { food: 'lait-ecreme', g: 150 },
       { food: 'cannelle', g: 2 },
-      { food: 'amandes', g: 12 },
     ],
   },
   {
@@ -1068,7 +1073,6 @@ export const RECIPES: Recipe[] = [
       { food: 'flocons-d-avoine', g: 60 },
       { food: 'fruits-rouges-surgeles', g: 120 },
       { food: 'cannelle', g: 2 },
-      { food: 'amandes', g: 15 },
     ],
   },
   {
@@ -1083,7 +1087,6 @@ export const RECIPES: Recipe[] = [
       { food: 'flocons-d-avoine', g: 58 },
       { food: 'fruits-rouges-surgeles', g: 100 },
       { food: 'cannelle', g: 2 },
-      { food: 'beurre-de-cacahuete', g: 14 },
     ],
   },
   {
@@ -1098,7 +1101,6 @@ export const RECIPES: Recipe[] = [
       { food: 'flocons-d-avoine', g: 50 },
       { food: 'pomme', g: 150 },
       { food: 'cannelle', g: 2 },
-      { food: 'amandes', g: 14 },
     ],
   },
   {
@@ -1112,7 +1114,6 @@ export const RECIPES: Recipe[] = [
       { food: 'pain-complet', g: 55 },
       { food: 'fromage-blanc-0', g: 150 },
       { food: 'ail', g: 2 },
-      { food: 'huile-d-olive', g: 8 },
       { food: 'whey-poudre', g: 5 },
     ],
   },
@@ -1332,9 +1333,30 @@ export const STARCHY_IDS: string[] = [
 // pèsent dans l'assiette et ne sont PAS touchés par ce ratio — il ne s'applique qu'aux
 // féculents. À 30 %, les jours sans séance dépassaient leur cible de 120 kcal.
 export const RATIO_REST = 0.48
-// Jour avec séance : la boîte d'après-séance sert le gros des glucides,
-// donc seul le dîner est réduit (de 27 %).
-export const RATIO_DINNER_GYM = 0.73
+// Jour AVEC séance : la boîte d'après-séance porte 60 % de féculents en plus, et le
+// dîner n'est plus réduit du tout.
+//
+// Avant, c'était l'inverse : le déjeuner servait la recette telle quelle et le dîner
+// était coupé de 27 %. Résultat mesuré sur les quatorze jours du cycle, cible calculée
+// comme l'app la calcule (dayEnergy) : les jours de séance tombaient 80 à 190 kcal SOUS
+// leur cible pendant que les jours de repos collaient à la leur. La moyenne du cycle
+// était bonne — +11 kcal — et masquait une répartition fausse. Le déficit tombait donc
+// les jours où il fallait manger : début de séance lourd, sprint écourté, séries en
+// échec.
+//
+// Le levier est au déjeuner et pas ailleurs pour une raison simple : c'est le repas
+// qui suit la séance de vingt minutes. Les glucides y sont mieux placés qu'à 20 h 30,
+// et c'est le seul repas de la journée dont la portion peut vraiment bouger — 40 g de
+// riz sec deviennent 65, 175 g de pommes de terre deviennent 280.
+//
+// Ce sens de variation arrange aussi la préparation à l'avance (voir PREP_ON_HIGH_SIDE) :
+// on cuisine toujours la version « jour avec séance ». On peut laisser du riz dans une
+// boîte, on ne peut pas y ajouter celui qu'on n'a pas cuit.
+//
+// 1.6 n'est pas un chiffre rond choisi à vue : c'est la valeur qui ramène l'écart moyen
+// à +7 kcal les jours de séance et -8 les jours de repos. Trois tests la gardent, dont
+// un qui mesure les deux types de jours SÉPARÉMENT — c'est ce qui manquait.
+export const RATIO_LUNCH_GYM = 1.6
 
 export interface DayTemplate { lunch: string, dinner: string }
 // Cycle de 14 jours, index 0 = lundi de la semaine 1. Les recettes alternent
@@ -1363,7 +1385,7 @@ export interface Slot {
   label: string
   recipe?: string // recette fixe (collations) ; sinon fournie par le CYCLE
   from?: 'lunch' | 'dinner'
-  ratio?: 'rest' | 'dinnerGym' // modulation à appliquer aux féculents
+  ratio?: 'rest' | 'lunchGym' // modulation à appliquer aux féculents
 }
 
 // Journée AVEC séance entre midi et deux, calée sur le déroulé réel :
@@ -1372,13 +1394,26 @@ export interface Slot {
 //   ~12 h 25 - 13 h 20  séance
 //   13 h 30 - 13 h 50   retour au bureau, la boîte se mange dans la foulée
 //
-// Petit-déjeuner à 10 h : lever 8 h, travail à 9 h, et rien ne passe avant. Ça laisse
-// 2 h 15 avant la séance, ce qui est le bon écart — assez pour digérer, assez peu
-// pour ne pas repartir à jeun.
+// Petit-déjeuner à 9 h, en arrivant au bureau.
+//
+// Il était à 10 h, ce qui ne laissait que 2 h 25 avant la séance. Trop court : le
+// petit-déjeuner pèse 412 g et porte 15 g de fibres, et fibres comme lipides
+// ralentissent la vidange gastrique — c'est leur qualité le reste du temps, c'est
+// exactement ce qu'il ne faut pas avant un effort. Résultat, des débuts de séance
+// lourds et un sprint écourté pour ne pas être malade en reprenant le travail.
+//
+// 9 h donne 3 h 25, ce qui est l'écart normalement demandé pour un repas complet.
+// Et pas plus tôt : lever à 8 h, manger un quart d'heure après le réveil, c'est
+// remplacer un problème de digestion par un problème d'appétit.
 //
 // La banane reste à 11 h 45, soit 15 min avant le départ le plus tôt : elle est là
 // pour le sucre disponible pendant l'effort, donc elle doit rester proche de la
 // séance sans être avalée sur le pas de la porte.
+//
+// Elle ne pose pas le problème du petit-déjeuner : 120 g, 3 g de fibres, aucun
+// lipide. C'est le VOLUME cumulé qui gênait — 532 g dans l'estomac au départ, dont
+// la moitié avalée quarante minutes plus tôt. Le petit-déjeuner reculé d'une heure,
+// elle arrive sur un estomac qui a fini son travail.
 //
 // PAS de shaker d'après-séance. Il était calé à 13 h 20 — une heure où tu es au
 // vestiaire ou dans la rue — puis suivi 25 minutes plus tard d'un déjeuner à 45 g de
@@ -1388,12 +1423,12 @@ export interface Slot {
 // (0,4 g/kg ≈ 38 g). Le total calorique et protéique de la journée est INCHANGÉ,
 // c'est la même whey déplacée de quatre heures.
 export const SLOTS_GYM: Slot[] = [
-  { id: 'pdj', time: '10 h', label: 'Petit-déjeuner', recipe: 'pdj-croquant' },
-  { id: 'creatine', time: '10 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
+  { id: 'pdj', time: '9 h', label: 'Petit-déjeuner', recipe: 'pdj-croquant' },
+  { id: 'creatine', time: '9 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
   { id: 'pre', time: '11 h 45', label: 'Banane (avant la séance)', recipe: 'col-pre' },
-  { id: 'lunch', time: '13 h 45', label: 'Déjeuner (boîte, au retour de la salle)', from: 'lunch' },
+  { id: 'lunch', time: '13 h 45', label: 'Déjeuner (boîte, au retour de la salle)', from: 'lunch', ratio: 'lunchGym' },
   { id: 'snack', time: '17 h', label: 'Collation + shaker', recipe: 'col-aprem-salle' },
-  { id: 'dinner', time: '20 h 30', label: 'Dîner', from: 'dinner', ratio: 'dinnerGym' },
+  { id: 'dinner', time: '20 h 30', label: 'Dîner', from: 'dinner' },
   { id: 'night', time: '22 h 30', label: 'Avant de dormir', recipe: 'col-soir-salle' },
 ]
 
@@ -1402,8 +1437,8 @@ export const SLOTS_GYM: Slot[] = [
 // repas. Le déjeuner reste à 13 h 45 : garder le même horaire les deux types de jours
 // évite d'avoir faim à contretemps le lendemain d'un changement.
 export const SLOTS_REST: Slot[] = [
-  { id: 'pdj', time: '10 h', label: 'Petit-déjeuner', recipe: 'pdj-croquant' },
-  { id: 'creatine', time: '10 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
+  { id: 'pdj', time: '9 h', label: 'Petit-déjeuner', recipe: 'pdj-croquant' },
+  { id: 'creatine', time: '9 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
   { id: 'lunch', time: '13 h 45', label: 'Déjeuner (boîte)', from: 'lunch', ratio: 'rest' },
   { id: 'snack', time: '17 h', label: 'Collation', recipe: 'col-aprem-repos' },
   { id: 'dinner', time: '20 h 30', label: 'Dîner', from: 'dinner', ratio: 'rest' },

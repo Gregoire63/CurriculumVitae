@@ -222,15 +222,22 @@ net      = (brut − au repos) × 1,07               (EPOC)
 Soustraire le métabolisme de base est le point qui change tout : sans ça, on compte deux
 fois la même heure et on surestime chaque séance d'environ 80 kcal.
 
-La cible devient alors :
+La cible devient alors, et c'est **le seul** modèle du module (`dayEnergy`) :
 
 ```
-cible = métabolisme × 1,25 (NEAT hors séance) + dépense mesurée − déficit
+besoin = métabolisme × 1,2 + pas de la journée + dépense mesurée de la séance
+cible  = besoin − déficit           déficit = 20 % du besoin, borné à 400-700 kcal
 ```
 
-Et `targetFor(bmr, 0)` retombe **exactement** sur la cible d'un jour sans séance : les deux
-modes de calcul restent cohérents, un jour ne saute pas de cible quand on supprime une
-séance du journal (c'est verrouillé par un test).
+`sessionKcal = 0` retombe **exactement** sur la cible d'un jour sans séance : un jour ne
+saute pas de cible quand on supprime une séance du journal (c'est verrouillé par un test).
+
+**Il n'y a plus de forfait en parallèle.** `targetOf`, `tdeeOf` et `targetFor` — un modèle
+« métabolisme × facteur d'activité − déficit fixe » — ont été supprimés le 11/08. Aucun
+écran ne les appelait, mais la calibration du plan, elle, s'y référait : le plan collait à
+2 150 kcal pendant que l'app affichait 2 300, et les jours de séance sont restés 80 à
+190 kcal sous leur cible sans qu'un test bronche. Deux modèles de cible dans le même
+module, c'est un de trop — celui que personne ne regarde est celui qui dérive.
 
 **Sur les 5 séances réelles du journal de juillet**, le modèle donne de 334 à 535 kcal —
 soit des cibles de 2 070 à 2 270 kcal là où le forfait disait 2 180 pour tout le monde.
@@ -799,10 +806,16 @@ décrémente le stock.
 Les grammages stockés dans `data/nutritionProgram.ts` sont ceux d'un **jour avec séance**.
 Tout le reste est calculé à la volée, jamais stocké :
 
-- **jour sans séance** → féculents du midi et du soir × 0,70, et les slots `pre` (banane)
-  et `post` (shaker) disparaissent ;
-- **jour avec séance** → féculents du dîner × 0,73, parce que la boîte d'après-séance a
-  déjà servi le gros des glucides.
+- **jour sans séance** → féculents du midi et du soir × 0,48, et le slot `pre` (banane)
+  disparaît ;
+- **jour avec séance** → féculents de la boîte du midi **× 1,6**, le dîner intact.
+
+Ce dernier ratio a longtemps été l'inverse (dîner × 0,73, midi intact) et c'était l'erreur :
+mesuré sur les quatorze jours du cycle, le plan tombait 80 à 190 kcal **sous** sa cible les
+jours de séance pendant qu'il collait à la sienne les jours de repos. Le déficit tombait le
+mauvais jour. Le levier est au déjeuner parce que c'est le repas qui suit la séance de vingt
+minutes — et parce qu'on cuisine toujours la version « jour avec séance » : on peut laisser
+du riz dans une boîte, on ne peut pas y ajouter celui qu'on n'a pas cuit.
 
 Protéines, légumes et matières grasses ne bougent jamais. C'est ce qui protège la masse
 maigre et garde la satiété constante quand les calories baissent.

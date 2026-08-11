@@ -144,6 +144,22 @@ export function topOfRange(reps: string): number | null {
   return m ? parseInt(m[2], 10) : null
 }
 
+/**
+ * Borne BASSE de la fourchette. « 8-10 » → 8 ; « 15 » → 15 (une valeur seule est
+ * ses deux bornes à la fois).
+ *
+ * Elle sert à distinguer les deux situations que le ressenti « à l'échec » ne
+ * distingue pas tout seul : arriver à l'échec À 8 reps sur du 8-10, c'est la
+ * série qu'on voulait ; arriver à l'échec à 5, c'est une charge trop lourde.
+ * Sans cette borne, les deux donnaient le même conseil — redescendre.
+ */
+export function bottomOfRange(reps: string): number | null {
+  const range = reps.match(/(\d+)\s*-\s*(\d+)/)
+  if (range) return parseInt(range[1], 10)
+  const single = reps.match(/(\d+)/)
+  return single ? parseInt(single[1], 10) : null
+}
+
 // Incrément suggéré selon le groupe musculaire
 export function suggestedIncrement(ex: Exercise): number {
   const lower = ['quadris', 'ischios', 'fessiers', 'mollets']

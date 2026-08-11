@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, GYM_BAG, KEEPS_DEFAULT, MICRO_REFS,
-  RATIO_DINNER_GYM, RATIO_REST,
+  RATIO_LUNCH_GYM, RATIO_REST,
   KEEPS_FRESH, RECIPE_BY_ID, STARCHY_IDS, SLOTS_GYM, SLOTS_REST,
 } from '../../data/nutritionProgram'
 import {
@@ -21,7 +21,7 @@ import {
   FIBER_HIGH, FIBER_MIN, fiberIntake, fiberOf, fiberVerdict,
   normalizeWeek,
   selectionTotals, shoppingFrom, shoppingFromWeek, stockOf, weekDayPlans, weekDaysOn, weekGrams,
-  sessionBurn, sessionsOn, targetFor, targetOf, tdeeOf, usableDuration,
+  sessionBurn, sessionsOn, usableDuration,
   workSetCount,
 } from '../../lib/nutritionStats'
 import type { TrainingLike } from '../../lib/nutritionStats'
@@ -69,7 +69,7 @@ describe('modulation des féculents', () => {
   })
 
   it('arrondit au multiple de 5 g, pesable à la balance de cuisine', () => {
-    for (const it of scaleItems(items, RATIO_DINNER_GYM)) expect(it.g % 5).toBe(0)
+    for (const it of scaleItems(items, RATIO_LUNCH_GYM)) expect(it.g % 5).toBe(0)
   })
 
   it('laisse les portions intactes avec un ratio de 1', () => {
@@ -132,14 +132,33 @@ describe('journée', () => {
   // Les valeurs ne sont plus écrites en dur mais DÉRIVÉES du profil. C'est ce qui
   // fait qu'elles restent vraies quand le poids bouge — et le poids bouge, c'est
   // même l'objectif.
-  const BMR = bmrMifflin(92.6, 179, 29, 'h')!
-  const COMP = { fatRatio: 26.5, fatMass: 24.53, leanMass: 68.07 }
+  const BMR = bmrMifflin(92.4, 179, 29, 'h')!
+  const COMP = { fatRatio: 26.41, fatMass: 24.4, leanMass: 67.99 }
+
+  // Coût moyen d'une séance, calculé par `sessionBurn` sur les neuf séances
+  // réellement enregistrées entre le 21/07 et le 11/08 : 419 kcal.
+  const SEANCE = 420
+  // Télétravail le mardi et le vendredi.
+  const TT = (i: number) => [1, 4].includes(i % 7)
+
+  /**
+   * La cible d'un jour du cycle, calculée EXACTEMENT comme l'app la calcule.
+   *
+   * Ce détour par `dayEnergy` n'est pas une coquetterie, c'est la leçon d'une
+   * régression coûteuse. Ces tests s'appuyaient sur `targetOf`, un forfait
+   * métabolisme × facteur d'activité qu'AUCUN écran n'utilisait — Hero, Day,
+   * DaySheet et History appellent tous `dayEnergy`. Le plan était donc calibré
+   * sur un modèle mort : il collait à 2 150 kcal pendant que l'app affichait
+   * 2 300, et les jours de séance sont restés 80 à 190 kcal sous leur cible sans
+   * qu'un seul test bronche. `targetOf`, `tdeeOf` et `targetFor` ont été
+   * supprimés pour qu'on ne puisse plus recalibrer sur eux par mégarde.
+   */
+  const cibleDu = (i: number) =>
+    dayEnergy({ bmr: BMR, kg: 92.4, tt: TT(i), steps: null, sessionKcal: DEFAULT_TRAINED(i) ? SEANCE : 0 }).target
 
   it('tient la cible calorique du profil, jour par jour', () => {
     for (let i = 0; i < CYCLE_LENGTH; i++) {
-      const trained = DEFAULT_TRAINED(i)
-      const kcal = buildDay(i, trained).total.kcal
-      expect(Math.abs(kcal - targetOf(BMR, trained))).toBeLessThan(100)
+      expect(Math.abs(buildDay(i, DEFAULT_TRAINED(i)).total.kcal - cibleDu(i))).toBeLessThan(100)
     }
   })
 
@@ -147,18 +166,31 @@ describe('journée', () => {
     // Le jour par jour tolère 100 kcal ; la MOYENNE, elle, ne doit pas dériver —
     // c'est elle qui décide de la vitesse de perte réelle.
     let ecart = 0
-    for (let i = 0; i < CYCLE_LENGTH; i++) {
-      const trained = DEFAULT_TRAINED(i)
-      ecart += buildDay(i, trained).total.kcal - targetOf(BMR, trained)
-    }
+    for (let i = 0; i < CYCLE_LENGTH; i++) ecart += buildDay(i, DEFAULT_TRAINED(i)).total.kcal - cibleDu(i)
     expect(Math.abs(ecart / CYCLE_LENGTH)).toBeLessThan(30)
+  })
+
+  it('ne sous-sert pas les jours de séance au profit des jours de repos', () => {
+    // LA régression du 11/08. La moyenne sur le cycle était bonne (+11 kcal) et
+    // masquait une répartition fausse : -134 kcal les jours de séance, -8 les
+    // jours de repos. Autrement dit le déficit tombait les jours où il fallait
+    // manger — début de séance lourd, sprint écourté, séries en échec.
+    // Une moyenne juste ne prouve rien si les deux types de jours dérivent en
+    // sens opposés : il faut les mesurer SÉPARÉMENT.
+    let salle = 0, nSalle = 0, repos = 0, nRepos = 0
+    for (let i = 0; i < CYCLE_LENGTH; i++) {
+      const w = buildDay(i, DEFAULT_TRAINED(i)).total.kcal - cibleDu(i)
+      if (DEFAULT_TRAINED(i)) { salle += w; nSalle++ } else { repos += w; nRepos++ }
+    }
+    expect(Math.abs(salle / nSalle)).toBeLessThan(40)
+    expect(Math.abs(repos / nRepos)).toBeLessThan(40)
   })
 
   it('couvre la cible protéique sans la dépasser largement', () => {
     // Les deux bornes comptent. En dessous, on perd du muscle en déficit ; très
     // au-dessus, ce sont des calories qui iraient mieux en lipides ou en légumes,
     // puisque la synthèse musculaire plafonne.
-    const cible = proteinTarget(92.6, COMP)
+    const cible = proteinTarget(92.4, COMP)
     for (let i = 0; i < CYCLE_LENGTH; i++) {
       const p = roundMacros(buildDay(i, DEFAULT_TRAINED(i)).total).p
       expect(p).toBeGreaterThanOrEqual(cible * 0.92)
@@ -173,7 +205,7 @@ describe('journée', () => {
     // l'avait vu parce qu'aucun écran n'affichait les lipides face à leur cible.
     for (let i = 0; i < CYCLE_LENGTH; i++) {
       const trained = DEFAULT_TRAINED(i)
-      const cibles = macroTargets(92.6, targetOf(BMR, trained), COMP)
+      const cibles = macroTargets(92.4, cibleDu(i), COMP)
       const l = roundMacros(buildDay(i, trained).total).l
       expect(l).toBeGreaterThanOrEqual(cibles.l * 0.82)
     }
@@ -195,12 +227,6 @@ describe('dépense énergétique', () => {
   it('renvoie null tant que le profil est incomplet', () => {
     expect(bmrMifflin(94, null, 29, 'h')).toBeNull()
     expect(bmrMifflin(null, 179, 29, 'h')).toBeNull()
-  })
-
-  it('creuse un déficit dans les deux configurations', () => {
-    const b = bmrMifflin(94, 179, 29, 'h')!
-    expect(targetOf(b, true)).toBeLessThan(tdeeOf(b, true))
-    expect(targetOf(b, false)).toBeLessThan(tdeeOf(b, false))
   })
 
   it('vise 2,1 g de protéines par kilo', () => {
@@ -433,14 +459,19 @@ describe('dépense d\'une séance', () => {
 
 // ─── Cible dynamique ─────────────────────────────────────────────────────────
 describe('cible calorique dynamique', () => {
-  // Régression : les deux modes de calcul doivent coïncider, sinon un jour bascule
-  // brutalement de cible quand une séance est enregistrée puis supprimée.
+  // Il n'existe plus qu'UN modèle d'énergie, `dayEnergy`. Les forfaits statiques
+  // (`targetOf`, `tdeeOf`, `targetFor`, PAL_GYM/PAL_REST, GYM_DEFICIT/REST_DEFICIT)
+  // ont été supprimés : ils n'étaient utilisés par aucun écran et servaient de
+  // référence à la calibration du plan, qui a donc dérivé de 150 kcal sans alerte.
   it('monte avec la dépense mesurée', () => {
-    expect(targetFor(BMR, 550)).toBeGreaterThan(targetFor(BMR, 350))
+    const base = { bmr: BMR, kg: 94, tt: false, steps: 8000 }
+    expect(dayEnergy({ ...base, sessionKcal: 550 }).target)
+      .toBeGreaterThan(dayEnergy({ ...base, sessionKcal: 350 }).target)
   })
 
-  it('reste proche du forfait pour une séance moyenne', () => {
-    expect(Math.abs(targetFor(BMR, 440) - targetOf(BMR, true))).toBeLessThanOrEqual(60)
+  it('retombe sur un jour sans séance quand la séance est annulée', () => {
+    const base = { bmr: BMR, kg: 94, tt: false, steps: 8000 }
+    expect(dayEnergy({ ...base, sessionKcal: 0 }).target).toBe(dayEnergy(base).target)
   })
 })
 
@@ -830,9 +861,34 @@ describe('horaires des repas', () => {
     return Number(m[1]) * 60 + Number(m[2] ?? 0)
   }
 
-  it('rien avant 10 h : lever à 8 h, travail à 9 h, et rien ne passe avant', () => {
+  it('rien avant 9 h : lever à 8 h, et un quart d\'heure après le réveil rien ne passe', () => {
+    // Le petit-déjeuner était à 10 h. Il est passé à 9 h — l'heure d'arrivée au
+    // bureau — parce que 2 h 25 avant la séance ne suffisaient pas à digérer 412 g
+    // et 15 g de fibres : début de séance lourd, sprint écourté. 9 h donne 3 h 25.
+    //
+    // Et pas plus tôt : à 8 h 15, on remplacerait un problème de digestion par un
+    // problème d'appétit, ce qui est exactement ce qu'on cherche à éviter.
     for (const slots of [SLOTS_GYM, SLOTS_REST]) {
-      for (const s of slots) expect(minutes(s.time)).toBeGreaterThanOrEqual(600)
+      for (const s of slots) expect(minutes(s.time)).toBeGreaterThanOrEqual(540)
+    }
+  })
+
+  it('laisse au moins trois heures entre le petit-déjeuner et la séance', () => {
+    // C'est LE chiffre qui a changé, et celui qu'il faut garder : un repas complet
+    // demande 3 à 4 h avant un effort. Départ à la salle à 12 h au plus tôt.
+    const pdj = minutes(SLOTS_GYM.find(s => s.id === 'pdj')!.time)
+    expect(minutes('12 h') - pdj).toBeGreaterThanOrEqual(180)
+  })
+
+  it('garde les lipides du matin bas, ils retardent la vidange gastrique', () => {
+    // Les oléagineux sont passés du petit-déjeuner à la collation de l'après-midi :
+    // même total sur la journée, mais plus rien de gras juste avant l'entraînement.
+    for (const r of Object.values(RECIPE_BY_ID)) {
+      if (r.kind !== 'pdj') continue
+      // Le petit-déjeuner salé fait exception : ses lipides viennent des œufs, qui
+      // en sont la base — on ne peut pas les retirer sans supprimer le plat.
+      if (r.id === 'pdj-sale') continue
+      expect(macrosOf(r.items).l).toBeLessThan(10)
     }
   })
 
@@ -880,14 +936,14 @@ describe('horaires des repas', () => {
     }
   })
 
-  it('« 10 h » sans minutes est bien ordonné par la frise', () => {
-    // Le format français abrège « 10 h 00 » en « 10 h » : la frise doit quand même
-    // le placer avant 10 h 05, et pas le renvoyer en fin de journée.
+  it('« 9 h » sans minutes est bien ordonné par la frise', () => {
+    // Le format français abrège « 9 h 00 » en « 9 h » : la frise doit quand même
+    // le placer avant 9 h 05, et pas le renvoyer en fin de journée.
     const day = buildDay(0, true)
     const line = timelineOf(day, [], [])
     const t = line.map(e => minutes(e.time))
     expect(t).toEqual([...t].sort((a, b) => a - b))
-    expect(t[0]).toBe(600)
+    expect(t[0]).toBe(540)
   })
 })
 
@@ -971,8 +1027,11 @@ describe('adjustSignature — ce qu\'on a confirmé est-il encore ce qu\'on prop
   it('change d\'empreinte quand la portion visée change', () => {
     // C'est tout l'intérêt : on confirme « 250 g de riz », puis un extra de 300 kcal
     // rend le conseil caduc. La confirmation doit expirer d'elle-même.
-    const petit = adjustRemaining(day, Math.round(day.total.kcal) - 60, [], 0, 'separate')
-    const gros = adjustRemaining(day, Math.round(day.total.kcal) - 150, [], 0, 'separate')
+    // 80 et non 60 : le seuil de déclenchement EST à 60, et `Math.round` sur le
+    // total pouvait faire tomber l'écart réel à 59,6 selon les décimales du jour.
+    // Le test échouait alors sur un arrondi, pas sur le comportement testé.
+    const petit = adjustRemaining(day, Math.round(day.total.kcal) - 80, [], 0, 'separate')
+    const gros = adjustRemaining(day, Math.round(day.total.kcal) - 180, [], 0, 'separate')
     expect(petit!.portion!.toG).not.toBe(gros!.portion!.toG)
     expect(adjustSignature(petit)).not.toBe(adjustSignature(gros))
   })

@@ -503,19 +503,21 @@ const deloadAdvised = computed(() => {
   return fatigue(todayISO.value, todayDow.value).level === 'deload'
 })
 
-// Conseil de surcharge progressive. Tient compte du ressenti déclaré la dernière
-// fois : « facile » fait monter, « dur » consolide, « échec » fait redescendre.
+// Conseil de surcharge progressive. Les reps décident ; le ressenti les qualifie.
+// « à l'échec » ne fait plus redescendre à lui seul — seulement quand les reps
+// sont tombées SOUS la fourchette.
 function overloadHint(ex: Exercise): { cls: string; text: string } | null {
   if (ex.bodyweight || ex.superset) return null // au poids du corps / superset : progression gérée à la main
   const s = suggestWeight(ex)
   const felt = lastEffort(ex.id)
-  if (s.reason === 'deload') return { cls: 'stall', text: `💥 Échec la dernière fois → on redescend à ${s.weight} kg pour repartir propre` }
+  if (s.reason === 'deload') return { cls: 'stall', text: `💥 À l'échec sous la fourchette → on redescend à ${s.weight} kg pour repartir propre` }
   if (s.reason === 'progress') {
     return felt === 'easy' && s.weight === s.base + s.inc
       ? { cls: 'progress', text: `😀 Noté « facile » la dernière fois → passe à ${s.weight} kg` }
       : { cls: 'progress', text: `🎯 Objectif de reps atteint → +${s.inc} kg par série (jusqu'à ${s.weight} kg)` }
   }
   if (s.reason === 'stall') return { cls: 'stall', text: `⏫ Bloqué ${s.streak} séances à ${s.base} kg — on force +${s.inc} kg par série` }
+  if (s.reason === 'keep' && felt === 'fail') return { cls: 'keep', text: `💥 À l'échec dans la fourchette → on reste à ${s.base} kg et on va chercher la rep suivante` }
   if (s.reason === 'keep' && felt === 'hard') return { cls: 'keep', text: `😤 C'était dur → on reste à ${s.base} kg et on gagne des reps` }
   return null
 }
