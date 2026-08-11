@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
-import { expandItems, keepsOf, macrosOf, roundMacros } from '~/lib/nutritionStats'
+import { expandItems, ingredientLines, keepsOf, macrosOf, roundMacros } from '~/lib/nutritionStats'
 
 // LA fiche d'un plat : photo, ingrédients, recette. Une seule, ouverte depuis
 // n'importe quelle carte de l'application.
@@ -39,6 +39,15 @@ const sauceMacros = computed(() => (sauce.value
   ? roundMacros(macrosOf(sauce.value.items, library.value.foods))
   : null))
 const keeps = computed(() => (recipe.value ? keepsOf(recipe.value, library.value) : null))
+
+/**
+ * Les ingrédients, sauce comprise, chacun une seule fois.
+ *
+ * Le citron du dîner poisson apparaissait deux fois — 20 g dans le plat, 10 g dans la
+ * sauce — et pareil pour l'ail et les herbes. Devant le frigo, ça oblige à faire
+ * l'addition de tête. On additionne ici, et la part sauce reste en annotation.
+ */
+const lines = computed(() => (recipe.value ? ingredientLines(recipe.value, library.value) : []))
 </script>
 
 <template>
@@ -65,31 +74,30 @@ const keeps = computed(() => (recipe.value ? keepsOf(recipe.value, library.value
       </template>
 
       <template #default>
-        <div class="section-label">Ingrédients</div>
+        <!-- UNE seule liste, sauce comprise. Chaque ingrédient n'y figure qu'une fois,
+             avec son total : c'est la réponse à « qu'est-ce que je sors du frigo ».
+             La part qui va dans le pot est en annotation, pas sur une deuxième ligne. -->
+        <div class="section-label">Ingrédients<template v-if="sauce"> — sauce comprise</template></div>
         <ul class="rs-items">
-          <li v-for="it in recipe.items" :key="it.food" class="rs-item">
-            <span class="rs-q mono">{{ it.g }} g</span>
+          <li v-for="l in lines" :key="l.food" class="rs-item">
+            <span class="rs-q mono">{{ l.g }} g</span>
             <span class="rs-n">
-              {{ foodName(it.food) }}
-              <span v-if="foodBuy(it.food)" class="muted">{{ foodBuy(it.food) }}</span>
+              {{ foodName(l.food) }}
+              <span v-if="l.sauceOnly" class="rs-tag">pour la sauce</span>
+              <span v-else-if="l.sauceG" class="rs-tag">dont {{ l.sauceG }} g pour la sauce</span>
+              <span v-if="foodBuy(l.food)" class="muted">{{ foodBuy(l.food) }}</span>
             </span>
           </li>
         </ul>
         <p class="muted italic rs-raw">Viandes, poissons et féculents : toujours pesés crus.</p>
 
-        <!-- La sauce est une recette à part — elle se prépare dans un pot — mais ses
-             calories sont déjà comptées ci-dessus. Il faut donc la voir ici. -->
+        <!-- La sauce se prépare à part, dans un pot : sa préparation mérite son bloc.
+             Ses ingrédients, eux, sont déjà dans la liste ci-dessus. -->
         <template v-if="sauce">
-          <div class="section-label">Avec {{ sauce.name.toLowerCase() }}</div>
-          <ul class="rs-items">
-            <li v-for="it in sauce.items" :key="it.food" class="rs-item">
-              <span class="rs-q mono">{{ it.g }} g</span>
-              <span class="rs-n">{{ foodName(it.food) }}</span>
-            </li>
-          </ul>
+          <div class="section-label">{{ sauce.name }}</div>
           <p class="nu-note">{{ sauce.steps }}</p>
           <p v-if="sauceMacros" class="muted mono rs-raw">
-            La sauce compte pour {{ sauceMacros.kcal }} kcal et {{ sauceMacros.p }} g de protéines,
+            Elle compte pour {{ sauceMacros.kcal }} kcal et {{ sauceMacros.p }} g de protéines,
             déjà inclus dans le total ci-dessus.
           </p>
         </template>

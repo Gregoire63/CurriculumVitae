@@ -10,7 +10,7 @@ import {
   carryAdjustedTarget, dayEnergy, dayIntake, mergeFoods, mergeRecipes, nextMeal,
   resolveDay, slugify, timelineOf, validateFood, validateRecipe, weekBalance,
   CYCLE_EPOCH, cycleIndexOf, dayBurn, dayStatus, DEFAULT_TRAINED, dinnerAdjustment, fmtQty, isDayPlayed,
-  adjustSignature,
+  adjustSignature, ingredientLines,
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   fatRatioOf, leanMassOf, proteinPerKgLean, proteinPlan,
   PROTEIN_FAT_HIGH, PROTEIN_FAT_LOW, PROTEIN_LEAN_MAX, PROTEIN_LEAN_MIN,
@@ -892,6 +892,67 @@ describe('horaires des repas', () => {
 })
 
 // ─── Ajustement sur ce qui reste ─────────────────────────────────────────────
+describe('ingredientLines — chaque ingrédient une seule fois', () => {
+  it('additionne l\'aromate qui va dans le plat ET dans la sauce', () => {
+    // Le dîner poisson affichait « Citron 20 g » dans les ingrédients puis
+    // « Citron 10 g » dans la sauce. Devant le frigo, ça oblige à faire l'addition
+    // de tête — au mieux ; au pire on n'en sort que la moitié.
+    const lignes = ingredientLines(RECIPE_BY_ID['din-poisson'])
+    const citron = lignes.filter(l => l.food === 'citron')
+    expect(citron).toHaveLength(1)
+    expect(citron[0].g).toBe(30)
+    expect(citron[0].sauceG).toBe(10)
+    expect(citron[0].sauceOnly).toBe(false)
+  })
+
+  it('n\'affiche aucun ingrédient deux fois, sur AUCUN plat', () => {
+    // Six plats sur neuf sont concernés : c'est l'invariant, pas un cas isolé.
+    for (const r of Object.values(RECIPE_BY_ID)) {
+      const noms = ingredientLines(r).map(l => l.food)
+      expect(new Set(noms).size).toBe(noms.length)
+    }
+  })
+
+  it('marque ce qui n\'existe que dans la sauce', () => {
+    const lignes = ingredientLines(RECIPE_BY_ID['din-poisson'])
+    const yaourt = lignes.find(l => l.food === 'yaourt-grec-0')!
+    expect(yaourt.sauceOnly).toBe(true)
+    expect(yaourt.g).toBe(yaourt.sauceG)
+  })
+
+  it('laisse à zéro ce qui ne va pas dans la sauce', () => {
+    const lignes = ingredientLines(RECIPE_BY_ID['din-poisson'])
+    const poisson = lignes.find(l => l.food === 'cabillaud-colin')!
+    expect(poisson.sauceG).toBe(0)
+    expect(poisson.sauceOnly).toBe(false)
+  })
+
+  it('ne perd pas un gramme : le total colle aux macros du plat servi', () => {
+    // C'est le vrai garde-fou. Si la fusion oubliait une ligne ou en comptait une en
+    // trop, la fiche afficherait des ingrédients qui ne font pas les calories
+    // annoncées juste au-dessus.
+    for (const r of Object.values(RECIPE_BY_ID)) {
+      const parLignes = macrosOf(ingredientLines(r).map(l => ({ food: l.food, g: l.g })))
+      const parPlat = macrosOf(expandItems(r))
+      expect(parLignes.kcal).toBeCloseTo(parPlat.kcal, 6)
+      expect(parLignes.p).toBeCloseTo(parPlat.p, 6)
+    }
+  })
+
+  it('garde l\'ordre de la cuisine : le plat d\'abord, la sauce ensuite', () => {
+    const lignes = ingredientLines(RECIPE_BY_ID['din-poisson'])
+    expect(lignes[0].food).toBe('cabillaud-colin')
+    expect(lignes.at(-1)!.sauceOnly).toBe(true)
+  })
+
+  it('rend simplement les items quand le plat n\'a pas de sauce', () => {
+    const sansSauce = Object.values(RECIPE_BY_ID).find(r => !r.sauce && r.items.length > 1)!
+    const lignes = ingredientLines(sansSauce)
+    expect(lignes.map(l => l.food)).toEqual(sansSauce.items.map(i => i.food))
+    expect(lignes.every(l => l.sauceG === 0 && !l.sauceOnly)).toBe(true)
+  })
+})
+
 describe('adjustSignature — ce qu\'on a confirmé est-il encore ce qu\'on propose ?', () => {
   const day = buildDay(0, true)
 

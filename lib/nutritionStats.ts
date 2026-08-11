@@ -149,6 +149,57 @@ export function expandItems(recipe: Recipe, lib: Library = BUILTIN): RecipeItem[
   return sauce ? [...recipe.items, ...sauce.items] : recipe.items
 }
 
+/** Une ligne de la liste d'ingrédients d'une fiche : le total, et ce qui va dans la sauce. */
+export interface IngredientLine {
+  food: string
+  /** Total à sortir du frigo, sauce comprise. */
+  g: number
+  /** Part destinée à la sauce, 0 si l'ingrédient n'y entre pas. */
+  sauceG: number
+  /** Vrai quand l'ingrédient n'existe QUE dans la sauce (le yaourt grec, par exemple). */
+  sauceOnly: boolean
+}
+
+/**
+ * La liste d'ingrédients d'un plat, sauce comprise, SANS répétition.
+ *
+ * Six plats sur neuf font entrer le même aromate dans le plat et dans sa sauce, avec
+ * des quantités différentes : le dîner poisson affichait « Citron 20 g » dans les
+ * ingrédients puis « Citron 10 g » dans la sauce, et pareil pour l'ail et les herbes.
+ * Lire deux fois le même nom avec deux nombres différents oblige à faire l'addition
+ * de tête devant le frigo — au mieux ; au pire on n'en sort que la moitié.
+ *
+ * On additionne donc, et on garde la répartition en annotation. La liste répond à la
+ * question « qu'est-ce que je sors », l'annotation à « combien va dans le pot ».
+ *
+ * L'ordre suit celui du plat, puis celui de la sauce pour ce qui lui est propre :
+ * c'est l'ordre dans lequel on cuisine, pas l'ordre alphabétique.
+ */
+export function ingredientLines(recipe: Recipe, lib: Library = BUILTIN): IngredientLine[] {
+  const sauce = recipe.sauce ? lib.recipes[recipe.sauce] ?? RECIPE_BY_ID[recipe.sauce] : null
+  const out: IngredientLine[] = recipe.items.map(it => ({
+    food: it.food,
+    g: it.g,
+    sauceG: 0,
+    sauceOnly: false,
+  }))
+  if (!sauce) return out
+
+  const byFood = new Map(out.map(l => [l.food, l]))
+  for (const it of sauce.items) {
+    const found = byFood.get(it.food)
+    if (found) {
+      found.g = Math.round((found.g + it.g) * 100) / 100
+      found.sauceG = Math.round((found.sauceG + it.g) * 100) / 100
+      continue
+    }
+    const line: IngredientLine = { food: it.food, g: it.g, sauceG: it.g, sauceOnly: true }
+    out.push(line)
+    byFood.set(it.food, line)
+  }
+  return out
+}
+
 const EMPTY: Macros = { kcal: 0, p: 0, g: 0, l: 0 }
 
 /** Macros d'une liste d'ingrédients. Un aliment inconnu est ignoré plutôt que de faire planter la vue. */

@@ -839,6 +839,12 @@
 .rs-q { font-weight: 700; text-align: right; color: var(--accent-primary); }
 .rs-n { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .rs-n .muted { font-size: 10.5px; }
+/* La part d'un ingrédient qui va dans la sauce. Discrète mais lisible : elle répond
+   à « combien dans le pot » sans qu'on ait à chercher une seconde liste. */
+.rs-tag {
+  font-size: 10px; color: var(--accent-primary); background: var(--bg-secondary);
+  border-radius: 999px; padding: 1px 7px; white-space: nowrap;
+}
 .rs-raw { font-size: 11px; margin: 2px 0 0; }
 .rs-steps { margin: 0; }
 /* Un second bouton de fermeture en bas : celui de la photo est parti hors champ

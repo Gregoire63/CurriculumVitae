@@ -164,11 +164,23 @@ const canEatEdit = computed(() => !isFuture.value && !plan.value?.off)
         <p v-if="plan?.off" class="muted ds-empty">
           Jour marqué comme une absence dans ta semaine type : aucun repas prévu.
         </p>
+        <!-- Même carte que les séances au-dessus : la journée se lit d'un seul geste,
+             au lieu d'alterner entre une liste et des cartes. Les macros sont là parce
+             que la place est là — c'est ce qu'on vient vérifier en relisant un jour. -->
         <div v-else-if="plan" class="ds-meals">
           <div v-for="m in plan.meals" :key="m.slot" class="ds-meal" :class="{ eaten: done.has(m.slot) }">
-            <span class="ds-m-time mono">{{ m.time }}</span>
-            <span class="ds-m-name">{{ m.name }}</span>
-            <span class="ds-m-kcal mono">{{ done.has(m.slot) ? '✓' : Math.round(m.macros.kcal) }}</span>
+            <div class="ds-m-top">
+              <span class="ds-m-dot" />
+              <span class="ds-m-name">{{ m.name }}</span>
+              <span class="ds-m-time mono">{{ m.time }}</span>
+            </div>
+            <div class="ds-m-sub">
+              <span class="ds-m-kcal mono">{{ Math.round(m.macros.kcal) }} kcal</span>
+              <span class="ds-m-macros mono">
+                {{ Math.round(m.macros.p) }} P · {{ Math.round(m.macros.g) }} G · {{ Math.round(m.macros.l) }} L
+              </span>
+              <span class="ds-m-state">{{ done.has(m.slot) ? '✓ pris' : '—' }}</span>
+            </div>
           </div>
         </div>
         <button v-if="canEatEdit" class="btn-primary ds-open" @click="eatSheet = true">
