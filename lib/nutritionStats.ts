@@ -1539,7 +1539,14 @@ export interface TimelineEntry {
   done: boolean
 }
 
-const minutesOf = (time: string) => {
+/**
+ * « 13 h 45 » → 825. Le format français abrège « 10 h 00 » en « 10 h », d'où les
+ * minutes optionnelles. Un horaire illisible renvoie 9999 : il part en fin de frise
+ * au lieu de se retrouver à minuit, ce qui serait pire.
+ *
+ * Exporté depuis que les rappels de repas en ont besoin pour savoir quoi programmer.
+ */
+export const minutesOf = (time: string) => {
   const m = time.match(/(\d{1,2})\s*h?\s*(\d{2})?/)
   if (!m) return 9999
   return Number(m[1]) * 60 + Number(m[2] ?? 0)

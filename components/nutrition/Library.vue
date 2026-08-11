@@ -10,7 +10,7 @@ import { expandItems, macrosOf, roundMacros, validateFood, validateRecipe } from
 // Tout ce qui est livré avec le plan est modifiable, et tout ce qui manque peut être
 // créé — sinon on reste prisonnier d'une table de 31 aliments.
 const {
-  library, addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,
+  library, addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe, isRecipePatched,
   toggleRecipeActive, isRecipeActive, addFood, isCustomFood,
 } = useNutrition()
 
@@ -258,7 +258,15 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
                 {{ isRecipeActive(r.id) ? 'De côté' : 'Réactiver' }}
               </button>
               <button v-if="isCustomRecipe(r.id)" class="btn" @click="removeRecipe(r.id)">✕</button>
-              <button v-else class="btn" title="Revenir à la version d'origine" @click="resetRecipe(r.id)">↺</button>
+              <!-- Uniquement sur les plats RÉELLEMENT modifiés : leurs grammages
+                   locaux écrasent ceux du programme, y compris après une mise à
+                   jour. Affiché partout, ce bouton ne disait rien ; affiché ici, il
+                   pointe exactement les plats qui ne suivent plus le plan. -->
+              <button
+                v-else-if="isRecipePatched(r.id)" class="btn warn"
+                title="Ce plat a été modifié : il garde tes grammages et ignore les mises à jour du programme"
+                @click="resetRecipe(r.id)"
+              >↺ modifié</button>
             </div>
           </div>
         </article>

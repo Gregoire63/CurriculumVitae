@@ -447,3 +447,37 @@ describe('sauvegarde complète', () => {
     expect(() => n.restore({})).not.toThrow()
   })
 })
+
+describe('plats modifiés localement', () => {
+  it('ne signale rien tant qu\'on n\'a touché à aucun plat', async () => {
+    const n = await load()
+    expect(n.isRecipePatched('boite-a')).toBe(false)
+    expect(n.patchedRecipes.value).toEqual([])
+  })
+
+  it('signale un plat dont les grammages ont été modifiés', async () => {
+    // C'est ce qui fait qu'une mise à jour du programme peut passer inaperçue : le
+    // patch local écrase les grammages livrés, sans rien afficher.
+    const n = await load()
+    n.patchRecipe('boite-a', { items: [{ food: 'filet-de-poulet', g: 250 }] })
+    expect(n.isRecipePatched('boite-a')).toBe(true)
+    expect(n.patchedRecipes.value).toContain('boite-a')
+    expect(n.library.value.recipes['boite-a'].items[0].g).toBe(250)
+  })
+
+  it('« revenir à la version d\'origine » rend vraiment la main au programme', async () => {
+    const n = await load()
+    const livre = n.library.value.recipes['boite-a'].items.find(i => i.food === 'filet-de-poulet')!.g
+    n.patchRecipe('boite-a', { items: [{ food: 'filet-de-poulet', g: 250 }] })
+    n.resetRecipe('boite-a')
+    expect(n.isRecipePatched('boite-a')).toBe(false)
+    expect(n.library.value.recipes['boite-a'].items.find(i => i.food === 'filet-de-poulet')!.g).toBe(livre)
+  })
+
+  it('un plat créé de toutes pièces n\'est pas « modifié »', async () => {
+    // Il n'a pas de version livrée derrière lui : le bouton n'aurait aucun sens.
+    const n = await load()
+    const id = n.addRecipe({ name: 'Mon plat', kind: 'diner', batch: false, steps: '', items: [] })
+    expect(n.isRecipePatched(id)).toBe(false)
+  })
+})

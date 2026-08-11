@@ -7,6 +7,7 @@ import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
+import { useMealReminders } from '~/composables/useMealReminders'
 import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf } from '~/utils/sportStats'
 import type { Effort, PrKind } from '~/utils/sportStats'
 import '~/assets/css/sport.css'
@@ -634,6 +635,13 @@ onMounted(() => {
   // Volontairement non attendu : rien de ce qui s'affiche n'en dépend, et une balance
   // injoignable ne doit pas retarder le premier écran d'une milliseconde.
   useWithings().autoSync(isoOf(new Date())).catch(() => { /* hors ligne : ce sera pour la prochaine ouverture */ })
+  // Rappels de repas : on les repose à chaque ouverture. Sans ça, ceux d'hier
+  // resteraient en attente et ceux d'aujourd'hui n'existeraient pas.
+  const rem = useMealReminders()
+  rem.hydrate()
+  const nut = useNutrition()
+  nut.hydrate()
+  rem.reschedule(nut.dayFor(isoOf(new Date())).gym).catch(() => { /* notifications indisponibles */ })
   // Données de démo UNIQUEMENT en environnement local/test (jamais en prod) :
   // actif en `nuxt dev`, ou si NUXT_PUBLIC_SEED_TEST_DATA=true. En prod → rien.
   try {

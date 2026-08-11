@@ -183,6 +183,32 @@ export const FOODS: Food[] = [
     micro: { ca: 20, fe: 0.2, mg: 25, zn: 0.4, k: 380, vc: 1, vd: 1, o3: 200, b9: 8 },
   },
   {
+    id: 'maquereau',
+    cook: 'au four 12 min à 200 °C, ou à la poêle 3 min par face. En boîte au naturel, c\'est tout aussi bon et déjà cuit.',
+    name: 'Maquereau',
+    cat: 'viandes',
+    kcal: 205,
+    p: 19,
+    g: 0,
+    l: 14,
+    buy: 'frais, surgelé ou en boîte au naturel — deux fois moins cher que le saumon',
+    keeps: 2,
+    micro: { ca: 12, fe: 1.6, mg: 76, zn: 0.6, k: 314, vd: 13.8, o3: 2600, b9: 1 },
+  },
+  {
+    id: 'champignons-uv',
+    cook: 'émincés, 6 min à la poêle À SEC d\'abord, pour qu\'ils rendent leur eau',
+    name: 'Champignons exposés aux UV',
+    cat: 'legumes',
+    kcal: 22,
+    p: 3,
+    g: 1,
+    l: 0.3,
+    buy: 'cherche la mention « source de vitamine D » ou « exposés aux UV » sur la barquette — ce sont les mêmes champignons, passés sous une lampe. Les ordinaires n\'en contiennent quasiment pas.',
+    keeps: 3,
+    micro: { fib: 2, ca: 4, fe: 0.5, mg: 10, zn: 0.5, k: 350, vc: 2, vd: 10, b9: 25 },
+  },
+  {
     id: 'saumon',
     cook: 'côté peau 4 min sans le retourner, puis 1 min sur l\'autre face',
     name: 'Saumon',
@@ -778,11 +804,11 @@ export const RECIPES: Recipe[] = [
     batch: true,
     steps: 'Frotte le poulet AVANT cuisson avec paprika fumé, ail en poudre, cumin, sel, poivre et un filet de citron : la marinade sèche fait plus pour le goût que n\'importe quelle sauce ajoutée après. Four 200 °C, 22 min. Riz à l\'eau. Brocolis et poivrons vapeur. L\'huile s\'ajoute APRÈS cuisson, directement dans la boîte : c\'est le poste où le déficit se perd. La sauce blanche se met dans un pot à part, jamais dans la boîte.',
     items: [
-      { food: 'filet-de-poulet', g: 180 },
-      { food: 'riz-basmati', g: 48 },
-      { food: 'brocolis', g: 200 },
-      { food: 'poivrons', g: 100 },
-      { food: 'huile-d-olive', g: 10 },
+      { food: 'filet-de-poulet', g: 120 },
+      { food: 'riz-basmati', g: 40 },
+      { food: 'brocolis', g: 220 },
+      { food: 'poivrons', g: 120 },
+      { food: 'huile-d-olive', g: 20 },
       { food: 'paprika-fume', g: 2 },
       { food: 'ail-en-poudre', g: 3 },
       { food: 'cumin-moulu', g: 1 },
@@ -796,11 +822,11 @@ export const RECIPES: Recipe[] = [
     batch: true,
     steps: 'Bœuf poêlé à sec avec l\'oignon (il rend assez de gras), cumin et paprika jetés en fin de cuisson pour qu\'ils ne brûlent pas. Pommes de terre en cubes au four 200 °C, 30 min, avec l\'ail en poudre. Haricots verts vapeur. Le chimichurri à part réveille l\'ensemble au dernier moment.',
     items: [
-      { food: 'steak-hache-5', g: 180 },
-      { food: 'pommes-de-terre', g: 200 },
-      { food: 'haricots-verts', g: 200 },
+      { food: 'steak-hache-5', g: 125 },
+      { food: 'pommes-de-terre', g: 175 },
+      { food: 'haricots-verts', g: 220 },
       { food: 'oignon', g: 50 },
-      { food: 'huile-d-olive', g: 6 },
+      { food: 'huile-d-olive', g: 18 },
       { food: 'cumin-moulu', g: 2 },
       { food: 'paprika-fume', g: 2 },
       { food: 'ail-en-poudre', g: 2 },
@@ -814,12 +840,12 @@ export const RECIPES: Recipe[] = [
     batch: true,
     steps: 'Pâtes al dente : elles finiront de cuire au réchauffage. Sauce oignon + ail + courgettes en dés + tomates concassées + herbes, thon ajouté hors du feu. Les cornichons se coupent au dernier moment : c\'est le croquant et l\'acide qui manquent toujours à un plat réchauffé. Le basilic se déchire À LA MAIN et se pose dans l\'assiette au dernier moment : cuit ou réchauffé, il noircit et ne sert plus à rien. Très bon froid, en salade de pâtes.',
     items: [
-      { food: 'thon-au-naturel-egoutte', g: 160 },
-      { food: 'pates-completes', g: 62 },
+      { food: 'thon-au-naturel-egoutte', g: 110 },
+      { food: 'pates-completes', g: 54 },
       { food: 'tomates-concassees', g: 200 },
       { food: 'courgettes', g: 200 },
       { food: 'oignon', g: 50 },
-      { food: 'huile-d-olive', g: 8 },
+      { food: 'huile-d-olive', g: 18 },
       { food: 'ail', g: 5 },
       { food: 'herbes-de-provence', g: 2 },
       { food: 'cornichons', g: 20 },
@@ -834,11 +860,11 @@ export const RECIPES: Recipe[] = [
     batch: false,
     steps: 'Cabillaud en papillote au four, 15 min, avec citron, ail et herbes DANS la papillote — le poisson prend le goût en cuisant, il ne le prend plus après. Pommes de terre vapeur. Le poisson ne se réchauffe pas bien : s\'il te reste dix minutes le soir même, préfère le cuire à la minute.',
     items: [
-      { food: 'cabillaud-colin', g: 220 },
-      { food: 'pommes-de-terre', g: 230 },
+      { food: 'cabillaud-colin', g: 160 },
+      { food: 'pommes-de-terre', g: 190 },
       { food: 'haricots-verts', g: 250 },
-      { food: 'huile-d-olive', g: 10 },
-      { food: 'pain-complet', g: 20 },
+      { food: 'huile-d-olive', g: 18 },
+      { food: 'pain-complet', g: 15 },
       { food: 'citron', g: 20 },
       { food: 'ail', g: 5 },
       { food: 'herbes-de-provence', g: 2 },
@@ -852,14 +878,31 @@ export const RECIPES: Recipe[] = [
     batch: false,
     steps: 'Dinde en lanières à la poêle très chaude avec les courgettes et les champignons. Sauce soja, gingembre râpé et ail en fin de cuisson, hors du feu : le gingembre cuit perd tout son mordant. Riz à côté.',
     items: [
-      { food: 'escalope-de-dinde', g: 220 },
-      { food: 'riz-basmati', g: 42 },
+      { food: 'escalope-de-dinde', g: 150 },
+      { food: 'riz-basmati', g: 40 },
       { food: 'courgettes', g: 300 },
-      { food: 'champignons', g: 100 },
-      { food: 'huile-d-olive', g: 10 },
+      { food: 'champignons-uv', g: 100 },
+      { food: 'huile-d-olive', g: 18 },
       { food: 'gingembre-frais', g: 8 },
       { food: 'ail', g: 5 },
       { food: 'sauce-soja', g: 15 },
+    ],
+  },
+  {
+    id: 'din-maquereau',
+    sauce: 'sauce-blanche',
+    name: 'Maquereau au four, pommes de terre, haricots',
+    kind: 'diner',
+    batch: true,
+    keeps: 2,
+    steps: 'Maquereau au four 12 min à 200 °C avec le citron et l\'ail, ou en boîte au naturel égoutté si tu n\'as pas le temps — même valeur, aucun travail. Pommes de terre à l\'eau, haricots vapeur. PAS d\'huile ajoutée dans ce plat : le maquereau en apporte déjà 21 g à lui seul, c\'est le poisson le plus gras du programme et c\'est exactement pour ça qu\'il est là. Il porte à lui seul le tiers de tes besoins en vitamine D de la journée.',
+    items: [
+      { food: 'maquereau', g: 150 },
+      { food: 'pommes-de-terre', g: 190 },
+      { food: 'haricots-verts', g: 250 },
+      { food: 'citron', g: 20 },
+      { food: 'ail', g: 5 },
+      { food: 'herbes-de-provence', g: 2 },
     ],
   },
   {
@@ -870,10 +913,10 @@ export const RECIPES: Recipe[] = [
     batch: false,
     steps: 'Saumon à la poêle côté peau, 4 min sans le retourner, puis 1 min sur l\'autre face. Patate douce en frites au four, saupoudrée de paprika fumé. Épinards poêlés à l\'ail, citron pressé dessus au moment de servir.',
     items: [
-      { food: 'saumon', g: 170 },
-      { food: 'patate-douce', g: 210 },
+      { food: 'saumon', g: 150 },
+      { food: 'patate-douce', g: 190 },
       { food: 'epinards', g: 250 },
-      { food: 'huile-d-olive', g: 5 },
+      { food: 'huile-d-olive', g: 4 },
       { food: 'citron', g: 15 },
       { food: 'ail', g: 5 },
       { food: 'paprika-fume', g: 1 },
@@ -887,13 +930,13 @@ export const RECIPES: Recipe[] = [
     batch: false,
     steps: '3 œufs ENTIERS, jaunes compris — aucun gaspillage. Dinde émincée saisie d\'abord, puis les légumes et l\'ail, puis les œufs battus par-dessus. Persil frais jeté à la fin, hors du feu. 10 min chrono.',
     items: [
-      { food: 'ufs-entiers', g: 165 },
-      { food: 'escalope-de-dinde', g: 100 },
+      { food: 'ufs-entiers', g: 180 },
+      { food: 'escalope-de-dinde', g: 60 },
       { food: 'poivrons', g: 150 },
-      { food: 'champignons', g: 100 },
+      { food: 'champignons-uv', g: 100 },
       { food: 'epinards', g: 100 },
-      { food: 'pain-complet', g: 20 },
-      { food: 'huile-d-olive', g: 3 },
+      { food: 'pain-complet', g: 15 },
+      { food: 'huile-d-olive', g: 5 },
       { food: 'ail', g: 5 },
       { food: 'cumin-moulu', g: 1 },
       { food: 'persil-frais', g: 10 },
@@ -907,11 +950,11 @@ export const RECIPES: Recipe[] = [
     batch: true,
     steps: 'Lentilles 20 min à l\'eau non salée, avec une gousse d\'ail entière dedans — à cuire pendant la session de cuisine, elles se gardent 4 jours. Poulet grillé, citron pressé dessus. Salade ajoutée au moment de manger, jamais avant : elle rend de l\'eau et se flétrit en une heure.',
     items: [
-      { food: 'filet-de-poulet', g: 200 },
-      { food: 'lentilles-vertes', g: 45 },
+      { food: 'filet-de-poulet', g: 140 },
+      { food: 'lentilles-vertes', g: 40 },
       { food: 'salade-verte', g: 100 },
       { food: 'tomates-concassees', g: 100 },
-      { food: 'huile-d-olive', g: 8 },
+      { food: 'huile-d-olive', g: 18 },
       { food: 'ail', g: 5 },
       { food: 'herbes-de-provence', g: 2 },
       { food: 'citron', g: 15 },
@@ -930,7 +973,7 @@ export const RECIPES: Recipe[] = [
   // Le shaker d'après-séance n'existe plus. Ce n'est pas un oubli : à 13 h 20 tu es
   // au vestiaire ou dans la rue, et tu manges ta boîte à 13 h 45. Un shaker calé
   // 25 minutes avant un déjeuner à 45 g de protéines ne servait à rien, et un shaker
-  // qu'il faut transporter est un shaker qu'on oublie. Ses 30 g de whey sont passés
+  // qu'il faut transporter est un shaker qu'on oublie. Sa whey est passée
   // sur la collation de 17 h (`col-aprem-salle`), la seule prise de la journée qui
   // était sous le seuil utile. Voir le commentaire de SLOTS_GYM plus bas.
   {
@@ -948,10 +991,11 @@ export const RECIPES: Recipe[] = [
     name: 'Collation de l\'après-midi',
     kind: 'collation',
     batch: false,
-    steps: 'Vers 16 h - 17 h, quand la faim arrive. Le creux entre le déjeuner et le dîner est le moment où les plans déraillent.',
+    steps: 'Vers 16 h - 17 h, quand la faim arrive. Le creux entre le déjeuner et le dîner est le moment où les plans déraillent. La whey est ici aussi, et pas seulement les jours de séance : le muscle se répare SURTOUT les jours de repos, et la cible protéique ne baisse pas parce qu\'on n\'est pas allé à la salle. Sans elle, cette collation tombait à 16 g de protéines contre 34 les jours d\'entraînement — le manque tombait le mauvais jour.',
     items: [
-      { food: 'fromage-blanc-0', g: 200 },
-      { food: 'pomme', g: 150 },
+      { food: 'fromage-blanc-0', g: 180 },
+      { food: 'whey-poudre', g: 18 },
+      { food: 'amandes', g: 12 },
     ],
   },
   {
@@ -959,10 +1003,11 @@ export const RECIPES: Recipe[] = [
     name: 'Collation + shaker de l\'après-midi',
     kind: 'collation',
     batch: false,
-    steps: 'Vers 16 h - 17 h, quand la faim arrive. Le creux entre le déjeuner et le dîner est le moment où les plans déraillent. C\'est ici qu\'est passé le shaker d\'après-séance : de toutes tes prises de la journée, c\'était la seule sous le seuil utile (16 g de protéines), les autres étaient déjà saturées. Avec la whey elle monte à 43 g. Deux façons de faire, au choix : la poudre versée dans le fromage blanc et remuée, ou le shaker à l\'eau bu à côté. Le sachet de whey reste au bureau, à côté de celui du petit-déjeuner — plus rien ne part dans le sac de sport.',
+    steps: 'Vers 16 h - 17 h, quand la faim arrive. Le creux entre le déjeuner et le dîner est le moment où les plans déraillent. C\'est ici qu\'est passé le shaker d\'après-séance : de toutes tes prises de la journée, c\'était la seule sous le seuil utile (16 g de protéines), les autres étaient déjà saturées. Avec la whey et les amandes elle monte à 34 g. Deux façons de faire, au choix : la poudre versée dans le fromage blanc et remuée, ou le shaker à l\'eau bu à côté. Le sachet de whey reste au bureau, à côté de celui du petit-déjeuner — plus rien ne part dans le sac de sport.',
     items: [
-      { food: 'fromage-blanc-0', g: 200 },
-      { food: 'whey-poudre', g: 30 },
+      { food: 'fromage-blanc-0', g: 180 },
+      { food: 'whey-poudre', g: 20 },
+      { food: 'amandes', g: 10 },
     ],
   },
   {
@@ -1002,11 +1047,12 @@ export const RECIPES: Recipe[] = [
     steps: 'LA VEILLE : avoine, fromage blanc, lait et cannelle dans un bocal, fruits rouges surgelés par-dessus. Le lait n\'est pas facultatif — l\'avoine absorbe plusieurs fois son poids en eau, et sans lui le mélange devient pâteux. LE MATIN, dans le bocal : la protéine en poudre et la créatine, puis on remue. La poudre mise la veille gélifie pendant la nuit. Se garde 3 jours au frigo. Si la texture ne te convient toujours pas, prends plutôt le bol cheesecake ou le smoothie : l\'avoine crue trempée ne plaît pas à tout le monde, et ce n\'est pas une question d\'habitude à prendre.',
     items: [
       { food: 'flocons-d-avoine', g: 55 },
-      { food: 'fromage-blanc-0', g: 250 },
-      { food: 'whey-poudre', g: 30 },
+      { food: 'fromage-blanc-0', g: 200 },
+      { food: 'whey-poudre', g: 10 },
       { food: 'fruits-rouges-surgeles', g: 100 },
       { food: 'lait-ecreme', g: 150 },
       { food: 'cannelle', g: 2 },
+      { food: 'amandes', g: 12 },
     ],
   },
   {
@@ -1017,11 +1063,12 @@ export const RECIPES: Recipe[] = [
     batch: true,
     steps: 'L\'avoine ne trempe PAS : c\'est tout l\'intérêt. Les flocons sont déjà précuits à la vapeur avant d\'être laminés, ils se mangent crus et secs — c\'est le principe du muesli. LA VEILLE, ou trois pots d\'un coup : fromage blanc et fruits rouges surgelés dans un bocal, rien d\'autre. À CÔTÉ, dans un petit sachet : l\'avoine, la protéine en poudre et la cannelle. AU MOMENT DE MANGER : tu verses le sachet, tu remues, tu manges tout de suite. Si tu mélanges à l\'avance, l\'avoine boit l\'eau du fromage blanc et tu retombes exactement sur la texture molle que tu ne supportes pas.',
     items: [
-      { food: 'fromage-blanc-0', g: 250 },
-      { food: 'whey-poudre', g: 30 },
-      { food: 'flocons-d-avoine', g: 65 },
+      { food: 'fromage-blanc-0', g: 200 },
+      { food: 'whey-poudre', g: 15 },
+      { food: 'flocons-d-avoine', g: 60 },
       { food: 'fruits-rouges-surgeles', g: 120 },
       { food: 'cannelle', g: 2 },
+      { food: 'amandes', g: 15 },
     ],
   },
   {
@@ -1032,10 +1079,11 @@ export const RECIPES: Recipe[] = [
     steps: 'Pour les matins où rien ne passe : un liquide se boit quand un bol ne s\'avale pas. Lait écrémé, whey, avoine mixée, fruits rouges, cannelle. Trente secondes au blender, et ça se finit dans la voiture ou devant l\'ordinateur.',
     items: [
       { food: 'lait-ecreme', g: 250 },
-      { food: 'whey-poudre', g: 42 },
-      { food: 'flocons-d-avoine', g: 62 },
+      { food: 'whey-poudre', g: 22 },
+      { food: 'flocons-d-avoine', g: 58 },
       { food: 'fruits-rouges-surgeles', g: 100 },
       { food: 'cannelle', g: 2 },
+      { food: 'beurre-de-cacahuete', g: 14 },
     ],
   },
   {
@@ -1045,11 +1093,12 @@ export const RECIPES: Recipe[] = [
     batch: false,
     steps: 'Fromage blanc fouetté avec la whey pour qu\'il devienne mousseux — c\'est le fouet qui fait la texture, pas un ingrédient de plus. Pomme râpée avec la peau, avoine par-dessus, cannelle généreuse. Le goût de dessert pour les macros d\'un petit-déjeuner.',
     items: [
-      { food: 'fromage-blanc-0', g: 300 },
-      { food: 'whey-poudre', g: 28 },
+      { food: 'fromage-blanc-0', g: 230 },
+      { food: 'whey-poudre', g: 14 },
       { food: 'flocons-d-avoine', g: 50 },
       { food: 'pomme', g: 150 },
       { food: 'cannelle', g: 2 },
+      { food: 'amandes', g: 14 },
     ],
   },
   {
@@ -1060,10 +1109,11 @@ export const RECIPES: Recipe[] = [
     steps: 'La version salée, pour les matins où le sucré écœure. Œufs brouillés à feu DOUX en remuant sans arrêt (le feu vif les rend caoutchouteux), pain complet grillé, fromage blanc à côté avec ciboulette et poivre. Huit minutes.',
     items: [
       { food: 'ufs-entiers', g: 165 },
-      { food: 'pain-complet', g: 70 },
-      { food: 'fromage-blanc-0', g: 200 },
-      { food: 'whey-poudre', g: 12 },
+      { food: 'pain-complet', g: 55 },
+      { food: 'fromage-blanc-0', g: 150 },
       { food: 'ail', g: 2 },
+      { food: 'huile-d-olive', g: 8 },
+      { food: 'whey-poudre', g: 5 },
     ],
   },
 
@@ -1275,8 +1325,13 @@ export const STARCHY_IDS: string[] = [
   'riz-basmati',
 ]
 
-// Jour sans séance : féculents du midi ET du soir réduits de 30 %.
-export const RATIO_REST = 0.7
+// Jour sans séance : féculents du midi ET du soir réduits de moitié.
+//
+// La coupe est plus franche qu'avant (elle était de 30 %) pour une raison précise :
+// depuis que les plats portent leur vraie dose de lipides, l'huile et les oléagineux
+// pèsent dans l'assiette et ne sont PAS touchés par ce ratio — il ne s'applique qu'aux
+// féculents. À 30 %, les jours sans séance dépassaient leur cible de 120 kcal.
+export const RATIO_REST = 0.48
 // Jour avec séance : la boîte d'après-séance sert le gros des glucides,
 // donc seul le dîner est réduit (de 27 %).
 export const RATIO_DINNER_GYM = 0.73
@@ -1289,14 +1344,14 @@ export const CYCLE: DayTemplate[] = [
   { lunch: 'boite-a', dinner: 'din-dinde' },
   { lunch: 'boite-a', dinner: 'din-omelette' },
   { lunch: 'boite-b', dinner: 'din-saumon' },
-  { lunch: 'boite-b', dinner: 'din-poisson' },
+  { lunch: 'boite-b', dinner: 'din-maquereau' },
   { lunch: 'boite-b', dinner: 'din-poulet' },
   { lunch: 'boite-c', dinner: 'din-dinde' },
   { lunch: 'boite-c', dinner: 'din-poisson' },
   { lunch: 'boite-c', dinner: 'din-saumon' },
   { lunch: 'boite-c', dinner: 'din-omelette' },
   { lunch: 'boite-a', dinner: 'din-dinde' },
-  { lunch: 'boite-a', dinner: 'din-poisson' },
+  { lunch: 'boite-a', dinner: 'din-maquereau' },
   { lunch: 'boite-a', dinner: 'din-poulet' },
   { lunch: 'boite-b', dinner: 'din-dinde' },
 ]
@@ -1328,7 +1383,7 @@ export interface Slot {
 // PAS de shaker d'après-séance. Il était calé à 13 h 20 — une heure où tu es au
 // vestiaire ou dans la rue — puis suivi 25 minutes plus tard d'un déjeuner à 45 g de
 // protéines. Deux prises saturées collées l'une à l'autre, et un objet de plus à
-// transporter : c'est celui qui se faisait oublier. Ses 30 g de whey sont passés sur
+// transporter : c'est celui qui se faisait oublier. Sa whey est passée sur
 // la collation de 17 h, la seule prise de la journée qui était sous le seuil utile
 // (0,4 g/kg ≈ 38 g). Le total calorique et protéique de la journée est INCHANGÉ,
 // c'est la même whey déplacée de quatre heures.

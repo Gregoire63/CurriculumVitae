@@ -212,6 +212,21 @@ export function useNutrition() {
     userRecipes.value = userRecipes.value.filter(r => r.id !== id)
     write(RECIPES_KEY, userRecipes.value)
   }
+  /**
+   * Ce plat porte-t-il une modification locale ?
+   *
+   * La question n'est pas cosmétique : un patch écrase les champs livrés (voir
+   * `mergeRecipes`). Un plat modifié un jour dans l'app garde donc SES grammages
+   * même après une mise à jour du programme — et rien ne le signalait, puisque le
+   * bouton « revenir à la version d'origine » s'affichait sur tous les plats.
+   */
+  const isRecipePatched = (id: string) =>
+    !!recipePatches.value[id] && Object.keys(recipePatches.value[id]).length > 0
+  const isFoodPatched = (id: string) =>
+    !!foodPatches.value[id] && Object.keys(foodPatches.value[id]).length > 0
+  /** Les plats livrés qui ne suivent plus le programme, pour pouvoir les signaler. */
+  const patchedRecipes = computed(() => Object.keys(recipePatches.value).filter(isRecipePatched))
+
   function resetRecipe(id: string) {
     const next = { ...recipePatches.value }
     delete next[id]
@@ -582,6 +597,7 @@ export function useNutrition() {
     freezer, setFreezer,
     isEaten, toggleEaten, eatenSlots, eatenCount, isPacked, togglePacked, packedCount,
     isAdjustApplied, setAdjustApplied, clearAdjustApplied,
+    isRecipePatched, isFoodPatched, patchedRecipes,
     extrasFor, addExtra, removeExtra,
     addFood, patchFood, removeFood, resetFood, isCustomFood,
     addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,

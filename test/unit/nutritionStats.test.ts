@@ -65,7 +65,7 @@ describe('modulation des féculents', () => {
     const out = scaleItems(items, RATIO_REST)
     expect(out.find(i => i.food === 'filet-de-poulet')!.g).toBe(180)
     expect(out.find(i => i.food === 'brocolis')!.g).toBe(200)
-    expect(out.find(i => i.food === 'riz-basmati')!.g).toBe(55) // 80 × 0,70 arrondi à 5 g
+    expect(out.find(i => i.food === 'riz-basmati')!.g).toBe(40) // 80 × 0,48 arrondi à 5 g
   })
 
   it('arrondit au multiple de 5 g, pesable à la balance de cuisine', () => {
@@ -89,21 +89,30 @@ describe('journée', () => {
     expect(gym).toBeGreaterThan(rest)
   })
 
-  // Régression : la séance annulée doit retirer la banane ET la whey de la collation,
-  // sinon on garde ~220 kcal d'un effort qui n'a pas eu lieu. Depuis que le shaker est
-  // passé de 13 h 20 à 17 h, c'est la collation de l'après-midi qui porte la whey :
-  // c'est donc elle qu'il faut surveiller, pas un créneau `post` qui n'existe plus.
-  it('retire la banane et la whey de l\'après-midi quand la séance saute', () => {
+    // Régression : la séance annulée doit retirer la banane, sinon on garde les
+  // calories d'un effort qui n'a pas eu lieu.
+  //
+  // Ce test surveillait aussi l'absence de whey dans la collation d'un jour sans
+  // séance. Ce n'est plus le bon invariant, et c'était même l'erreur : la cible
+  // protéique ne baisse pas les jours de repos — le muscle s'y répare — donc la
+  // whey est désormais dans les DEUX collations. Ce qui distingue un jour sans
+  // séance, c'est la banane et les féculents, pas les protéines.
+  it('retire la banane et allège les féculents quand la séance saute', () => {
     const off = buildDay(0, false)
+    const on = buildDay(0, true)
     expect(off.meals.map(m => m.slot)).not.toContain('pre')
-
-    const snackOff = off.meals.find(m => m.slot === 'snack')!
-    expect(snackOff.items.map(i => i.food)).not.toContain('whey-poudre')
-
-    const snackGym = buildDay(0, true).meals.find(m => m.slot === 'snack')!
-    expect(snackGym.items.map(i => i.food)).toContain('whey-poudre')
-    expect(snackGym.macros.kcal).toBeGreaterThan(snackOff.macros.kcal - 100)
+    expect(off.total.kcal).toBeLessThan(on.total.kcal)
+    expect(off.total.g).toBeLessThan(on.total.g)
   })
+
+  it('garde les protéines les jours sans séance : le muscle se répare surtout là', () => {
+    const off = buildDay(0, false)
+    const snack = off.meals.find(m => m.slot === 'snack')!
+    expect(snack.items.map(i => i.food)).toContain('whey-poudre')
+    // Et le total protéique de la journée reste dans la même fourchette.
+    expect(off.total.p).toBeGreaterThan(buildDay(0, true).total.p * 0.85)
+  })
+
 
   it('garde la créatine les jours sans séance', () => {
     // La saturation du muscle dépend de la régularité, pas de l'entraînement du jour.
@@ -113,17 +122,60 @@ describe('journée', () => {
     expect(gym).toContain('creatine-monohydrate')
   })
 
-  it('tient la cible calorique à moins de 100 kcal près sur les 14 jours', () => {
+  // ─── Le plan doit tenir SA PROPRE cible ─────────────────────────────────
+  //
+  // Ces trois tests sont le contrôle qui manquait. Sans eux, le plan a livré pendant
+  // des semaines 236 g de protéines pour une cible de 176 — 34 % au-dessus — et
+  // 37 g de lipides pour un plancher de 74, sans que rien ne le signale. Un écart de
+  // cette taille ne se voit pas à l'œil : chaque plat pris isolément semblait normal.
+  //
+  // Les valeurs ne sont plus écrites en dur mais DÉRIVÉES du profil. C'est ce qui
+  // fait qu'elles restent vraies quand le poids bouge — et le poids bouge, c'est
+  // même l'objectif.
+  const BMR = bmrMifflin(92.6, 179, 29, 'h')!
+  const COMP = { fatRatio: 26.5, fatMass: 24.53, leanMass: 68.07 }
+
+  it('tient la cible calorique du profil, jour par jour', () => {
     for (let i = 0; i < CYCLE_LENGTH; i++) {
       const trained = DEFAULT_TRAINED(i)
       const kcal = buildDay(i, trained).total.kcal
-      expect(Math.abs(kcal - (trained ? 2180 : 1930))).toBeLessThan(100)
+      expect(Math.abs(kcal - targetOf(BMR, trained))).toBeLessThan(100)
     }
   })
 
-  it('apporte au moins 185 g de protéines chaque jour', () => {
+  it('ne dérive pas de la cible calorique en moyenne sur le cycle', () => {
+    // Le jour par jour tolère 100 kcal ; la MOYENNE, elle, ne doit pas dériver —
+    // c'est elle qui décide de la vitesse de perte réelle.
+    let ecart = 0
     for (let i = 0; i < CYCLE_LENGTH; i++) {
-      expect(roundMacros(buildDay(i, DEFAULT_TRAINED(i)).total).p).toBeGreaterThanOrEqual(185)
+      const trained = DEFAULT_TRAINED(i)
+      ecart += buildDay(i, trained).total.kcal - targetOf(BMR, trained)
+    }
+    expect(Math.abs(ecart / CYCLE_LENGTH)).toBeLessThan(30)
+  })
+
+  it('couvre la cible protéique sans la dépasser largement', () => {
+    // Les deux bornes comptent. En dessous, on perd du muscle en déficit ; très
+    // au-dessus, ce sont des calories qui iraient mieux en lipides ou en légumes,
+    // puisque la synthèse musculaire plafonne.
+    const cible = proteinTarget(92.6, COMP)
+    for (let i = 0; i < CYCLE_LENGTH; i++) {
+      const p = roundMacros(buildDay(i, DEFAULT_TRAINED(i)).total).p
+      expect(p).toBeGreaterThanOrEqual(cible * 0.92)
+      expect(p).toBeLessThanOrEqual(cible * 1.12)
+    }
+  })
+
+  it('atteint le plancher lipidique, qui ne se négocie pas', () => {
+    // Régression réelle : le plan livrait 37 g de lipides pour un plancher de 74.
+    // 0,4 g/kg, c'est la moitié du seuil sous lequel la production hormonale et
+    // l'absorption des vitamines A, D, E et K finissent par en pâtir. Personne ne
+    // l'avait vu parce qu'aucun écran n'affichait les lipides face à leur cible.
+    for (let i = 0; i < CYCLE_LENGTH; i++) {
+      const trained = DEFAULT_TRAINED(i)
+      const cibles = macroTargets(92.6, targetOf(BMR, trained), COMP)
+      const l = roundMacros(buildDay(i, trained).total).l
+      expect(l).toBeGreaterThanOrEqual(cibles.l * 0.82)
     }
   })
 
@@ -676,7 +728,7 @@ describe('ajustement du dîner', () => {
     // On n'a touché qu'au féculent : les protéines ne bougent qu'à la marge (un féculent
     // en apporte un peu), jamais assez pour passer sous la cible.
     expect(day.total.p - adjusted.total.p).toBeLessThan(5)
-    expect(adjusted.total.p).toBeGreaterThan(190)
+    expect(adjusted.total.p).toBeGreaterThan(day.total.p * 0.97)
   })
 
   it('laisse le plan intact sans ajustement', () => {
@@ -712,7 +764,10 @@ describe('boîtes assemblées à l\'avance', () => {
     const starchy = dinner.items.find(i => STARCHY_IDS.includes(i.food))!
     const step = steps.find(s => s.slot === 'dinner' && s.kind === 'partial')!
     const leftG = -step.kcal / (FOOD_BY_ID[starchy.food].kcal / 100)
-    expect(leftG).toBeLessThanOrEqual(starchy.g * LEAVE_MAX)
+    // + 1 g de tolérance : les kcal de l'étape sont arrondies, donc reconstruire les
+    // grammes par division rend un chiffre légèrement au-dessus. C'est l'arrondi
+    // qu'on tolère, pas le plafond qu'on relâche.
+    expect(leftG).toBeLessThanOrEqual(starchy.g * LEAVE_MAX + 1)
   })
 
   it('enchaîne sur les repas annexes quand le féculent ne suffit pas', () => {
@@ -729,10 +784,21 @@ describe('boîtes assemblées à l\'avance', () => {
     expect(plan.steps[0].kcal).toBeGreaterThan(0)
   })
 
-  it('ne touche jamais aux protéines, même en retirant beaucoup', () => {
+  it('en mode « assemblé », retirer 300 kcal coûte des protéines — et c\'est le prix', () => {
+    // Ce mode suppose que la boîte est déjà faite : on ne peut plus jouer sur les
+    // grammages, seulement laisser des choses de côté. Il supprime donc des repas
+    // ENTIERS, collation protéinée comprise, là où le mode « féculents à part » se
+    // contente de réduire le riz.
+    //
+    // Le test borne ce coût au lieu de prétendre qu'il est nul : c'est ce que fait
+    // vraiment le code, et c'est la raison pour laquelle ce mode n'est pas exposé
+    // dans l'interface. Si un jour il l'est, ce chiffre-là est l'argument contre.
     const plan = adjustPlanFor(day, day.total.kcal - 300, 'assembled')!
     const after = applySteps(day, plan)
-    expect(after.total.p).toBeGreaterThan(170)
+    const perdu = day.total.p - after.total.p
+    expect(perdu).toBeGreaterThan(0) // il en coûte, ce n'est pas gratuit
+    expect(perdu).toBeLessThan(45) // mais jamais au point de vider la journée
+    expect(after.total.p).toBeGreaterThan(day.total.p * 0.75)
   })
 
   it('recalcule les totaux pour refléter ce qui sera vraiment mangé', () => {
@@ -1651,9 +1717,17 @@ describe('le congélateur, quand il y a la place', () => {
   it('sépare les portions d\'un même plat selon leur destination', () => {
     // Le plat du lundi va au frigo, celui du vendredi au congélateur : deux entrées,
     // parce que ce ne sont ni le même geste ni la même étagère.
-    const poisson = dimOf(avec).dishes.filter(d => d.recipeId === 'din-poisson')
-    expect(poisson).toHaveLength(2)
-    expect(poisson.map(d => d.frozen).sort()).toEqual([false, true])
+    //
+    // On cherche N'IMPORTE quel plat dans ce cas plutôt qu'un identifiant en dur :
+    // l'invariant porte sur la séparation, pas sur le poisson. Écrit en dur, ce test
+    // tombait dès qu'on changeait un dîner du cycle — ce qui est arrivé.
+    const dishes = dimOf(avec).dishes
+    const parPlat = new Map<string, boolean[]>()
+    for (const d of dishes) parPlat.set(d.recipeId, [...(parPlat.get(d.recipeId) ?? []), d.frozen])
+    const partages = [...parPlat.values()].filter(dest => dest.length > 1)
+
+    expect(partages.length).toBeGreaterThan(0)
+    for (const dest of partages) expect([...dest].sort()).toEqual([false, true])
   })
 
   it('range le frigo et le congélateur dans deux listes distinctes', () => {
@@ -1741,7 +1815,7 @@ describe('la recette guidée', () => {
 
   it('donne le contenu d\'UNE boîte, pas le total du plat', () => {
     const boite = steps.find(s => s.title.startsWith('Boîte A'))!
-    expect(boite.lines.some(l => /180 g par boîte/.test(l))).toBe(true)
+    expect(boite.lines.some(l => /120 g par boîte/.test(l))).toBe(true)
   })
 
   it('sort les ingrédients frais de l\'assemblage et le dit', () => {
