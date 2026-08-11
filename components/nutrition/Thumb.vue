@@ -22,8 +22,20 @@ const url = ref<string | null>(null)
 
 // Aucune illustration de repli : une image floue « qui situe le plat » se lit comme
 // une photo ratée. Une place vide dit la vérité — il n'y a pas encore de photo.
-watch(() => [props.id, props.variant] as const, async ([id, variant]) => {
-  url.value = has(id) ? await urlOf(id, variant) : null
+//
+// `has(props.id)` fait PARTIE de la source surveillée, et c'est tout l'enjeu.
+//
+// Sans lui, la vignette ne se calculait qu'au montage. Or les métadonnées des photos
+// sont lues dans IndexedDB de façon asynchrone : au premier rendu, `has()` répond
+// encore faux, la vignette reste vide — et rien ne la réveille quand les données
+// arrivent. Il fallait passer par l'onglet « Plats » puis revenir pour que les
+// composants soient remontés APRÈS l'hydratation et voient enfin les photos.
+//
+// `has` lit `metas`, qui est une ref : l'inclure ici suffit à ce que la vignette se
+// recalcule d'elle-même dès que les métadonnées arrivent, ou dès qu'on ajoute ou
+// supprime une photo depuis un autre écran.
+watch(() => [props.id, props.variant, has(props.id)] as const, async ([id, variant, exists]) => {
+  url.value = exists ? await urlOf(id, variant) : null
 }, { immediate: true })
 
 const shown = computed(() => url.value)

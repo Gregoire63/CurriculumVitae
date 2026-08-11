@@ -8,6 +8,7 @@ import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
 import { useMealReminders } from '~/composables/useMealReminders'
+import { usePhotos } from '~/composables/usePhotos'
 import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf } from '~/utils/sportStats'
 import type { Effort, PrKind } from '~/utils/sportStats'
 import '~/assets/css/sport.css'
@@ -637,6 +638,17 @@ onMounted(() => {
   useWithings().autoSync(isoOf(new Date())).catch(() => { /* hors ligne : ce sera pour la prochaine ouverture */ })
   // Rappels de repas : on les repose à chaque ouverture. Sans ça, ceux d'hier
   // resteraient en attente et ceux d'aujourd'hui n'existeraient pas.
+  // Les métadonnées des photos de plats, dès l'ouverture.
+  //
+  // Elles n'étaient chargées que par le panneau Nutrition : tant qu'on n'était pas
+  // passé par l'onglet « Plats », `has(id)` répondait faux partout ailleurs et les
+  // vignettes restaient vides — sur l'accueil, dans la feuille des repas, dans la
+  // fiche d'un plat. Il fallait visiter un écran pour que les autres s'affichent.
+  //
+  // Ce sont bien les MÉTADONNÉES seules (identifiant, dimensions, poids), pas les
+  // images : quelques centaines d'octets, lus une fois. Chaque vignette lit son blob
+  // à la demande, donc ceci ne charge rien d'inutile au démarrage.
+  usePhotos().hydrate().catch(() => { /* IndexedDB indisponible : navigation privée */ })
   const rem = useMealReminders()
   rem.hydrate()
   const nut = useNutrition()
