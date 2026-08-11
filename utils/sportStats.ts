@@ -523,3 +523,219 @@ export function shiftIso(iso: string, days: number): string {
   d.setDate(d.getDate() + days)
   return isoOf(d)
 }
+
+// ─── Objectifs atteignables ──────────────────────────────────────────────────
+//
+// « Combien dans un mois ? » est la question qu'on se pose vraiment, et rien dans
+// l'app n'y répondait : elle savait dire d'où on venait, jamais où on allait.
+//
+// Le parti pris est de projeter sur la progression RÉELLEMENT MESURÉE, pas sur un
+// barème. Un barème donne le même chiffre à tout le monde ; or la vitesse de
+// progression dépend du niveau, du nombre de séances par semaine, du sommeil et du
+// déficit calorique en cours — et tout ça est déjà contenu dans les points qu'on a
+// enregistrés. Le barème ne sert que de PLAFOND de bon sens, pour ne pas
+// extrapoler à l'infini une poussée de début de cycle.
+//
+// Références publiées pour la borne haute (Fittux, synthèse des taux usuels) :
+// débutant +2,5 à 5 kg par semaine au développé couché, intermédiaire +2,5 kg
+// toutes les 2 à 4 semaines. On retient l'intermédiaire comme référence — la
+// progression de débutant ne tient que quelques semaines, et elle ne tient pas du
+// tout en déficit calorique.
+
+/** Progression de référence : un incrément toutes les 3 semaines. */
+export const GAIN_REF_WEEKS = 3
+/** On ne projette jamais plus de 2× la référence, même si les données le disent. */
+export const GAIN_CAP_FACTOR = 2
+/** En dessous de ce nombre de séances, on n'a pas de pente exploitable. */
+export const GAIN_MIN_POINTS = 3
+/** Au-delà, une projection n'a plus de sens : trop loin pour rester honnête. */
+export const GAIN_MAX_WEEKS = 26
+
+export type GainPace = 'ahead' | 'ontrack' | 'slow' | 'stalled' | 'unknown'
+
+export interface Milestone {
+  from: number // charge de travail actuelle
+  to: number // prochain palier
+  perWeek: number // progression mesurée sur le 1RM estimé, kg/semaine
+  weeks: number | null // délai estimé, null si non projetable
+  etaIso: string | null
+  pace: GainPace
+  points: number // séances qui ont servi à la mesure
+  skipped: number // séances écartées comme non comparables (voir COMPARABLE_BAND)
+}
+
+/**
+ * Bande de charges considérées comparables à la charge actuelle, pour la tendance.
+ *
+ * Sans elle, une saisie aberrante ruine la projection : un `oiseau` noté 425 kg au
+ * lieu de 42,5 donnait une pente de −253 kg par semaine. Une charge deux fois
+ * supérieure ou inférieure à celle du jour n'est de toute façon pas le même
+ * exercice — c'est une faute de frappe, un autre réglage, ou une reprise. Les
+ * séances écartées sont COMPTÉES et affichées : le but est que la faute se voie,
+ * pas qu'elle disparaisse.
+ */
+export const COMPARABLE_BAND = 2
+
+/** Jours entre deux dates ISO (positif si `b` est après `a`). */
+export const daysBetween = (a: string, b: string) =>
+  Math.round((new Date(b + 'T00:00:00').getTime() - new Date(a + 'T00:00:00').getTime()) / 86400000)
+
+/**
+ * Pente d'une série de points (date ISO, valeur), en unités par semaine.
+ * Régression linéaire des moindres carrés : une simple différence premier/dernier
+ * se ferait piéger par une séance basse un jour de fatigue, qui est justement le
+ * genre de séance qu'on enregistre.
+ */
+export function weeklySlopeOf(points: { date: string, value: number }[]): number | null {
+  const pts = points.filter(p => p.value > 0)
+  if (pts.length < 2) return null
+  const t0 = pts[0].date
+  const xs = pts.map(p => daysBetween(t0, p.date) / 7)
+  const ys = pts.map(p => p.value)
+  const n = xs.length
+  const mx = xs.reduce((a, b) => a + b, 0) / n
+  const my = ys.reduce((a, b) => a + b, 0) / n
+  let num = 0, den = 0
+  for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2 }
+  return den === 0 ? null : num / den
+}
+
+/**
+ * Prochain palier de charge et date à laquelle il devient atteignable.
+ *
+ * `history` est l'historique d'UN exercice ; il est tronqué au dernier changement
+ * de matériel, sans quoi la pente mélangerait deux machines (cf. `sinceSwap`).
+ *
+ * La pente porte sur le 1RM ESTIMÉ et non sur la charge affichée : la charge
+ * avance par marches de 2,5 kg et resterait plate des semaines entières, alors que
+ * gagner une rep à charge égale est déjà de la progression — c'est même la forme
+ * qu'elle prend le plus souvent.
+ */
+export function nextMilestone(
+  history: SwapLike[],
+  inc: number,
+  todayIso: string,
+): Milestone | null {
+  const h = sinceSwap(history).filter(s => workSets(s.sets).length) as (SwapLike & { date?: string })[]
+  if (!h.length) return null
+  const from = topWeight(h[h.length - 1].sets)
+  if (!from) return null
+  // Palier arrondi au demi-kilo : « 31,3 kg » ne se met pas sur une machine.
+  const to = Math.round((from + inc) * 2) / 2
+
+  const all = h.filter((s): s is SwapLike & { date: string } => typeof s.date === 'string')
+  const dated = all.filter((s) => {
+    const w = topWeight(s.sets)
+    return w > 0 && w <= from * COMPARABLE_BAND && w >= from / COMPARABLE_BAND
+  })
+  const skipped = all.length - dated.length
+  const none: Milestone = { from, to, perWeek: 0, weeks: null, etaIso: null, pace: 'unknown', points: dated.length, skipped }
+  if (dated.length < GAIN_MIN_POINTS) return none
+
+  const slope = weeklySlopeOf(dated.map(s => ({ date: s.date, value: e1rmOf(s.sets) })))
+  if (slope === null) return none
+
+  const ref = inc / GAIN_REF_WEEKS
+  const perWeek = Math.min(slope, ref * GAIN_CAP_FACTOR)
+  if (perWeek <= 0) return { ...none, perWeek: Math.round(slope * 100) / 100, pace: 'stalled' }
+
+  const weeks = Math.ceil((to - from) / perWeek)
+  const pace: GainPace = perWeek >= ref * 1.2 ? 'ahead' : perWeek >= ref * 0.5 ? 'ontrack' : 'slow'
+  if (weeks > GAIN_MAX_WEEKS) return { ...none, perWeek: Math.round(perWeek * 100) / 100, pace }
+
+  return {
+    from, to,
+    perWeek: Math.round(perWeek * 100) / 100,
+    weeks,
+    etaIso: shiftIso(todayIso, weeks * 7),
+    pace,
+    points: dated.length,
+    skipped,
+  }
+}
+
+// ─── Sprint ──────────────────────────────────────────────────────────────────
+// Les efforts de sprint étaient enregistrés et jamais relus : ni vitesse, ni
+// volume, ni tendance. Trois séances de sprint dans le journal, et aucun écran
+// n'en montrait quoi que ce soit.
+
+/** Palier de vitesse sur tapis : 0,5 km/h, la graduation de la plupart des tapis. */
+export const SPEED_STEP = 0.5
+/** Plafond du plan (« vitesse cible ≈ 15–18 km/h »). Au-delà, l'objectif change. */
+export const SPEED_PLAN_MAX = 18
+/** Volume d'effort visé par séance : 5 à 6 sprints de 10 à 15 s. */
+export const SPRINT_SECONDS_MIN = 50
+export const SPRINT_SECONDS_MAX = 90
+
+export interface SprintLike { kind: string, count: number, duration: string | number, intensity: string | number }
+export interface SprintSession { date: string, topSpeed: number, seconds: number, reps: number }
+
+const num = (v: string | number) => {
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/** Réduit les efforts d'une séance à ce qui se suit dans le temps : vitesse et volume.
+ *  L'échauffement est exclu — c'est du footing, il tirerait la vitesse vers le bas. */
+export function sprintSessionOf(date: string, efforts: SprintLike[]): SprintSession | null {
+  const runs = efforts.filter(e => e.kind === 'sprint')
+  if (!runs.length) return null
+  let topSpeed = 0, seconds = 0, reps = 0
+  for (const r of runs) {
+    const count = Math.max(1, Math.round(num(r.count) || 1))
+    const dur = num(r.duration)
+    topSpeed = Math.max(topSpeed, num(r.intensity))
+    seconds += count * dur
+    reps += count
+  }
+  return topSpeed || seconds ? { date, topSpeed, seconds, reps } : null
+}
+
+export type SprintGoalKind = 'speed' | 'volume' | 'none'
+export interface SprintGoal {
+  kind: SprintGoalKind
+  topSpeed: number
+  seconds: number
+  reps: number
+  target: number // vitesse visée (kind 'speed') ou secondes visées (kind 'volume')
+  perWeek: number // km/h par semaine
+  weeks: number | null
+  etaIso: string | null
+  points: number
+}
+
+/**
+ * Objectif de sprint. La vitesse n'est PAS toujours la bonne cible : au-dessus du
+ * plafond du plan, ou quand le volume est tombé sous le protocole, courir plus vite
+ * sur deux efforts de 20 s n'est plus une progression — c'est un raccourci.
+ *
+ * Cas réel : 3 × 30 s à 16 km/h le 28/07, puis 2 × 20 s à 17 km/h le 11/08. La
+ * vitesse monte, le temps d'effort tombe de 90 à 40 secondes. L'objectif suivant
+ * est le volume, pas le chrono.
+ */
+export function sprintGoal(sessions: SprintSession[], todayIso: string): SprintGoal | null {
+  const h = sessions.filter(s => s.topSpeed > 0)
+  if (!h.length) return null
+  const last = h[h.length - 1]
+  const base: SprintGoal = {
+    kind: 'none', topSpeed: last.topSpeed, seconds: last.seconds, reps: last.reps,
+    target: 0, perWeek: 0, weeks: null, etaIso: null, points: h.length,
+  }
+
+  // Volume d'abord : la vitesse ne compte que si l'effort dure.
+  if (last.seconds < SPRINT_SECONDS_MIN) return { ...base, kind: 'volume', target: SPRINT_SECONDS_MIN }
+  if (last.topSpeed >= SPEED_PLAN_MAX) return { ...base, kind: 'volume', target: SPRINT_SECONDS_MAX }
+
+  const target = Math.min(SPEED_PLAN_MAX, Math.round((last.topSpeed + SPEED_STEP) * 10) / 10)
+  const slope = h.length >= GAIN_MIN_POINTS ? weeklySlopeOf(h.map(s => ({ date: s.date, value: s.topSpeed }))) : null
+  if (slope === null || slope <= 0) return { ...base, kind: 'speed', target }
+
+  const weeks = Math.ceil((target - last.topSpeed) / slope)
+  if (weeks > GAIN_MAX_WEEKS) return { ...base, kind: 'speed', target, perWeek: Math.round(slope * 100) / 100 }
+  return {
+    ...base, kind: 'speed', target,
+    perWeek: Math.round(slope * 100) / 100,
+    weeks,
+    etaIso: shiftIso(todayIso, weeks * 7),
+  }
+}

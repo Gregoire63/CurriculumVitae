@@ -4,6 +4,8 @@ import {
   warmupLoad, roundToStep,
   avgSessionDuration, plausibleDurations, DURATION_MIN, DURATION_MAX,
   nextLoad, sameWeightStreak, sinceSwap, perfRegressed,
+  nextMilestone, sprintGoal, sprintSessionOf, weeklySlopeOf, daysBetween,
+  GAIN_REF_WEEKS, GAIN_CAP_FACTOR, SPRINT_SECONDS_MIN, SPEED_PLAN_MAX,
   detectPRs,
   muscleSetCounts, weeklyStatus, withProgramMuscles,
   rampWeeks, recoveryWeeks, weeksSinceRecovery, assessFatigue,
@@ -497,5 +499,164 @@ describe('baisse de performance à charge identique', () => {
   it('ne conclut rien sur une seule séance', () => {
     expect(perfRegressed([{ sets: [s(40, 8)] }])).toBe(false)
     expect(perfRegressed([])).toBe(false)
+  })
+})
+
+
+// ─── Objectifs atteignables ──────────────────────────────────────────────────
+describe('pente hebdomadaire', () => {
+  it('mesure une progression régulière', () => {
+    const pts = [
+      { date: '2026-08-01', value: 80 },
+      { date: '2026-08-08', value: 82 },
+      { date: '2026-08-15', value: 84 },
+    ]
+    expect(weeklySlopeOf(pts)).toBeCloseTo(2, 5)
+  })
+
+  it('résiste à une séance basse isolée', () => {
+    // Une régression des moindres carrés, pas un simple premier/dernier : sinon un
+    // jour de fatigue en fin de série ferait conclure à un recul.
+    const pts = [
+      { date: '2026-08-01', value: 80 },
+      { date: '2026-08-08', value: 84 },
+      { date: '2026-08-15', value: 82 },
+    ]
+    expect(weeklySlopeOf(pts)!).toBeGreaterThan(0)
+  })
+
+  it('ne se prononce pas sur un seul point', () => {
+    expect(weeklySlopeOf([{ date: '2026-08-01', value: 80 }])).toBeNull()
+  })
+
+  it('ne divise pas par zéro quand tout tombe le même jour', () => {
+    const pts = [{ date: '2026-08-01', value: 80 }, { date: '2026-08-01', value: 84 }]
+    expect(weeklySlopeOf(pts)).toBeNull()
+  })
+
+  it('compte les jours dans le bon sens', () => {
+    expect(daysBetween('2026-08-01', '2026-08-08')).toBe(7)
+    expect(daysBetween('2026-08-08', '2026-08-01')).toBe(-7)
+  })
+})
+
+describe('prochain palier', () => {
+  const ex = (date: string, w: number, r = 8) => ({ date, sets: [{ w, r }, { w, r }] })
+
+  it('date le palier suivant à partir de la progression mesurée', () => {
+    const h = [ex('2026-07-21', 60), ex('2026-07-28', 62.5), ex('2026-08-04', 65)]
+    const m = nextMilestone(h, 2.5, '2026-08-04')!
+    expect(m.from).toBe(65)
+    expect(m.to).toBe(67.5)
+    expect(m.perWeek).toBeGreaterThan(0)
+    expect(m.etaIso).not.toBeNull()
+    expect(m.pace).toBe('ahead')
+  })
+
+  it('ne date rien sous trois séances', () => {
+    const m = nextMilestone([ex('2026-07-28', 60), ex('2026-08-04', 62.5)], 2.5, '2026-08-04')!
+    expect(m.etaIso).toBeNull()
+    expect(m.pace).toBe('unknown')
+    expect(m.points).toBe(2)
+  })
+
+  it('annonce « à débloquer » quand la tendance recule', () => {
+    // dev-mil, cas réel : même charge, tonnage et reps qui baissent.
+    const h = [ex('2026-07-21', 40, 10), ex('2026-07-28', 40, 8), ex('2026-08-04', 40, 7)]
+    const m = nextMilestone(h, 2.5, '2026-08-04')!
+    expect(m.pace).toBe('stalled')
+    expect(m.etaIso).toBeNull()
+  })
+
+  it('plafonne une poussée de reprise', () => {
+    // +10 kg par semaine ne se prolonge pas : on ne projette jamais au-delà du
+    // double de la progression usuelle, sinon l'app promet 200 kg à Noël.
+    const h = [ex('2026-07-21', 40), ex('2026-07-28', 60), ex('2026-08-04', 80)]
+    const m = nextMilestone(h, 2.5, '2026-08-04')!
+    // `perWeek` est arrondi au centième pour l'affichage, d'où le toBeCloseTo
+    // plutôt qu'une inégalité stricte : 1,6666… s'affiche 1,67.
+    expect(m.perWeek).toBeCloseTo((2.5 / GAIN_REF_WEEKS) * GAIN_CAP_FACTOR, 2)
+  })
+
+  it('écarte une charge hors de proportion, et le dit', () => {
+    // Saisie réelle : `oiseau` noté 425 kg au lieu de 42,5. Sans ce filtre, la
+    // pente tombait à -253 kg par semaine et la projection n'avait aucun sens.
+    const h = [ex('2026-07-21', 37.5), ex('2026-07-28', 425), ex('2026-08-04', 50), ex('2026-08-11', 50)]
+    const m = nextMilestone(h, 2.5, '2026-08-11')!
+    expect(m.skipped).toBe(1)
+    expect(m.points).toBe(3)
+    expect(m.perWeek).toBeGreaterThanOrEqual(0)
+  })
+
+  it('ne projette pas par-dessus un changement de machine', () => {
+    const h = [ex('2026-07-21', 70), ex('2026-07-28', 70), ex('2026-08-04', 45), { ...ex('2026-08-04', 45), swap: true }]
+    const m = nextMilestone(h, 2.5, '2026-08-04')!
+    expect(m.from).toBe(45)
+    expect(m.points).toBe(1) // seule la séance du changement compte encore
+  })
+
+  it('ne renvoie rien sans série de travail', () => {
+    expect(nextMilestone([], 2.5, '2026-08-04')).toBeNull()
+    expect(nextMilestone([{ date: '2026-08-04', sets: [{ w: 40, r: 8, warm: true }] }], 2.5, '2026-08-04')).toBeNull()
+  })
+})
+
+describe('objectif de sprint', () => {
+  const eff = (kind: string, count: number, duration: string, intensity: string) => ({ kind, count, duration, intensity })
+
+  it('résume une séance sans compter l\'échauffement', () => {
+    // L'échauffement est du footing à 8 km/h : compté, il écraserait la vitesse max.
+    const s = sprintSessionOf('2026-07-23', [
+      eff('echauffement', 1, '240', '8'),
+      eff('sprint', 1, '30', '15'),
+      eff('sprint', 3, '30', '16'),
+    ])!
+    expect(s.topSpeed).toBe(16)
+    expect(s.reps).toBe(4)
+    expect(s.seconds).toBe(120)
+  })
+
+  it('ne renvoie rien quand il n\'y a que de l\'échauffement', () => {
+    expect(sprintSessionOf('2026-07-23', [eff('echauffement', 1, '240', '8')])).toBeNull()
+  })
+
+  it('vise le VOLUME quand l\'effort est retombé sous le protocole', () => {
+    // Cas réel : 3 × 30 s à 16 km/h, puis 2 × 20 s à 17. La vitesse monte, le temps
+    // d'effort tombe de 90 à 40 s. Féliciter le chrono ici serait encourager le
+    // raccourci — 5 à 6 sprints de 10-15 s, c'est ça le plan.
+    const h = [
+      { date: '2026-07-23', topSpeed: 16, seconds: 120, reps: 4 },
+      { date: '2026-07-28', topSpeed: 16, seconds: 90, reps: 3 },
+      { date: '2026-08-11', topSpeed: 17, seconds: 40, reps: 2 },
+    ]
+    const g = sprintGoal(h, '2026-08-11')!
+    expect(g.kind).toBe('volume')
+    expect(g.target).toBe(SPRINT_SECONDS_MIN)
+  })
+
+  it('vise la VITESSE quand le volume est au rendez-vous', () => {
+    const h = [
+      { date: '2026-07-21', topSpeed: 15, seconds: 60, reps: 5 },
+      { date: '2026-07-28', topSpeed: 15.5, seconds: 60, reps: 5 },
+      { date: '2026-08-04', topSpeed: 16, seconds: 60, reps: 5 },
+    ]
+    const g = sprintGoal(h, '2026-08-04')!
+    expect(g.kind).toBe('speed')
+    expect(g.target).toBe(16.5)
+    expect(g.etaIso).not.toBeNull()
+  })
+
+  it('bascule sur le volume une fois le plafond du plan atteint', () => {
+    const h = [
+      { date: '2026-07-21', topSpeed: 17, seconds: 60, reps: 5 },
+      { date: '2026-07-28', topSpeed: 17.5, seconds: 60, reps: 5 },
+      { date: '2026-08-04', topSpeed: SPEED_PLAN_MAX, seconds: 60, reps: 5 },
+    ]
+    const g = sprintGoal(h, '2026-08-04')!
+    expect(g.kind).toBe('volume')
+  })
+
+  it('ne conclut rien sans sprint enregistré', () => {
+    expect(sprintGoal([], '2026-08-04')).toBeNull()
   })
 })

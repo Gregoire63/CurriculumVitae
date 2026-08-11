@@ -4,8 +4,9 @@ import type { Exercise } from '~/data/sportProgram'
 import {
   workSets, topWeight, volumeOf, e1rmOf, setTop, detectPRs, sameWeightStreak, nextLoad,
   muscleSetCounts, withProgramMuscles, isEffort, assessFatigue, perfRegressed, startOfWeek, shiftIso, STALL_SESSIONS,
+  nextMilestone, sprintGoal, sprintSessionOf,
 } from '~/utils/sportStats'
-import type { Effort, PrKind, SetLike, WeekStats } from '~/utils/sportStats'
+import type { Effort, PrKind, SetLike, SprintSession, WeekStats } from '~/utils/sportStats'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
 // w2/r2 : 2e mouvement d'un superset (charge/reps propres)
@@ -358,6 +359,29 @@ export function useWorkout() {
     return { ...verdict, weeks, current }
   }
 
+  // ─── Objectifs atteignables ────────────────────────────────────────────
+  /** Prochain palier de charge d'un exercice et sa date estimée. */
+  function milestoneOf(ex: Exercise, todayIso: string) {
+    return nextMilestone(logs.value[ex.id] || [], suggestedIncrement(ex), todayIso)
+  }
+
+  /** Les séances de sprint réduites à ce qui se suit : vitesse max et temps d'effort.
+   *  Elles dormaient dans `sessionHistory` sans qu'aucun écran ne les relise. */
+  function sprintSessions(): SprintSession[] {
+    const out: SprintSession[] = []
+    for (const rec of sessionHistory.value) {
+      if (!rec.sprint?.length) continue
+      const s = sprintSessionOf(rec.at.slice(0, 10), rec.sprint)
+      if (s) out.push(s)
+    }
+    return out.sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  /** Objectif de sprint : vitesse, ou volume quand l'effort est retombé sous le plan. */
+  function sprintObjective(todayIso: string) {
+    return sprintGoal(sprintSessions(), todayIso)
+  }
+
   // Historique groupé par jour (charges à plat) — conservé pour compat
   function history() {
     const byDate: Record<string, { exId: string; sets: SetLog[] }[]> = {}
@@ -531,6 +555,7 @@ export function useWorkout() {
     lastPerf, lastEffort, bestCharge, recordsOf, bodyWeightAt,
     recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     muscleSets, muscleSetsWithGaps, weeklyStats, fatigue, stalledCount,
+    milestoneOf, sprintSessions, sprintObjective,
     addBodyWeight, setBodyWeightAt, exportJSON, importJSON, seedDemo, clearAll,
     daysSinceExport, restoreBackup, backupDate,
   }

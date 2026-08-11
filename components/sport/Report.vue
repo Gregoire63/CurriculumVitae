@@ -5,7 +5,7 @@ import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import {
   avgSessionDuration, volumeOf, weeklyStatus, startOfWeek, FATIGUE_LABELS,
-  WEEKLY_TARGET_MIN, WEEKLY_TARGET_MAX,
+  WEEKLY_TARGET_MIN, WEEKLY_TARGET_MAX, SPRINT_SECONDS_MIN, SPEED_PLAN_MAX,
 } from '~/utils/sportStats'
 
 // Vue « Rapport » extraite de /sport (chargée à la demande). État partagé via composables.
@@ -24,7 +24,7 @@ const PARTS: { id: Part, label: string }[] = [
 ]
 const part = ref<Part>('corps')
 
-const { logs, bodyWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWithGaps, daysSinceExport, lastExportAt, fatigue } = useWorkout()
+const { logs, bodyWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWithGaps, daysSinceExport, lastExportAt, fatigue, milestoneOf, sprintObjective } = useWorkout()
 const { profile } = useProfile()
 
 const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères', 'curl-ez': 'Curl barre EZ' }
@@ -97,6 +97,44 @@ const fatWeeks = computed(() => {
   ]
 })
 const FATIGUE_ICON: Record<string, string> = { unknown: '·', fresh: '🟢', building: '🟡', high: '🟠', deload: '🔴' }
+
+// ─── Objectifs atteignables ──────────────────────────────────────────────────
+// Projeté sur la progression réellement mesurée, jamais sur un barème : la vitesse
+// à laquelle on avance dépend du niveau, du nombre de séances et du déficit en
+// cours, et tout ça est déjà dans les points enregistrés. Cf. `nextMilestone`.
+const PACE_LABEL: Record<string, string> = {
+  ahead: 'En avance',
+  ontrack: 'Dans les temps',
+  slow: 'Lent',
+  stalled: 'À débloquer',
+  unknown: 'Pas encore lisible',
+}
+const PACE_ICON: Record<string, string> = { ahead: '🟢', ontrack: '🟢', slow: '🟡', stalled: '🟠', unknown: '·' }
+
+const goals = computed(() => {
+  const today = props.todayIso
+  if (!today) return []
+  return ALL_EXERCISES
+    .map((ex) => {
+      const m = milestoneOf(ex, today)
+      return m ? { id: ex.id, name: ex.name, unit: ex.bodyweight ? 'kg (poids de corps compris)' : 'kg', ...m } : null
+    })
+    .filter((g): g is NonNullable<typeof g> => g !== null)
+    // Ceux qui ont une date d'abord, du plus proche au plus lointain ; les autres
+    // ensuite. On vient chercher « c'est pour quand », pas une liste alphabétique.
+    .sort((a, b) => {
+      if (a.etaIso && b.etaIso) return a.etaIso.localeCompare(b.etaIso)
+      if (a.etaIso) return -1
+      if (b.etaIso) return 1
+      return b.from - a.from
+    })
+})
+const goalsDated = computed(() => goals.value.filter(g => g.etaIso))
+const goalsWaiting = computed(() => goals.value.filter(g => !g.etaIso))
+const goalsSkipped = computed(() => goals.value.filter(g => g.skipped > 0))
+const showAllGoals = ref(false)
+
+const sprint = computed(() => (props.todayIso ? sprintObjective(props.todayIso) : null))
 
 // ─── Sauvegarde ──────────────────────────────────────────────────────────────
 // Tout vit dans le navigateur : vider les données du site effacerait tout. On
@@ -214,6 +252,79 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
       </div>
       <!-- Les courbes de charge, ex-onglet « Progrès ». Chargées à la demande :
            elles ne servent qu'ici, et elles tirent le composant de graphique. -->
+      <!-- Objectifs : la seule section qui regarde devant. Le reste du rapport dit
+           d'où on vient ; celle-ci dit quand le prochain palier tombe, et si on est
+           dans les temps pour l'atteindre. -->
+      <div v-if="part === 'exos' && goals.length" class="card">
+        <div class="section-label mb-8">Prochains paliers</div>
+        <div v-if="goalsDated.length" class="ob-list">
+          <div v-for="g in goalsDated" :key="g.id" class="ob-row" :class="g.pace">
+            <div class="ob-main">
+              <div class="ob-name">{{ g.name }}</div>
+              <div class="ob-step mono">{{ g.from }} <span class="ob-arrow">→</span> <b>{{ g.to }}</b> kg</div>
+            </div>
+            <div class="ob-when">
+              <div class="ob-eta mono">{{ fmtDate(g.etaIso!) }}</div>
+              <div class="ob-sub">{{ g.weeks }} sem · {{ g.perWeek }} kg/sem</div>
+            </div>
+            <div class="ob-pace" :title="PACE_LABEL[g.pace]">{{ PACE_ICON[g.pace] }}</div>
+          </div>
+        </div>
+        <div v-else class="muted">
+          Aucun palier datable pour l'instant : il faut au moins trois séances sur un
+          exercice, et une tendance qui monte.
+        </div>
+
+        <button v-if="goalsWaiting.length" class="ob-more" @click="showAllGoals = !showAllGoals">
+          {{ showAllGoals ? '▲ Masquer' : '▼ Voir' }} les {{ goalsWaiting.length }} exercices sans date
+        </button>
+        <div v-if="showAllGoals" class="ob-list mt-8">
+          <div v-for="g in goalsWaiting" :key="g.id" class="ob-row" :class="g.pace">
+            <div class="ob-main">
+              <div class="ob-name">{{ g.name }}</div>
+              <div class="ob-step mono">{{ g.from }} <span class="ob-arrow">→</span> <b>{{ g.to }}</b> kg</div>
+            </div>
+            <div class="ob-when"><div class="ob-sub">{{ PACE_LABEL[g.pace] }}<template v-if="g.pace === 'unknown'"> ({{ g.points }}/3 séances)</template></div></div>
+            <div class="ob-pace">{{ PACE_ICON[g.pace] }}</div>
+          </div>
+        </div>
+
+        <div class="muted mt-8">
+          Projeté sur ta progression <b>réellement mesurée</b> (pente du 1RM estimé), pas
+          sur un barème : c'est ce qui tient compte de ton nombre de séances et du déficit
+          en cours. Plafonné au double de la progression usuelle pour ne pas extrapoler une
+          poussée de reprise.
+          <template v-if="goalsSkipped.length">
+            <br>⚠️ <b>{{ goalsSkipped.length }}</b> exercice{{ goalsSkipped.length > 1 ? 's' : '' }} avec une séance écartée du calcul,
+            charge hors de proportion — probablement une faute de frappe à corriger :
+            <b>{{ goalsSkipped.map(g => g.name).join(', ') }}</b>.
+          </template>
+        </div>
+      </div>
+
+      <!-- Sprint : enregistré depuis le début, relu par personne jusqu'ici. -->
+      <div v-if="part === 'exos' && sprint" class="card">
+        <div class="section-label mb-8">Sprint</div>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-v mono">{{ sprint.topSpeed }}<span class="stat-u">km/h</span></div><div class="stat-l">Vitesse max</div></div>
+          <div class="stat"><div class="stat-v mono">{{ sprint.seconds }}<span class="stat-u">s</span></div><div class="stat-l">Temps d'effort</div></div>
+          <div class="stat"><div class="stat-v mono">{{ sprint.reps }}</div><div class="stat-l">Sprints</div></div>
+        </div>
+        <div v-if="sprint.kind === 'volume'" class="ob-goal vol">
+          <b>Objectif : remonter le volume à {{ sprint.target }} s d'effort</b>
+          <small>
+            Le plan demande 5 à 6 sprints de 10 à 15 s. Tu es à {{ sprint.reps }} × pour {{ sprint.seconds }} s au total.
+            <template v-if="sprint.topSpeed >= SPEED_PLAN_MAX">Tu es déjà au plafond de vitesse du plan ({{ SPEED_PLAN_MAX }} km/h) : c'est le volume qui progresse maintenant.</template>
+            <template v-else-if="sprint.seconds < SPRINT_SECONDS_MIN">Monter la vitesse sur un effort plus court n'est pas une progression — c'est un raccourci. Le temps d'abord, le chrono ensuite.</template>
+          </small>
+        </div>
+        <div v-else class="ob-goal spd">
+          <b>Objectif : {{ sprint.target }} km/h</b>
+          <small v-if="sprint.etaIso">Atteignable vers le <b>{{ fmtDate(sprint.etaIso) }}</b> — {{ sprint.weeks }} semaine(s) au rythme de {{ sprint.perWeek }} km/h par semaine.</small>
+          <small v-else>Pas encore de tendance exploitable : il faut au moins trois séances avec sprint ({{ sprint.points }} pour l'instant).</small>
+        </div>
+      </div>
+
       <LazySportProgress v-if="part === 'exos'" />
 
       <div class="card" :class="{ 'backup-warn': exportStale }">

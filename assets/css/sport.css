@@ -890,3 +890,26 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
    à l'intérieur d'une règle (« Unknown at rule: @keyframes »). */
 @keyframes boot-spin { to { transform: rotate(360deg); } }
 @keyframes mini-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* Objectifs atteignables — la seule section du rapport qui regarde devant */
+.ob-list { display: flex; flex-direction: column; gap: 6px; }
+.ob-row { display: flex; align-items: center; gap: 10px; background: var(--bg-secondary); border-radius: 10px; border-left: 3px solid var(--bg-accent); padding: 9px 11px; }
+.ob-row.ahead, .ob-row.ontrack { border-left-color: #3f7a4f; }
+.ob-row.slow { border-left-color: #a97b1e; }
+.ob-row.stalled { border-left-color: #b5502f; }
+.ob-main { flex: 1 1 auto; min-width: 0; }
+.ob-name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ob-step { font-size: 12.5px; color: var(--text-muted); margin-top: 1px; }
+.ob-step b { color: var(--text-primary); }
+.ob-arrow { opacity: 0.5; }
+.ob-when { flex: 0 0 auto; text-align: right; }
+.ob-eta { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.ob-sub { font-size: 11px; color: var(--text-muted); }
+.ob-pace { flex: 0 0 auto; font-size: 13px; }
+.ob-more { width: 100%; margin-top: 8px; background: none; border: 1px dashed var(--bg-accent); border-radius: 9px; color: var(--text-muted); padding: 8px; font-family: var(--font-body); font-size: 12.5px; cursor: pointer; }
+.ob-more:hover { border-color: var(--accent-secondary); color: var(--text-primary); }
+.ob-goal { display: flex; flex-direction: column; gap: 3px; margin-top: 10px; border-radius: 10px; padding: 10px 12px; }
+.ob-goal b { font-size: 13.5px; }
+.ob-goal small { font-size: 12px; line-height: 1.45; color: var(--text-muted); }
+.ob-goal.spd { background: #eef2f9; border-left: 3px solid #4a6fa5; }
+.ob-goal.vol { background: #f6ecd6; border-left: 3px solid #a97b1e; }
