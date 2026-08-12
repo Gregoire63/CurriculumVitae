@@ -4,7 +4,7 @@ import { CAT_LABELS, CAT_ORDER } from '~/data/nutritionProgram'
 import type { FoodCat, Recipe, RecipeItem, RecipeKind } from '~/data/nutritionProgram'
 import { useNutrition } from '~/composables/useNutrition'
 import { usePhotos } from '~/composables/usePhotos'
-import { expandItems, macrosOf, roundMacros, validateFood, validateRecipe } from '~/lib/nutritionStats'
+import { FAT_STEPS, expandItems, macrosOf, roundMacros, validateFood, validateRecipe } from '~/lib/nutritionStats'
 
 // Vue « Plats » : la bibliothèque complète, consultable et extensible.
 // Tout ce qui est livré avec le plan est modifiable, et tout ce qui manque peut être
@@ -12,6 +12,7 @@ import { expandItems, macrosOf, roundMacros, validateFood, validateRecipe } from
 const {
   library, addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe, isRecipePatched,
   toggleRecipeActive, isRecipeActive, addFood, isCustomFood,
+  dairyFoods, setFatPct, dairyCost,
 } = useNutrition()
 
 // Ménage des photos dont le plat a disparu : sans ça, supprimer un plat laisse son
@@ -281,6 +282,53 @@ const kindLabel = (k: RecipeKind) => KINDS.find(x => x.id === k)?.label ?? k
         poissons et féculents, prends celles du produit <b>cru</b> — c'est ainsi que tout
         le plan est calculé.
       </p>
+
+      <!-- Le plan est écrit en 0 %, le rayon n'en a pas toujours. Sans ce réglage,
+           acheter du 3 % ajoute 154 kcal par jour que rien n'affiche. -->
+      <div class="card nu-fat">
+        <div class="section-label mb-8">Taux de matière grasse acheté</div>
+        <p class="muted mb-8">
+          Le plan est écrit en 0 %. Si ton magasin n'en a pas, déclare ici ce que tu
+          achètes vraiment : les quantités du plan baissent en conséquence, et la
+          protéine en poudre déjà présente dans la recette compense ce qui peut l'être.
+        </p>
+        <div v-for="d in dairyFoods" :key="d.food.id" class="nu-fat-row">
+          <div class="nu-fat-name">
+            <span>
+              {{ d.base.name }}
+              <span v-if="d.pct" class="nu-tag mine">acheté en {{ d.pct }} %</span>
+            </span>
+            <small class="mono">{{ d.food.kcal }} kcal · {{ d.food.p }} P / {{ d.food.l }} L</small>
+          </div>
+          <div class="nu-fat-steps">
+            <button
+              v-for="step in FAT_STEPS" :key="step"
+              class="nu-fat-step" :class="{ on: d.pct === step }"
+              :aria-pressed="d.pct === step"
+              @click="setFatPct(d.food.id, step)"
+            >{{ step }} %</button>
+          </div>
+        </div>
+        <div v-if="dairyCost" class="nu-fat-cost">
+          <b>Ce que ça coûte, par jour</b>
+          <div class="nu-fat-cost-grid mono">
+            <span>Laitier</span><span>{{ dairyCost.grams }} g</span>
+            <span>Calories</span><span>{{ dairyCost.kcal > 0 ? '+' : '' }}{{ dairyCost.kcal }} kcal</span>
+            <span>Protéines</span><span>{{ dairyCost.p > 0 ? '+' : '' }}{{ dairyCost.p }} g</span>
+            <span>Lipides</span><span>{{ dairyCost.l > 0 ? '+' : '' }}{{ dairyCost.l }} g</span>
+          </div>
+          <small>
+            Sans rééquilibrage, ce taux coûterait <b>+{{ dairyCost.rawKcal }} kcal</b> par
+            jour. Réduire les quantités en rattrape la plus grande part ; il reste
+            <b>{{ dairyCost.kcal > 0 ? '+' : '' }}{{ dairyCost.kcal }} kcal</b>, dont
+            l'ajustement du soir se charge.
+            <template v-if="dairyCost.l > 6">
+              Les lipides, eux, restent hauts : c'est du gras laitier, il ne se retire
+              que du pot.
+            </template>
+          </small>
+        </div>
+      </div>
 
       <div v-for="g in foods" :key="g.cat" class="card no-pad">
         <h4 class="nu-cat-title">{{ CAT_LABELS[g.cat] }}</h4>

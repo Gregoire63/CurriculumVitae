@@ -817,6 +817,18 @@ mauvais jour. Le levier est au déjeuner parce que c'est le repas qui suit la s�
 minutes — et parce qu'on cuisine toujours la version « jour avec séance » : on peut laisser
 du riz dans une boîte, on ne peut pas y ajouter celui qu'on n'a pas cuit.
 
+- **laitier acheté plus gras que 0 %** → la quantité baisse (jusqu'à -50 %) et la
+  protéine en poudre déjà présente dans la recette remonte pour tenir les protéines.
+
+Le dernier point mérite son paragraphe. Le plan sert **730 g de laitier par jour** au
+plus fort (fromage blanc + yaourt grec en sauce). Acheté en 3 % au lieu de 0 %, ça fait
+**+154 kcal par jour** — le tiers du déficit — et rien ne l'affichait : le 0 % n'est pas
+toujours en rayon, et personne ne change d'enseigne pour ça. Le taux se déclare
+maintenant par produit (Plats → Aliments), les macros sont redérivées de l'étiquette, et
+les grammages du plan suivent. Le rééquilibrage ramène les 154 kcal à 49 ; le reste est
+CHIFFRÉ ET AFFICHÉ plutôt que forcé dans l'assiette, parce qu'on ne peut pas faire qu'un
+laitier à 3 % se comporte comme du 0 % sans transformer le bol du matin en shaker.
+
 Protéines, légumes et matières grasses ne bougent jamais. C'est ce qui protège la masse
 maigre et garde la satiété constante quand les calories baissent.
 

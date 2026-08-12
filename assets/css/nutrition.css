@@ -1061,3 +1061,19 @@
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
   color: var(--text-muted); background: var(--bg-secondary); border-radius: 999px; padding: 2px 7px;
 }
+
+/* Taux de matière grasse des laitiers — le rayon ne suit pas toujours le plan */
+.nu-fat-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 0; border-top: 1px dashed var(--bg-accent); }
+.nu-fat-row:first-of-type { border-top: none; }
+.nu-fat-name { flex: 1 1 150px; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); display: flex; flex-direction: column; gap: 1px; }
+.nu-fat-name small { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.nu-fat-steps { display: flex; gap: 4px; flex: 0 0 auto; }
+.nu-fat-step { min-width: 44px; background: var(--bg-secondary); border: 1px solid var(--bg-accent); color: var(--text-muted); border-radius: 8px; padding: 7px 6px; font-family: var(--font-mono); font-size: 12px; cursor: pointer; transition: all 0.15s; }
+.nu-fat-step:hover { border-color: var(--accent-secondary); color: var(--text-primary); }
+.nu-fat-step.on { background: #4a6fa5; border-color: transparent; color: #fff; font-weight: 700; }
+.nu-fat-cost { margin-top: 10px; background: #f6ecd6; border-left: 3px solid #a97b1e; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.nu-fat-cost b { font-size: 13px; }
+.nu-fat-cost small { font-size: 11.5px; line-height: 1.45; color: var(--text-muted); }
+.nu-fat-cost-grid { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 12.5px; }
+.nu-fat-cost-grid span:nth-child(odd) { color: var(--text-muted); }
+.nu-fat-cost-grid span:nth-child(even) { text-align: right; font-weight: 700; color: var(--text-primary); }

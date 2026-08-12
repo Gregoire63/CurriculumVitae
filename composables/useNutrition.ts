@@ -3,6 +3,7 @@ import type { Food, Recipe } from '~/data/nutritionProgram'
 import type { DayOverride, DayPlan, Extra, Library, MenuWeek, PrepMode, PriceMap, ShoppingList, WeekTemplate } from '~/lib/nutritionStats'
 import {
   DEFAULT_WEEK, basketTotal, blankWeekDays, buildDay, builtinWeeks, cookPlan, cookSelection,
+  atFatPct, dairySwapCost, isAdjustableDairy,
   dowIndex, emptyDay, mergeFoods, mergeRecipes, mondayOf, normalizeWeek, resolveDay, selectionTotals,
   shoppingFromWeek, slugify, stockOf, weekDaysOn,
 } from '~/lib/nutritionStats'
@@ -31,6 +32,7 @@ const FREEZER_KEY = 'gr-nutri-freezer-v1' // ai-je de la place au congélateur ?
 const PICKED_KEY = 'gr-nutri-picked-v1' // plat réellement pris, quand il diffère
 const BAG_KEY = 'gr-nutri-bag-v1' // sac de sport : ce qui est déjà dedans, par date
 const ADJUST_KEY = 'gr-nutri-adjust-v1' // ajustement du soir confirmé, par date
+const FATPCT_KEY = 'gr-nutri-fatpct-v1' // taux de MG réellement acheté, par laitier
 // Clé de l'ancienne sélection « plat → portions », remplacée par la semaine type.
 // Les portions ne se saisissent plus à la main : elles se comptent dans la semaine.
 const LEGACY_SEL_KEY = 'gr-nutri-selection-v1'
@@ -85,6 +87,16 @@ const foodPatches = ref<Record<string, Partial<Food>>>({})
 const userRecipes = ref<Recipe[]>([])
 const recipePatches = ref<Record<string, Partial<Recipe>>>({})
 const disabledRecipes = ref<string[]>([])
+/**
+ * Taux de matière grasse RÉELLEMENT ACHETÉ, par laitier.
+ *
+ * Stocké à part des `foodPatches` et pas dedans, alors qu'il finit par produire un
+ * patch : un patch fige des macros, ce taux est une intention. Tant qu'on garde le
+ * pourcentage, on peut redériver les macros si la fiche de base change, revenir au
+ * 0 % en un tap, et surtout afficher « tu as déclaré du 3 % » plutôt qu'une colonne
+ * de nombres que personne ne reconnaît.
+ */
+const fatPct = ref<Record<string, number>>({})
 let hydrated = false
 let seq = 0
 function safeParse<T>(raw: string | null, fb: T): T {
@@ -120,6 +132,7 @@ export function useNutrition() {
     extras.value = safeParse(localStorage.getItem(EXTRA_KEY), {})
     userFoods.value = safeParse(localStorage.getItem(FOODS_KEY), [])
     foodPatches.value = safeParse(localStorage.getItem(FOODPATCH_KEY), {})
+    fatPct.value = safeParse(localStorage.getItem(FATPCT_KEY), {})
     userRecipes.value = safeParse(localStorage.getItem(RECIPES_KEY), [])
     recipePatches.value = safeParse(localStorage.getItem(RECIPEPATCH_KEY), {})
     disabledRecipes.value = safeParse(localStorage.getItem(OFF_KEY), [])
@@ -159,10 +172,53 @@ export function useNutrition() {
   const saveMenus = () => write(MENUS_KEY, menus.value.filter(m => !m.builtin))
   // ─── Bibliothèque ─────────────────────────────────────────────────────────
   /** Aliments et plats effectivement disponibles : livrés + créés + modifiés. */
-  const library = computed<Library>(() => ({
-    foods: mergeFoods(userFoods.value, foodPatches.value),
-    recipes: mergeRecipes(userRecipes.value, recipePatches.value, disabledRecipes.value),
-  }))
+  const library = computed<Library>(() => {
+    const foods = mergeFoods(userFoods.value, foodPatches.value)
+    // Le taux déclaré s'applique EN DERNIER : il redérive les macros depuis la fiche
+    // telle qu'elle est après patch, et pas depuis la fiche d'origine. Sinon corriger
+    // les protéines d'un fromage blanc effacerait la correction dès qu'on touche au
+    // taux, sans que rien ne le dise.
+    for (const [id, pct] of Object.entries(fatPct.value)) {
+      const f = foods[id]
+      if (f && isAdjustableDairy(f)) foods[id] = atFatPct(f, pct)
+    }
+    return {
+      foods,
+      recipes: mergeRecipes(userRecipes.value, recipePatches.value, disabledRecipes.value),
+    }
+  })
+
+  // ─── Taux de matière grasse des laitiers ──────────────────────────────────
+  /**
+   * Les laitiers dont le taux se règle. `food` porte les macros DÉRIVÉES du taux
+   * déclaré, pas celles de la fiche : c'est le seul moyen de vérifier d'un coup d'œil
+   * que ce qui est coché correspond à l'étiquette du pot qu'on a dans la main.
+   */
+  const dairyFoods = computed(() => {
+    const base = mergeFoods(userFoods.value, foodPatches.value)
+    return Object.values(base)
+      .filter(isAdjustableDairy)
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((f) => {
+        const pct = fatPct.value[f.id] ?? 0
+        return { food: atFatPct(f, pct), base: f, pct }
+      })
+  })
+
+  function setFatPct(id: string, pct: number) {
+    const next = { ...fatPct.value }
+    if (!pct) delete next[id] // 0 % = le produit du plan : on ne stocke rien
+    else next[id] = pct
+    fatPct.value = next
+    write(FATPCT_KEY, fatPct.value)
+  }
+
+  /** Ce que les taux déclarés coûtent sur une journée moyenne, rééquilibrage compris. */
+  const dairyCost = computed(() => {
+    if (!Object.keys(fatPct.value).length) return null
+    const gym = week.value.gym
+    return dairySwapCost(library.value, i => !!gym[i % 7])
+  })
   const isCustomFood = (id: string) => userFoods.value.some(f => f.id === id)
   const isCustomRecipe = (id: string) => userRecipes.value.some(r => r.id === id)
   /** Ajoute un aliment saisi depuis un emballage. Renvoie son id. */
@@ -547,7 +603,7 @@ export function useNutrition() {
       menus: menus.value.filter(m => !m.builtin), activeMenu: activeMenu.value, menuAssign: menuAssign.value,
       picked: picked.value, bag: bag.value, adjustOk: adjustOk.value,
       prepMode: prepMode.value, freezer: freezer.value, week: week.value, overrides: overrides.value,
-      extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value,
+      extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value, fatPct: fatPct.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
       disabledRecipes: disabledRecipes.value,
     }
@@ -577,6 +633,7 @@ export function useNutrition() {
     if (n.extras) { extras.value = n.extras; write(EXTRA_KEY, extras.value) }
     if (Array.isArray(n.userFoods)) { userFoods.value = n.userFoods; write(FOODS_KEY, userFoods.value) }
     if (n.foodPatches) { foodPatches.value = n.foodPatches; write(FOODPATCH_KEY, foodPatches.value) }
+    if (n.fatPct) { fatPct.value = n.fatPct as Record<string, number>; write(FATPCT_KEY, fatPct.value) }
     if (Array.isArray(n.userRecipes)) { userRecipes.value = n.userRecipes; write(RECIPES_KEY, userRecipes.value) }
     if (n.recipePatches) { recipePatches.value = n.recipePatches; write(RECIPEPATCH_KEY, recipePatches.value) }
     if (Array.isArray(n.disabledRecipes)) { disabledRecipes.value = n.disabledRecipes; write(OFF_KEY, disabledRecipes.value) }
@@ -600,6 +657,7 @@ export function useNutrition() {
     isRecipePatched, isFoodPatched, patchedRecipes,
     extrasFor, addExtra, removeExtra,
     addFood, patchFood, removeFood, resetFood, isCustomFood,
+    dairyFoods, setFatPct, dairyCost, fatPct,
     addRecipe, patchRecipe, removeRecipe, resetRecipe, isCustomRecipe,
     toggleRecipeActive, isRecipeActive,
     setPrice, isChecked, toggleChecked, clearChecked, setPrepMode,

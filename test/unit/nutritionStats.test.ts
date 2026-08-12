@@ -11,6 +11,7 @@ import {
   resolveDay, slugify, timelineOf, validateFood, validateRecipe, weekBalance,
   CYCLE_EPOCH, cycleIndexOf, dayBurn, dayStatus, DEFAULT_TRAINED, dinnerAdjustment, fmtQty, isDayPlayed,
   adjustSignature, ingredientLines,
+  atFatPct, isAdjustableDairy, rebalanceDairy, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   fatRatioOf, leanMassOf, proteinPerKgLean, proteinPlan,
   PROTEIN_FAT_HIGH, PROTEIN_FAT_LOW, PROTEIN_LEAN_MAX, PROTEIN_LEAN_MIN,
@@ -1971,5 +1972,97 @@ describe('totaux et stock', () => {
   it('retranche ce qui a été mangé, sans jamais descendre sous zéro', () => {
     expect(stockOf({ 'boite-a': 4 }, { 'boite-a': 3 })).toEqual({ 'boite-a': 1 })
     expect(stockOf({ 'boite-a': 2 }, { 'boite-a': 5 })).toEqual({ 'boite-a': 0 })
+  })
+})
+
+// ─── Taux de matière grasse des laitiers ─────────────────────────────────────
+describe('taux de matière grasse acheté', () => {
+  const FB = FOOD_BY_ID['fromage-blanc-0']
+  const libAt = (pct: number) => {
+    const foods = { ...FOOD_BY_ID }
+    for (const [id, f] of Object.entries(FOOD_BY_ID)) if (isAdjustableDairy(f)) foods[id] = atFatPct(f, pct)
+    return { foods, recipes: RECIPE_BY_ID }
+  }
+
+  it('laisse le produit du plan intact quand on déclare 0 %', () => {
+    // « 0 % » en rayon, c'est le produit du plan, qui porte 0,2 g à l'étiquette.
+    // Recalculer pour 0,2 g remplacerait les kcal de l'étiquette par un 4/4/9
+    // théorique — 50 au lieu de 47 — et changerait les chiffres de quelqu'un qui
+    // n'a rien changé à ses courses.
+    expect(atFatPct(FB, 0)).toBe(FB)
+    expect(atFatPct(FB, 0).kcal).toBe(47)
+  })
+
+  it('colle aux étiquettes du rayon', () => {
+    const trois = atFatPct(FB, 3)
+    expect(trois.l).toBe(3)
+    expect(trois.kcal).toBeGreaterThanOrEqual(70) // rayon : 72-75
+    expect(trois.kcal).toBeLessThanOrEqual(80)
+    expect(trois.p).toBeGreaterThan(7) // rayon : ~7,5
+    expect(trois.p).toBeLessThan(FB.p) // dilué par la crème remise
+  })
+
+  it('dilue aussi les micronutriments', () => {
+    // Le calcium ne se concentre pas parce qu'on ajoute du gras. Sans ça, le
+    // compteur de micros annoncerait une couverture qui n'existe pas.
+    expect(atFatPct(FB, 8).micro!.ca!).toBeLessThan(FB.micro!.ca!)
+  })
+
+  it('refuse un taux de crème', () => {
+    expect(atFatPct(FB, 90).l).toBe(FAT_PCT_MAX)
+  })
+
+  it('ne propose le réglage que sur les laitiers maigres', () => {
+    expect(isAdjustableDairy(FOOD_BY_ID['fromage-blanc-0'])).toBe(true)
+    expect(isAdjustableDairy(FOOD_BY_ID['yaourt-grec-0'])).toBe(true)
+    expect(isAdjustableDairy(FOOD_BY_ID['huile-d-olive'])).toBe(false)
+    expect(isAdjustableDairy(FOOD_BY_ID['filet-de-poulet'])).toBe(false)
+  })
+
+  it('réduit la quantité de laitier et monte la poudre déjà là', () => {
+    const items = [{ food: 'fromage-blanc-0', g: 200 }, { food: 'whey-poudre', g: 15 }, { food: 'flocons-d-avoine', g: 60 }]
+    const out = rebalanceDairy(items, libAt(3).foods)
+    expect(out[0].g).toBeLessThan(200)
+    expect(out[1].g).toBeGreaterThan(15)
+    expect(out[2].g).toBe(60) // rien d'autre ne bouge
+  })
+
+  it('ne vide pas le bol : le plancher tient', () => {
+    // Tenir calories ET protéines à 3 % ramènerait les 200 g du matin à 53 g. Les
+    // macros tomberaient juste, il ne resterait plus de petit-déjeuner.
+    const items = [{ food: 'fromage-blanc-0', g: 200 }, { food: 'whey-poudre', g: 15 }]
+    const out = rebalanceDairy(items, libAt(8).foods)
+    expect(out[0].g).toBeGreaterThanOrEqual(200 * DAIRY_KEEP_MIN)
+  })
+
+  it('tient les calories quand la recette n\'a pas de poudre', () => {
+    // Le fromage blanc du soir : une seule inconnue, on tient les calories.
+    const items = [{ food: 'fromage-blanc-0', g: 150 }]
+    const out = rebalanceDairy(items, libAt(3).foods)
+    const avant = macrosOf(items).kcal
+    const apres = macrosOf(out, libAt(3).foods).kcal
+    expect(Math.abs(apres - avant)).toBeLessThan(15)
+  })
+
+  it('ne touche à rien sans taux déclaré', () => {
+    const items = [{ food: 'fromage-blanc-0', g: 200 }, { food: 'whey-poudre', g: 15 }]
+    expect(rebalanceDairy(items, FOOD_BY_ID)).toEqual(items)
+  })
+
+  it('garde la cible protéique du jour malgré le changement de taux', () => {
+    // C'est TOUT l'intérêt du rééquilibrage. Réduire le laitier sans compenser
+    // ferait tomber la journée à 160 g de protéines pour une cible de 175.
+    const lib = libAt(3)
+    let p = 0
+    for (let i = 0; i < CYCLE_LENGTH; i++) p += buildDay(i, DEFAULT_TRAINED(i), lib).total.p
+    expect(p / CYCLE_LENGTH).toBeGreaterThanOrEqual(proteinTarget(92.4, { fatRatio: 26.41, leanMass: 67.99 }) * 0.95)
+  })
+
+  it('chiffre ce qui reste à la charge de la journée', () => {
+    const lib = libAt(3)
+    const cost = dairySwapCost(lib, i => DEFAULT_TRAINED(i))
+    expect(cost.grams).toBeLessThan(0) // moins de laitier
+    expect(cost.rawKcal).toBeGreaterThan(cost.kcal) // le rééquilibrage a servi
+    expect(cost.kcal).toBeLessThan(cost.rawKcal / 2) // et il en rattrape plus de la moitié
   })
 })

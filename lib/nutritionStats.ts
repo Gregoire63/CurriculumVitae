@@ -143,6 +143,179 @@ export function expandItems(recipe: Recipe, lib: Library = BUILTIN): RecipeItem[
   return sauce ? [...recipe.items, ...sauce.items] : recipe.items
 }
 
+// ─── Laitiers : le taux de matière grasse réellement acheté ──────────────────
+//
+// Tout le plan est écrit en 0 % — fromage blanc, yaourt grec, skyr. C'est un choix
+// de rédaction, pas une fatalité de rayon : le 0 % n'est pas toujours en magasin, et
+// personne ne va changer d'enseigne pour ça.
+//
+// L'écart n'est pas cosmétique. Le plan sert **613 g de laitier par jour** (530 de
+// fromage blanc, 83 de yaourt grec en sauce). Acheté en 3 % au lieu de 0 %, ça fait
+// +17 g de lipides et **+154 kcal par jour** ; en 5 %, +29 g et **+265 kcal**. Sur un
+// déficit de 530 kcal, c'est entre le tiers et la moitié qui part sans que rien ne
+// l'affiche. Quelqu'un qui achète du 3 % depuis un mois en croyant suivre le plan
+// perd deux fois moins vite que ce que l'app lui annonce.
+
+/** Paliers proposés : ce qu'on trouve réellement en rayon. */
+export const FAT_STEPS = [0, 3, 5, 8] as const
+/** Au-delà, ce n'est plus le même produit — c'est de la crème. */
+export const FAT_PCT_MAX = 12
+
+/**
+ * Les macros d'un laitier au taux de matière grasse réellement acheté.
+ *
+ * Modèle : un laitier à x % est le même produit avec de la crème remise dedans. Pour
+ * 100 g de produit final, la part non grasse est diluée d'autant — protéines et
+ * glucides baissent dans le rapport (100 − x) / (100 − x₀), et les calories sont
+ * recalculées depuis les macros (4/4/9) plutôt que mises à l'échelle, sinon l'erreur
+ * d'arrondi de départ serait multipliée.
+ *
+ * Vérifié contre les étiquettes : fromage blanc 3 % → 75 kcal et 7,8 g de protéines
+ * (rayon : 72-75 kcal, 7,5 g) ; yaourt grec 5 % → 98 kcal (rayon : 95-100).
+ */
+export function atFatPct(food: Food, pct: number): Food {
+  const target = clamp(pct, 0, FAT_PCT_MAX)
+  const base = food.l
+  // Tolérance large et volontaire : « 0 % » en rayon, c'est le produit du plan, qui
+  // porte 0,2 g de lipides à l'étiquette. Recalculer pour 0,2 g d'écart ne ferait que
+  // remplacer les kcal de l'étiquette par un 4/4/9 théorique, et changerait les
+  // chiffres de quelqu'un qui n'a rien changé à ses courses.
+  if (Math.abs(target - base) < 0.5) return food
+  const dilution = (100 - target) / (100 - base)
+  const p = Math.round(food.p * dilution * 100) / 100
+  const g = Math.round(food.g * dilution * 100) / 100
+  const l = Math.round(target * 100) / 100
+  const micro = food.micro
+    ? Object.fromEntries(Object.entries(food.micro).map(([k, v]) => [k, Math.round((v ?? 0) * dilution * 10) / 10]))
+    : undefined
+  return { ...food, p, g, l, kcal: Math.round(KCAL_P * p + KCAL_G * g + KCAL_L * l), ...(micro ? { micro } : {}) }
+}
+
+/**
+ * Part minimale de laitier qu'on accepte de garder dans une recette.
+ *
+ * Ce plancher n'est pas de la prudence, c'est un aveu : **on ne peut pas faire qu'un
+ * laitier à 3 % se comporte comme du 0 %.** Tenir à la fois les calories et les
+ * protéines de la journée demanderait de descendre à 164 g de laitier (contre 730) et
+ * de monter à 90 g de poudre — trois doses de shaker par jour et plus de bol. Les
+ * macros tomberaient juste sur le papier ; personne ne suit ça trois semaines.
+ *
+ * À 50 %, le bol du matin garde 100 g de fromage blanc sur 200. C'est moins crémeux,
+ * et c'est le prix honnête du rayon. Le reste de l'écart n'est PAS forcé dans
+ * l'assiette : il est chiffré et affiché (`dairySwapCost`), pour qu'il se décide au
+ * lieu de se subir.
+ */
+export const DAIRY_KEEP_MIN = 0.5
+/** On complète avec la poudre déjà présente, sans en faire un shaker non plus. */
+export const WHEY_ADD_MAX = 10
+
+/** Un laitier dont le taux se règle : la catégorie, et un produit maigre au départ. */
+export const isAdjustableDairy = (food: Food): boolean => food.cat === 'laitiers' && food.l <= 1
+
+/**
+ * Rééquilibre une recette quand son laitier n'est plus au taux du plan.
+ *
+ * Le principe retenu : **on réduit la quantité de laitier**, et on rend au plat les
+ * protéines perdues en montant la protéine en poudre DÉJÀ présente dans la recette.
+ * Ce n'est pas un ingrédient de plus — six des dix recettes au fromage blanc en
+ * contiennent déjà, c'est le levier qui est là.
+ *
+ * Deux inconnues, deux équations : la nouvelle quantité de laitier et la nouvelle
+ * dose de poudre doivent rendre EXACTEMENT les mêmes calories et les mêmes protéines
+ * que la version 0 % du plan.
+ *
+ *     D₁·kcal_lait + W₁·kcal_poudre = calories d'origine
+ *     D₁·prot_lait + W₁·prot_poudre = protéines d'origine
+ *
+ * Sans poudre dans la recette — les sauces, le fromage blanc du soir — le système
+ * n'a qu'une inconnue : on tient les calories et on accepte de perdre les protéines.
+ * `dairySwapCost` chiffre ce qui est perdu, pour que ça se voie au lieu de se deviner.
+ */
+export function rebalanceDairy(
+  items: RecipeItem[],
+  foods: Record<string, Food>,
+  base: Record<string, Food> = FOOD_BY_ID,
+): RecipeItem[] {
+  const idx = items.findIndex((i) => {
+    const b = base[i.food]
+    return b && isAdjustableDairy(b) && foods[i.food] && foods[i.food].l !== b.l
+  })
+  if (idx < 0) return items
+
+  const dBase = base[items[idx].food], dNow = foods[items[idx].food]
+  const d0 = items[idx].g
+  const wIdx = items.findIndex(i => (foods[i.food] ?? base[i.food])?.cat === 'complements' && (foods[i.food] ?? base[i.food])!.p >= 50)
+  const w0 = wIdx >= 0 ? items[wIdx].g : 0
+  const wf = wIdx >= 0 ? (foods[items[wIdx].food] ?? base[items[wIdx].food])! : null
+
+  // Ce que la version 0 % apportait, poudre comprise.
+  const K = (d0 * dBase.kcal + w0 * (wf?.kcal ?? 0)) / 100
+  const P = (d0 * dBase.p + w0 * (wf?.p ?? 0)) / 100
+
+  let d1: number, w1: number
+  const det = wf ? (dNow.kcal * wf.p - wf.kcal * dNow.p) : 0
+  if (wf && Math.abs(det) > 1e-6) {
+    d1 = (K * wf.p - P * wf.kcal) * 100 / det
+    w1 = (dNow.kcal * P - dNow.p * K) * 100 / det
+  }
+  else {
+    d1 = dNow.kcal > 0 ? (K * 100) / dNow.kcal : d0
+    w1 = w0
+  }
+
+  // Garde-fous : on ne vide pas le bol et on ne triple pas la dose de poudre.
+  d1 = clamp(d1, d0 * DAIRY_KEEP_MIN, d0)
+  w1 = clamp(w1, w0, w0 + WHEY_ADD_MAX)
+
+  const out = items.map(i => ({ ...i }))
+  out[idx] = { ...out[idx], g: roundPortion(d1) }
+  if (wIdx >= 0) out[wIdx] = { ...out[wIdx], g: Math.round(w1) }
+  return out
+}
+
+/** Ce que le changement de taux coûte sur une journée entière, en clair. */
+export interface DairySwapCost {
+  kcal: number // écart de calories APRÈS rééquilibrage
+  rawKcal: number // …et ce qu'il aurait coûté sans rien faire
+  p: number // écart de protéines (négatif = perdues)
+  l: number // écart de lipides
+  grams: number // grammes de laitier en moins par jour
+}
+
+/**
+ * Le coût réel du taux choisi, moyenné sur les quatorze jours du cycle.
+ *
+ * `rawKcal` est là exprès, à côté de `kcal` : sans lui, on ne voit que ce qui reste et
+ * jamais ce qui a été rattrapé. Les deux ensemble disent la vraie phrase — « le 3 %
+ * coûtait 154 kcal par jour, il en reste 48 ».
+ */
+export function dairySwapCost(adjusted: Library, trained: (i: number) => boolean): DairySwapCost {
+  const raw: Library = { ...adjusted, foods: { ...adjusted.foods } }
+  let kcal = 0, rawKcal = 0, p = 0, l = 0, grams = 0
+  for (let i = 0; i < CYCLE_LENGTH; i++) {
+    const gym = trained(i)
+    const ref = buildDay(i, gym, BUILTIN)
+    const now = buildDay(i, gym, adjusted)
+    kcal += now.total.kcal - ref.total.kcal
+    p += now.total.p - ref.total.p
+    l += now.total.l - ref.total.l
+    grams += dairyGrams(now) - dairyGrams(ref)
+    // Sans rééquilibrage : mêmes grammages qu'au plan, macros du produit acheté.
+    rawKcal += macrosOf(ref.meals.flatMap(m => m.items), raw.foods).kcal - ref.total.kcal
+  }
+  const n = CYCLE_LENGTH
+  return {
+    kcal: Math.round(kcal / n),
+    rawKcal: Math.round(rawKcal / n),
+    p: Math.round((p / n) * 10) / 10,
+    l: Math.round((l / n) * 10) / 10,
+    grams: Math.round(grams / n),
+  }
+}
+
+const dairyGrams = (day: DayPlan) =>
+  day.meals.flatMap(m => m.items).reduce((n, i) => n + (isAdjustableDairy(FOOD_BY_ID[i.food] ?? { cat: '', l: 9 } as Food) ? i.g : 0), 0)
+
 /** Une ligne de la liste d'ingrédients d'une fiche : le total, et ce qui va dans la sauce. */
 export interface IngredientLine {
   food: string
@@ -289,7 +462,10 @@ export function buildDay(
     const rid = menu?.slots?.[slot.id] ?? slot.recipe ?? (slot.from === 'lunch' ? tpl.lunch : tpl.dinner)
     const recipe = lib.recipes[rid] ?? RECIPE_BY_ID[rid]
     if (!recipe) continue
-    const items = scaleItems(expandItems(recipe, lib), ratioOf(slot), lib.foods)
+    // L'ordre compte : on rééquilibre le laitier AVANT de moduler les féculents.
+    // La quantité de laitier dépend de ce que la recette apporte, pas du ratio du
+    // jour, et le ratio ne touche de toute façon que les féculents.
+    const items = scaleItems(rebalanceDairy(expandItems(recipe, lib), lib.foods), ratioOf(slot), lib.foods)
     meals.push({
       slot: slot.id,
       time: slot.time,
