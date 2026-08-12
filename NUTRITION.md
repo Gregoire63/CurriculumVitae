@@ -835,6 +835,47 @@ maigre et garde la satiété constante quand les calories baissent.
 Conséquence directe : **le bouton « séance annulée » recalcule toute la journée**, sans
 qu'aucune donnée dupliquée n'ait à être maintenue. Une séance qui saute retire ~250 kcal.
 
+## La rotation des dîners
+
+Cinq dîners pour quatorze jours, et l'ordre n'est pas décoratif : il sort d'une recherche
+sous contraintes, refaite le 12/08 quand le maquereau est sorti du plan.
+
+| | |
+|---|---|
+| poisson blanc | ×3 |
+| poulet | ×3 |
+| saumon | ×3 |
+| dinde | ×3 |
+| omelette | ×2 |
+
+Les règles, toutes verrouillées par un test :
+
+- **jamais deux fois le même dîner à moins de 3 jours** (écart cyclique compris) ;
+- **jamais la même protéine midi ET soir** — pas de poulet du soir un jour de Boîte A,
+  pas de poisson du soir un jour de Boîte C au thon ;
+- **l'omelette uniquement mercredi, samedi ou dimanche.** Ce sont les seuls jours où un
+  plat qui se garde deux jours tombe en « à la minute » plutôt que dans la session du
+  dimanche. Des œufs cuits trois jours à l'avance, c'est du caoutchouc ;
+- **trois types de boîte par semaine maximum**, pour que la session du dimanche ne
+  s'allonge pas.
+
+### Le maquereau est sorti
+
+Il avait été ajouté pour la vitamine D (20,7 µg par dîner) et les oméga-3. Il n'était pas
+acheté — et un plat qu'on ne cuisine jamais n'est pas un plat, c'est un trou dans la
+semaine. **La recette reste dans la bibliothèque**, choisissable à la main.
+
+Sa vitamine D est reprise ailleurs, et mieux : **100 g de champignons exposés aux UV**
+ajoutés au poisson blanc et au poulet, les deux dîners qui n'en avaient aucune (1,6 et
+0,1 µg). À 10 µg pour 100 g et 22 kcal, c'est la source la moins chère du plan, et elle
+était déjà dans la liste de courses pour la dinde et l'omelette.
+
+```
+                    avec maquereau      sans, + champignons UV
+vitamine D               70 %                   81 %
+oméga-3                 244 %                  185 %
+```
+
 ## Régénérer les données
 
 `data/nutritionProgram.ts` est généré à partir d'un script Python qui sert de source de

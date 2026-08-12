@@ -1806,7 +1806,20 @@ describe('les sauces', () => {
     expect(sauces.hint).toMatch(/JAMAIS dans la boîte/)
     expect(sauces.lines.length).toBeGreaterThan(0)
     // Les quantités sont multipliées par le nombre de portions du plat servi.
-    expect(sauces.lines.some(l => /4 portions/.test(l))).toBe(true)
+    //
+    // On vérifie la MULTIPLICATION, pas un nombre écrit en dur. La version
+    // précédente attendait « 4 portions » : un chiffre qui ne dépendait que de
+    // l'ordre des plats dans le cycle, et qui est tombé à la première rotation
+    // retouchée — alors que la règle testée, elle, n'avait pas bougé d'un pouce.
+    const ligne = sauces.lines.find(l => /(\d+) portions/.test(l))!
+    expect(ligne).toBeDefined()
+    const n = Number(ligne.match(/(\d+) portions/)![1])
+    expect(n).toBeGreaterThan(1)
+    const base = RECIPE_BY_ID[Object.keys(RECIPE_BY_ID).find(id => RECIPE_BY_ID[id].kind === 'sauce' && ligne.startsWith(RECIPE_BY_ID[id].name))!]
+    for (const it of base.items) {
+      const g = Math.round(it.g * n * 10) / 10
+      expect(ligne, `${base.name} × ${n} doit servir ${g} g de ${it.food}`).toContain(`${g} g`)
+    }
   })
 
   it('restent légères : aucune ne dépasse 90 kcal la portion', () => {
@@ -2079,5 +2092,77 @@ describe('taux de matière grasse acheté', () => {
     expect(cost.grams).toBeLessThan(0) // moins de laitier
     expect(cost.rawKcal).toBeGreaterThan(cost.kcal) // le rééquilibrage a servi
     expect(cost.kcal).toBeLessThan(cost.rawKcal / 2) // et il en rattrape plus de la moitié
+  })
+})
+
+// ─── La rotation des dîners ──────────────────────────────────────────────────
+//
+// Le cycle a été refait le 12/08 : plus de maquereau, et un ordre calculé plutôt
+// que choisi. Ces tests verrouillent les règles qui l'ont produit — sans eux, la
+// prochaine retouche à la main peut casser silencieusement l'une d'elles, et on ne
+// le verrait qu'au moment de cuisiner.
+describe('rotation des dîners sur le cycle', () => {
+  const dinners = CYCLE.map(d => d.dinner)
+  const MINUTE_DAYS = [2, 5, 6] // mer, sam, dim : cf. cookSlotFor pour un plat keeps=2
+
+  it('ne programme plus de maquereau', () => {
+    // Il portait la vitamine D et les oméga-3, mais il n'était pas acheté. Un plat
+    // qu'on ne cuisine jamais n'est pas un plat, c'est un trou dans la semaine.
+    expect(dinners).not.toContain('din-maquereau')
+    // La recette RESTE dans la bibliothèque : elle se choisit à la main le jour où
+    // le poissonnier en a. La retirer aurait détruit du travail pour rien.
+    expect(RECIPE_BY_ID['din-maquereau']).toBeDefined()
+  })
+
+  it('ne sert jamais deux fois le même dîner à moins de trois jours', () => {
+    // Écart cyclique : le dimanche de la semaine 2 est suivi du lundi de la 1.
+    for (const plat of new Set(dinners)) {
+      const pos = dinners.map((d, i) => (d === plat ? i : -1)).filter(i => i >= 0)
+      for (let j = 0; j < pos.length; j++) {
+        const a = pos[j], b = pos[(j + 1) % pos.length]
+        const gap = b > a ? b - a : b + CYCLE_LENGTH - a
+        expect(gap, `${plat} revient après ${gap} jour(s)`).toBeGreaterThanOrEqual(3)
+      }
+    }
+  })
+
+  it('ne répète jamais la même protéine au déjeuner ET au dîner', () => {
+    // Poulet le midi PUIS poulet le soir, c'est le jour où on n'ouvre pas la boîte.
+    for (const [i, d] of CYCLE.entries()) {
+      if (d.lunch === 'boite-a') expect(d.dinner, `jour ${i}`).not.toBe('din-poulet')
+      if (d.lunch === 'boite-c') expect(['din-poisson', 'din-saumon'], `jour ${i}`).not.toContain(d.dinner)
+    }
+  })
+
+  it('place l\'omelette les seuls jours où elle se fait à la minute', () => {
+    // Des œufs cuits le dimanche pour mardi deviennent caoutchouteux : le plat de
+    // dix minutes qu'on avait conçu se transforme en restes. Seuls mercredi, samedi
+    // et dimanche renvoient « minute » pour un plat qui se garde deux jours.
+    for (const [i, d] of CYCLE.entries()) {
+      if (d.dinner === 'din-omelette') {
+        expect(MINUTE_DAYS, `omelette au jour ${i}`).toContain(i % 7)
+        expect(cookSlotFor(i % 7, keepsOf(RECIPE_BY_ID['din-omelette']))).toBe('minute')
+      }
+    }
+  })
+
+  it('garde le même effort de préparation qu\'avant, semaine par semaine', () => {
+    // Trois types de boîte par semaine, pas quatre : la session du dimanche ne doit
+    // pas s'allonger d'une casserole parce qu'on a réordonné les dîners.
+    for (const w of [0, 1]) {
+      const boxes = new Set(CYCLE.slice(w * 7, w * 7 + 7).map(d => d.lunch))
+      expect(boxes.size, `semaine ${w + 1}`).toBeLessThanOrEqual(3)
+    }
+  })
+
+  it('tient la vitamine D sans maquereau, par les champignons UV', () => {
+    // C'était le risque du retrait : on avait porté la couverture de 24 % à 70 %,
+    // et le maquereau en fournissait 20,7 µg par dîner. Les champignons exposés aux
+    // UV (10 µg / 100 g, 22 kcal) la reprennent — et la dépassent.
+    const plans = Array.from({ length: CYCLE_LENGTH }, (_, i) => buildDay(i, DEFAULT_TRAINED(i)))
+    const vd = microCoverage(plans).find(m => m.key === 'vd')!
+    expect(vd.pct).toBeGreaterThanOrEqual(75)
+    const o3 = microCoverage(plans).find(m => m.key === 'o3')!
+    expect(o3.pct).toBeGreaterThanOrEqual(100)
   })
 })

@@ -863,6 +863,7 @@ export const RECIPES: Recipe[] = [
       { food: 'cabillaud-colin', g: 160 },
       { food: 'pommes-de-terre', g: 190 },
       { food: 'haricots-verts', g: 250 },
+      { food: 'champignons-uv', g: 100 },
       { food: 'huile-d-olive', g: 18 },
       { food: 'pain-complet', g: 15 },
       { food: 'citron', g: 20 },
@@ -954,6 +955,7 @@ export const RECIPES: Recipe[] = [
       { food: 'lentilles-vertes', g: 40 },
       { food: 'salade-verte', g: 100 },
       { food: 'tomates-concassees', g: 100 },
+      { food: 'champignons-uv', g: 100 },
       { food: 'huile-d-olive', g: 18 },
       { food: 'ail', g: 5 },
       { food: 'herbes-de-provence', g: 2 },
@@ -1359,23 +1361,51 @@ export const RATIO_REST = 0.48
 export const RATIO_LUNCH_GYM = 1.6
 
 export interface DayTemplate { lunch: string, dinner: string }
-// Cycle de 14 jours, index 0 = lundi de la semaine 1. Les recettes alternent
-// pour rester supportables sans multiplier les courses.
+/**
+ * Cycle de 14 jours, index 0 = lundi de la semaine 1.
+ *
+ * **Plus de maquereau.** Il avait été ajouté pour la vitamine D et les oméga-3, mais
+ * il n'est pas acheté — un plat qu'on ne cuisine jamais n'est pas un plat, c'est un
+ * trou dans la semaine. La recette reste dans la bibliothèque : si le poissonnier en a
+ * un jour, elle se choisit à la main sur n'importe quel créneau.
+ *
+ * Sa vitamine D est récupérée AILLEURS, et mieux : 100 g de champignons exposés aux UV
+ * dans le poisson blanc et dans le poulet, les deux dîners qui n'en avaient aucune
+ * (1,6 et 0,1 µg). À 10 µg pour 100 g et 22 kcal, c'est la source la moins chère et la
+ * plus disponible du plan — elle était déjà dans la liste de courses pour la dinde et
+ * l'omelette. Résultat : **81 % de couverture contre 70 % avec le maquereau**.
+ *
+ * L'ordre n'est pas décoratif, il sort d'une recherche sous contraintes :
+ *
+ * - jamais deux fois le même dîner à moins de **3 jours** d'écart ;
+ * - jamais la même protéine au déjeuner ET au dîner — pas de poulet du soir sur un
+ *   jour de Boîte A, pas de poisson du soir sur un jour de Boîte C au thon ;
+ * - **ni saumon ni dinde avant le jeudi** de la semaine 1 : le cycle reprend après une
+ *   semaine où ils ont déjà été cuisinés en série, et enchaîner serait le meilleur
+ *   moyen de ne pas suivre le plan ;
+ * - même nombre de boîtes de chaque type par semaine qu'avant, pour que la session de
+ *   préparation du dimanche ne s'allonge pas d'une casserole ;
+ * - l'omelette UNIQUEMENT un mercredi, samedi ou dimanche. Ce n'est pas un caprice de
+ *   calendrier : ce sont les seuls jours où un plat qui se garde deux jours tombe en
+ *   « à la minute » plutôt que dans la session du dimanche (voir `cookSlotFor`). Des
+ *   œufs cuits le dimanche pour être mangés le mardi deviennent caoutchouteux, et le
+ *   plat de dix minutes qu'on avait conçu se transforme en restes.
+ */
 export const CYCLE: DayTemplate[] = [
-  { lunch: 'boite-a', dinner: 'din-poisson' },
-  { lunch: 'boite-a', dinner: 'din-dinde' },
-  { lunch: 'boite-a', dinner: 'din-omelette' },
-  { lunch: 'boite-b', dinner: 'din-saumon' },
-  { lunch: 'boite-b', dinner: 'din-maquereau' },
-  { lunch: 'boite-b', dinner: 'din-poulet' },
-  { lunch: 'boite-c', dinner: 'din-dinde' },
-  { lunch: 'boite-c', dinner: 'din-poisson' },
-  { lunch: 'boite-c', dinner: 'din-saumon' },
-  { lunch: 'boite-c', dinner: 'din-omelette' },
-  { lunch: 'boite-a', dinner: 'din-dinde' },
-  { lunch: 'boite-a', dinner: 'din-maquereau' },
-  { lunch: 'boite-a', dinner: 'din-poulet' },
-  { lunch: 'boite-b', dinner: 'din-dinde' },
+  { lunch: 'boite-a', dinner: 'din-poisson' }, // S1 lundi
+  { lunch: 'boite-b', dinner: 'din-poulet' }, // S1 mardi
+  { lunch: 'boite-a', dinner: 'din-omelette' }, // S1 mercredi
+  { lunch: 'boite-a', dinner: 'din-poisson' }, // S1 jeudi
+  { lunch: 'boite-b', dinner: 'din-saumon' }, // S1 vendredi
+  { lunch: 'boite-b', dinner: 'din-dinde' }, // S1 samedi
+  { lunch: 'boite-c', dinner: 'din-poulet' }, // S1 dimanche
+  { lunch: 'boite-a', dinner: 'din-saumon' }, // S2 lundi
+  { lunch: 'boite-c', dinner: 'din-dinde' }, // S2 mardi
+  { lunch: 'boite-c', dinner: 'din-poulet' }, // S2 mercredi
+  { lunch: 'boite-a', dinner: 'din-poisson' }, // S2 jeudi
+  { lunch: 'boite-c', dinner: 'din-dinde' }, // S2 vendredi
+  { lunch: 'boite-a', dinner: 'din-omelette' }, // S2 samedi
+  { lunch: 'boite-b', dinner: 'din-saumon' }, // S2 dimanche
 ]
 export const CYCLE_LENGTH = CYCLE.length
 
