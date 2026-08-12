@@ -1077,3 +1077,7 @@
 .nu-fat-cost-grid { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; font-size: 12.5px; }
 .nu-fat-cost-grid span:nth-child(odd) { color: var(--text-muted); }
 .nu-fat-cost-grid span:nth-child(even) { text-align: right; font-weight: 700; color: var(--text-primary); }
+
+/* Autorisation Withings à renouveler : un état, pas un message d'erreur de plus */
+.nu-wi-reco { border-left: 3px solid #b5502f; background: #fbeee9; display: flex; flex-direction: column; gap: 8px; }
+.nu-wi-reco .nu-mode { color: #b5502f; }

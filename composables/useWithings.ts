@@ -108,6 +108,16 @@ export function useWithings() {
   }
 
   const connected = computed(() => !!tokens.value?.accessToken)
+  /**
+   * Withings a refusé le refresh_token : plus rien ne passera tant qu'on n'aura pas
+   * réautorisé. C'est un état à part entière et pas un message d'erreur, parce qu'il
+   * appelle UNE action précise — le bouton « Reconnecter » — et qu'un texte rouge de
+   * plus au milieu des autres ne l'aurait jamais fait comprendre.
+   */
+  const needsReconnect = ref(false)
+
+  /** Marge avant expiration : on rafraîchit sans attendre le refus. */
+  const TOKEN_SKEW = 120
 
   /** Enregistre les jetons renvoyés par /api/withings/callback (query string). */
   function adoptFromQuery(q: Record<string, unknown>): boolean {
@@ -130,6 +140,7 @@ export function useWithings() {
 
   function disconnect() {
     tokens.value = null
+    needsReconnect.value = false
     if (import.meta.client) {
       try { localStorage.removeItem(TOK_KEY) }
       catch { /* ignore */ }
@@ -229,16 +240,69 @@ export function useWithings() {
    * import ou si la balance a corrigé une pesée) ; sinon on repart du dernier
    * `updatetime`, ce que Withings attend pour ne renvoyer que le delta.
    */
+  /** Écrit les jetons rendus par le serveur. Point de passage unique, exprès. */
+  function keepTokens(t: { accessToken: string, refreshToken: string, expiresIn: number }) {
+    tokens.value = {
+      ...tokens.value!,
+      accessToken: t.accessToken,
+      refreshToken: t.refreshToken,
+      expiresAt: Math.floor(Date.now() / 1000) + t.expiresIn,
+    }
+    write(TOK_KEY, tokens.value)
+  }
+
+  /**
+   * Rafraîchit les jetons AVANT d'aller chercher les données, et les enregistre
+   * immédiatement.
+   *
+   * L'ordre est tout l'intérêt. Withings invalide l'ancien refresh_token à la
+   * seconde où il en émet un nouveau : si on rafraîchit au milieu d'une synchro et
+   * que la suite échoue, le jeton neuf est perdu et l'ancien est déjà mort. Le compte
+   * est alors cassé pour de bon — `status 503 : invalid params: refresh_token`, à
+   * chaque tentative, sans rien pour l'expliquer. En rafraîchissant d'abord, il ne
+   * reste plus rien entre l'émission du jeton et son enregistrement.
+   */
+  async function ensureFresh(): Promise<boolean> {
+    const t = tokens.value
+    if (!t?.refreshToken) return false
+    const exp = t.expiresAt ?? 0
+    if (exp && exp - TOKEN_SKEW > Math.floor(Date.now() / 1000)) return true
+    try {
+      const res = await $fetch<{
+        tokens: { accessToken: string, refreshToken: string, expiresIn: number } | null
+        needsReconnect: boolean
+        error: string | null
+      }>('/api/withings/refresh', { method: 'POST', body: { refreshToken: t.refreshToken } })
+      if (res.needsReconnect) {
+        needsReconnect.value = true
+        syncError.value = res.error
+        return false // le seul cas qui bloque vraiment : plus aucun jeton ne passera
+      }
+      if (res.tokens) { keepTokens(res.tokens); needsReconnect.value = false }
+      return true
+    }
+    catch {
+      // Panne réseau, ou réponse inattendue : on tente quand même la synchro avec le
+      // jeton en main, il est peut-être encore bon. Renoncer ici transformerait une
+      // coupure de métro en « balance en panne ». Ce qu'on ne fait PAS, c'est brûler
+      // le refresh_token pour rien.
+      return true
+    }
+  }
+
   async function sync(opts: { full?: boolean } = {}): Promise<boolean> {
     if (!tokens.value || syncing.value) return false
     syncing.value = true
     syncError.value = null
     try {
+      if (!(await ensureFresh())) return false
       const res = await $fetch<{
         groups: { date: number, measures: { value: number, type: number, unit: number }[] }[]
         activity: { date: string, steps?: number, distance?: number, calories?: number }[]
         updatetime: number
         tokens: { accessToken: string, refreshToken: string, expiresIn: number } | null
+        needsReconnect?: boolean
+        error?: string | null
       }>('/api/withings/sync', {
         method: 'POST',
         body: {
@@ -248,15 +312,17 @@ export function useWithings() {
         },
       })
 
-      if (res.tokens) {
-        tokens.value = {
-          ...tokens.value,
-          accessToken: res.tokens.accessToken,
-          refreshToken: res.tokens.refreshToken,
-          expiresAt: Math.floor(Date.now() / 1000) + res.tokens.expiresIn,
-        }
-        write(TOK_KEY, tokens.value)
+      // TOUJOURS en premier, avant toute autre lecture de la réponse : le serveur
+      // rend les jetons neufs même quand la suite a échoué, et les perdre ici
+      // reviendrait exactement au bug qu'on répare.
+      if (res.tokens) keepTokens(res.tokens)
+      if (res.needsReconnect) {
+        needsReconnect.value = true
+        syncError.value = res.error ?? 'Reconnecte le compte Withings.'
+        return false
       }
+      needsReconnect.value = false
+      if (res.error) { syncError.value = res.error; return false }
 
       const fresh = (res.groups || []).map(g => parseGroup(g)).filter((e): e is BodyEntry => !!e)
       if (fresh.length) {
@@ -332,7 +398,7 @@ export function useWithings() {
   }
 
   return {
-    hydrate, connected, tokens, connect, disconnect, adoptFromQuery,
+    hydrate, connected, tokens, connect, disconnect, adoptFromQuery, needsReconnect,
     entries, activity, latest, bodyComp, syncing, syncError, lastSync,
     sync, syncAndPush, autoSync, pushToJournal, addManual, removeEntry, confirmEntry,
     suspects, suspectAts, mirror,

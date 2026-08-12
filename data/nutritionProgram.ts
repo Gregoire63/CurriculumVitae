@@ -1434,12 +1434,29 @@ export const SLOTS_GYM: Slot[] = [
 
 // Journée SANS séance : pas de banane, pas de whey dans la collation de l'après-midi
 // (c'est `col-aprem-repos`, avec une pomme à la place), féculents réduits sur les deux
-// repas. Le déjeuner reste à 13 h 45 : garder le même horaire les deux types de jours
-// évite d'avoir faim à contretemps le lendemain d'un changement.
+// repas.
+//
+// **Déjeuner à 12 h 30**, et non plus à 13 h 45.
+//
+// Le plan gardait le même horaire les deux types de jours, en se disant qu'un créneau
+// stable évite d'avoir faim à contretemps le lendemain d'un changement. L'argument se
+// tenait sur le papier ; dans les faits, 13 h 45 n'est pas un choix mais une
+// CONSÉQUENCE — celle d'une séance entre midi et deux, d'un retour au bureau vers
+// 13 h 30-50 et d'une boîte mangée dans la foulée. Sans séance, cette contrainte
+// n'existe pas, et l'heure devenait juste une heure tardive imposée sans raison.
+//
+// Le déclencheur est le bon : Grégoire mangeait plus tôt les jours sans salle, quoi
+// qu'affiche l'app. Un plan que la réalité contredit tous les mercredis n'est pas un
+// plan stable, c'est un plan faux — et il finit par décrédibiliser les créneaux qui,
+// eux, comptent vraiment (la banane avant l'effort, le shaker de 17 h).
+//
+// Les écarts d'un jour de repos deviennent 3 h 30 / 4 h 30 / 3 h 30 / 2 h. Le trou du
+// milieu est le plus long de la journée, mais il tombe l'après-midi et la collation de
+// 17 h le coupe bien. Rien d'autre ne bouge.
 export const SLOTS_REST: Slot[] = [
   { id: 'pdj', time: '9 h', label: 'Petit-déjeuner', recipe: 'pdj-croquant' },
   { id: 'creatine', time: '9 h 05', label: 'Créatine (dans le petit-déjeuner)', recipe: 'creatine' },
-  { id: 'lunch', time: '13 h 45', label: 'Déjeuner (boîte)', from: 'lunch', ratio: 'rest' },
+  { id: 'lunch', time: '12 h 30', label: 'Déjeuner (boîte)', from: 'lunch', ratio: 'rest' },
   { id: 'snack', time: '17 h', label: 'Collation', recipe: 'col-aprem-repos' },
   { id: 'dinner', time: '20 h 30', label: 'Dîner', from: 'dinner', ratio: 'rest' },
   { id: 'night', time: '22 h 30', label: 'Avant de dormir', recipe: 'col-soir-repos' },

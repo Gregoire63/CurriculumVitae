@@ -1,4 +1,4 @@
-import { api, refreshTokens } from './_client'
+import { WithingsError, api, refreshTokens } from './_client'
 import type { Tokens } from './_client'
 
 // Récupère pesées + activité. Le navigateur envoie ses jetons, le serveur les
@@ -42,30 +42,72 @@ export default defineEventHandler(async (event) => {
 
   let access = body.accessToken ?? ''
   let renewed: Tokens | null = null
+  let needsReconnect = false
 
-  // Le jeton Withings vit 3 h. Plutôt que de suivre son expiration côté client
-  // (horloge du téléphone, décalages, mise en veille), on tente et on rafraîchit
-  // sur échec : une requête perdue de temps en temps contre zéro état à maintenir.
+  const out = (extra: Record<string, unknown>) => ({
+    groups: [] as MeasResponse['measuregrps'],
+    timezone: null as string | null,
+    updatetime: nowSec,
+    activity: [] as ActivityResponse['activities'],
+    // Les jetons renouvelés repartent TOUJOURS, y compris quand la suite a échoué.
+    // C'est la règle qui manquait : Withings invalide l'ancien refresh_token dès
+    // qu'il en émet un nouveau, donc un jeton émis mais non transmis est un compte
+    // cassé jusqu'à reconnexion manuelle. Il ne doit exister AUCUN chemin de sortie
+    // qui perde `renewed`.
+    tokens: renewed
+      ? { accessToken: renewed.access_token, refreshToken: renewed.refresh_token, expiresIn: renewed.expires_in }
+      : null,
+    needsReconnect,
+    error: null as string | null,
+    ...extra,
+  })
+
+  /**
+   * Le jeton d'accès vit 3 h. On tente, et on rafraîchit UNIQUEMENT sur une erreur
+   * d'authentification.
+   *
+   * Le « uniquement » a son importance : la version précédente réessayait sur
+   * n'importe quelle erreur. Un quota dépassé ou un réseau qui saute brûlait donc un
+   * refresh_token pour rien — et comme Withings enterre l'ancien à la seconde où il
+   * en émet un nouveau, une seule requête malchanceuse pouvait condamner le compte.
+   */
   async function withRetry<T>(run: (token: string) => Promise<T>): Promise<T> {
     try {
       return await run(access)
     }
     catch (err) {
       if (!body.refreshToken) throw err
+      if (!(err instanceof WithingsError) || !err.isAuth) throw err
       renewed = await refreshTokens(event, body.refreshToken)
       access = renewed.access_token
       return await run(access)
     }
   }
 
-  const meas = await withRetry(t => api<MeasResponse>('/measure', t, {
-    action: 'getmeas',
-    meastypes: '1,5,6,8,11,76,77,88',
-    category: '1',
-    lastupdate: String(since),
-  }))
+  let meas: MeasResponse
+  try {
+    meas = await withRetry(t => api<MeasResponse>('/measure', t, {
+      action: 'getmeas',
+      meastypes: '1,5,6,8,11,76,77,88',
+      category: '1',
+      lastupdate: String(since),
+    }))
+  }
+  catch (err) {
+    // Le refresh_token lui-même a été refusé : ça ne se répare pas ici, il faut
+    // repasser par Withings. On le dit, au lieu de rendre une erreur brute que le
+    // téléphone affichera sans savoir qu'un bouton « Reconnecter » existe.
+    if (err instanceof WithingsError && err.isAuth) {
+      needsReconnect = true
+      return out({ error: 'La balance a révoqué l\'autorisation. Reconnecte le compte Withings, une fois : tes mesures déjà récupérées ne bougent pas.' })
+    }
+    // Toute autre panne : on rend quand même les jetons s'il y en a de neufs.
+    if (renewed) return out({ error: (err as Error).message.slice(0, 160) })
+    throw err
+  }
 
-  // getactivity veut des dates, pas des epochs.
+  // getactivity veut des dates, pas des epochs. Son échec n'est jamais bloquant :
+  // les pas sont un bonus, les pesées sont le sujet.
   const activity = await withRetry(t => api<ActivityResponse>('/v2/measure', t, {
     action: 'getactivity',
     startdateymd: isoOf(since),
@@ -73,14 +115,10 @@ export default defineEventHandler(async (event) => {
     data_fields: 'steps,distance,calories,totalcalories',
   })).catch(() => ({ activities: [] } as ActivityResponse))
 
-  return {
+  return out({
     groups: meas.measuregrps ?? [],
     timezone: meas.timezone ?? null,
     updatetime: meas.updatetime ?? nowSec,
     activity: activity.activities ?? [],
-    // Non nul uniquement si les jetons ont été renouvelés : le client les réécrit alors.
-    tokens: renewed
-      ? { accessToken: (renewed as Tokens).access_token, refreshToken: (renewed as Tokens).refresh_token, expiresIn: (renewed as Tokens).expires_in }
-      : null,
-  }
+  })
 })

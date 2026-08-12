@@ -18,7 +18,7 @@ import { isoOf, shiftIso } from '~/utils/sportStats'
 // glissante, sa pente, et la répartition gras / muscle de ce qui a été perdu.
 
 const {
-  hydrate, connected, entries, latest,
+  hydrate, connected, needsReconnect, connect, entries, latest,
   syncing, syncError, lastSync, syncAndPush, autoSync, addManual, removeEntry, confirmEntry,
   weightSeries, slope, comp, suspects, suspectAts,
 } = useWithings()
@@ -182,7 +182,21 @@ const fmt = (n: number, d = 1) => (n > 0 ? '+' : '') + n.toFixed(d)
       </div>
     </section>
 
-    <p v-if="syncError" class="nu-note nu-wi-err">{{ syncError }}</p>
+    <!-- Autorisation révoquée : ce n'est pas un message d'erreur, c'est un état qui
+         appelle UNE action. Affiché comme les autres textes rouges, il se serait
+         perdu — et rien n'aurait dit que la réponse tient en un bouton. -->
+    <section v-if="needsReconnect" class="card nu-wi-reco">
+      <h3 class="nu-mode">🔌 Autorisation à renouveler</h3>
+      <p class="nu-note">
+        Withings a révoqué l'accès de l'appli. Ça arrive quand une autorisation expire
+        ou qu'une synchro s'est interrompue au mauvais moment.
+        <b>Tes mesures déjà récupérées ne bougent pas</b> — elles sont sur ce téléphone,
+        pas chez Withings.
+      </p>
+      <button class="btn primary" @click="connect()">Reconnecter le compte Withings</button>
+    </section>
+
+    <p v-else-if="syncError" class="nu-note nu-wi-err">{{ syncError }}</p>
 
     <!-- Balance partagée : elle reconnaît l'utilisateur au poids et peut se tromper
          entre deux personnes proches. On ne supprime rien, on met de côté et on

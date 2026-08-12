@@ -900,11 +900,26 @@ describe('horaires des repas', () => {
     }
   })
 
-  it('le déjeuner tombe à 13 h 45 les deux types de jours — c\'est une contrainte, pas un choix', () => {
-    // Départ à la salle entre 12 h et 12 h 25, retour au bureau entre 13 h 30 et
-    // 13 h 50, boîte mangée dans la foulée : 13 h 45 est le milieu de la fourchette.
+  it('le déjeuner suit la séance les jours de salle, et l\'appétit les autres', () => {
+    // 13 h 45 un jour de salle n'est PAS un choix : départ entre 12 h et 12 h 25,
+    // retour au bureau entre 13 h 30 et 13 h 50, boîte mangée dans la foulée. C'est
+    // le milieu de la fourchette, et ça ne se négocie pas.
+    expect(SLOTS_GYM.find(s => s.id === 'lunch')!.time).toBe('13 h 45')
+    // Sans séance, cette contrainte n'existe pas. L'app affichait quand même 13 h 45
+    // pendant que le déjeuner se prenait à 12 h 30 : un plan que la réalité contredit
+    // tous les mercredis finit par décrédibiliser les créneaux qui comptent vraiment.
+    expect(SLOTS_REST.find(s => s.id === 'lunch')!.time).toBe('12 h 30')
+    expect(minutes(SLOTS_REST.find(s => s.id === 'lunch')!.time))
+      .toBeLessThan(minutes(SLOTS_GYM.find(s => s.id === 'lunch')!.time))
+  })
+
+  it('ne laisse aucun trou de plus de cinq heures, jour de repos compris', () => {
+    // Avancer le déjeuner allonge l'après-midi : 12 h 30 → 17 h fait 4 h 30, le plus
+    // long écart de la journée. Au-delà de cinq heures on ne tient pas sans grignoter,
+    // et c'est exactement ce que le plan cherche à éviter.
     for (const slots of [SLOTS_GYM, SLOTS_REST]) {
-      expect(slots.find(s => s.id === 'lunch')!.time).toBe('13 h 45')
+      const t = slots.map(s => minutes(s.time))
+      for (let i = 1; i < t.length; i++) expect(t[i] - t[i - 1]).toBeLessThanOrEqual(300)
     }
   })
 

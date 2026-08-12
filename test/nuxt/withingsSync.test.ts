@@ -22,6 +22,22 @@ registerEndpoint('/api/withings/sync', {
   },
 })
 
+// La route de rafraîchissement, simulée elle aussi : depuis la correction du jeton
+// mort, `sync()` passe TOUJOURS par elle quand le jeton d'accès est périmé.
+let refreshPayload: Record<string, unknown> = {}
+let refreshCalls = 0
+let lastRefreshBody: Record<string, unknown> | null = null
+
+registerEndpoint('/api/withings/refresh', {
+  method: 'POST',
+  handler: async (event) => {
+    refreshCalls++
+    lastRefreshBody = await readBody(event)
+    if (refreshPayload.boom) throw new Error('réseau indisponible')
+    return refreshPayload
+  },
+})
+
 // Câblage du composable Withings : persistance, report de composition, reversement
 // des pas dans la nutrition, synchronisation d'ouverture.
 //
@@ -37,6 +53,9 @@ beforeEach(() => {
   syncCalls = 0
   lastBody = null
   syncPayload = { groups: [], activity: [], updatetime: 1_760_000_000, tokens: null }
+  refreshCalls = 0
+  lastRefreshBody = null
+  refreshPayload = { tokens: { accessToken: 'a2', refreshToken: 'r2', expiresIn: 10800 }, needsReconnect: false, error: null }
 })
 
 const load = async () => {
@@ -330,5 +349,108 @@ describe('quarantaine', () => {
     expect(c.kg).toBe(92.4)
     expect(c.fatRatio).toBe(26.5)
     expect(c.carried).toBe(true)
+  })
+})
+
+
+// ─── Le jeton qui meurt ──────────────────────────────────────────────────────
+//
+// Le bug qui a cassé la balance, et les trois règles qui l'empêchent de revenir.
+//
+// Withings FAIT TOURNER ses refresh_token : chaque rafraîchissement en émet un
+// nouveau et invalide l'ancien dans la seconde. `sync` rafraîchissait au milieu de
+// son travail puis relançait l'appel de données ; quand ce second appel échouait, le
+// handler levait et le jeton neuf n'atteignait jamais le téléphone — pendant que
+// Withings avait déjà enterré l'ancien. À partir de là, chaque synchro renvoyait un
+// jeton mort : « status 503 : invalid params: refresh_token », à vie.
+const TOK_KEY = 'gr-withings-tok-v1'
+const seedTokens = (expiresAt: number, refresh = 'r1') =>
+  localStorage.setItem(TOK_KEY, JSON.stringify({ accessToken: 'a1', refreshToken: refresh, expiresAt }))
+const stored = () => JSON.parse(localStorage.getItem(TOK_KEY) || '{}')
+const past = Math.floor(Date.now() / 1000) - 60
+const future = Math.floor(Date.now() / 1000) + 3600
+
+describe('jetons Withings', () => {
+  it('rafraîchit AVANT d\'aller chercher les données, et enregistre aussitôt', async () => {
+    // L'ordre est tout : il ne doit rien rester entre l'émission du jeton et son
+    // écriture. C'est le seul moyen qu'une panne de réseau ne condamne pas le compte.
+    seedTokens(past)
+    const w = await load()
+    await w.sync()
+    expect(refreshCalls).toBe(1)
+    expect(lastRefreshBody).toMatchObject({ refreshToken: 'r1' })
+    expect(stored().refreshToken).toBe('r2')
+    // …et la synchro est bien partie ensuite, avec le jeton neuf.
+    expect(syncCalls).toBe(1)
+    expect(lastBody).toMatchObject({ accessToken: 'a2', refreshToken: 'r2' })
+  })
+
+  it('ne brûle pas un jeton encore valide', async () => {
+    seedTokens(future)
+    const w = await load()
+    await w.sync()
+    expect(refreshCalls).toBe(0)
+    expect(syncCalls).toBe(1)
+  })
+
+  it('garde les jetons rendus par une synchro qui a ÉCHOUÉ', async () => {
+    // Le cœur de la régression. Le serveur rend désormais `tokens` même quand la
+    // suite s'est mal passée ; les perdre ici referait exactement le même trou.
+    seedTokens(future)
+    syncPayload = {
+      groups: [], activity: [], updatetime: 0,
+      tokens: { accessToken: 'a9', refreshToken: 'r9', expiresIn: 10800 },
+      needsReconnect: false, error: 'Withings status 601: too many requests',
+    }
+    const w = await load()
+    const ok = await w.sync()
+    expect(ok).toBe(false)
+    expect(stored().refreshToken).toBe('r9') // écrit malgré l'échec
+    expect(w.syncError.value).toContain('601')
+  })
+
+  it('bascule sur « à reconnecter » quand le refresh_token est refusé', async () => {
+    seedTokens(past)
+    refreshPayload = { tokens: null, needsReconnect: true, error: 'La balance a révoqué l\'autorisation.' }
+    const w = await load()
+    const ok = await w.sync()
+    expect(ok).toBe(false)
+    expect(w.needsReconnect.value).toBe(true)
+    expect(syncCalls).toBe(0) // inutile d'aller plus loin
+    expect(stored().refreshToken).toBe('r1') // on n'écrase pas avec du vide
+  })
+
+  it('sort de l\'état « à reconnecter » dès qu\'une synchro repasse', async () => {
+    seedTokens(past)
+    refreshPayload = { tokens: null, needsReconnect: true, error: 'révoquée' }
+    const w = await load()
+    await w.sync()
+    expect(w.needsReconnect.value).toBe(true)
+    refreshPayload = { tokens: { accessToken: 'a3', refreshToken: 'r3', expiresIn: 10800 }, needsReconnect: false, error: null }
+    await w.sync()
+    expect(w.needsReconnect.value).toBe(false)
+    expect(stored().refreshToken).toBe('r3')
+  })
+
+  it('tente quand même la synchro si la route de rafraîchissement est injoignable', async () => {
+    // Réseau coupé sur /refresh : le jeton d'accès en main est peut-être encore bon.
+    // Ce qu'on ne fait surtout pas, c'est déclarer le compte mort — ni brûler le
+    // refresh_token pour rien.
+    seedTokens(past)
+    refreshPayload = { boom: true }
+    const w = await load()
+    await w.sync()
+    expect(w.needsReconnect.value).toBe(false)
+    expect(syncCalls).toBe(1)
+  })
+
+  it('oublie l\'état de reconnexion quand on déconnecte le compte', async () => {
+    seedTokens(past)
+    refreshPayload = { tokens: null, needsReconnect: true, error: 'révoquée' }
+    const w = await load()
+    await w.sync()
+    expect(w.needsReconnect.value).toBe(true)
+    w.disconnect()
+    expect(w.needsReconnect.value).toBe(false)
   })
 })

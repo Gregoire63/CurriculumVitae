@@ -24,6 +24,29 @@ function creds(event: H3Event) {
 }
 
 /**
+ * Statuts Withings qui parlent du JETON et de rien d'autre.
+ *
+ * 401 : le jeton d'accès est expiré ou révoqué — c'est le cas normal, il vit 3 h.
+ * 503 : « Invalid Params ». C'est le statut que renvoie l'endpoint de jetons quand
+ *       le refresh_token n'est plus valide, avec le message « invalid params:
+ *       refresh_token ». Attention : 503 est ici un statut WITHINGS, pas un code
+ *       HTTP — Withings répond toujours 200 et met le vrai statut dans le corps.
+ *       Confondre les deux envoie chercher une panne de serveur qui n'existe pas.
+ */
+export const AUTH_STATUSES = [401, 503]
+
+/** L'erreur porte le statut Withings, pour que l'appelant décide quoi en faire. */
+export class WithingsError extends Error {
+  constructor(readonly status: number, readonly detail: string) {
+    super(`Withings status ${status}: ${detail}`)
+    this.name = 'WithingsError'
+  }
+
+  /** Un problème de jeton, par opposition à une panne, un quota ou une donnée absente. */
+  get isAuth() { return AUTH_STATUSES.includes(this.status) }
+}
+
+/**
  * Withings renvoie toujours HTTP 200 : le vrai statut est dans `status` du corps.
  * Traiter la réponse comme réussie parce que le code HTTP est 200 fait passer les
  * erreurs de jeton pour des données vides, et le bug devient introuvable.
@@ -34,9 +57,7 @@ async function call<T>(url: string, body: Record<string, string>): Promise<T> {
     body: new URLSearchParams(body).toString(),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
-  if (res.status !== 0) {
-    throw createError({ statusCode: 502, statusMessage: `Withings status ${res.status}: ${res.error ?? 'erreur inconnue'}` })
-  }
+  if (res.status !== 0) throw new WithingsError(res.status, res.error ?? 'erreur inconnue')
   return res.body as T
 }
 
@@ -73,8 +94,6 @@ export async function api<T>(path: string, accessToken: string, params: Record<s
       'Authorization': `Bearer ${accessToken}`,
     },
   })
-  if (res.status !== 0) {
-    throw createError({ statusCode: 502, statusMessage: `Withings status ${res.status}: ${res.error ?? 'erreur inconnue'}` })
-  }
+  if (res.status !== 0) throw new WithingsError(res.status, res.error ?? 'erreur inconnue')
   return res.body as T
 }
