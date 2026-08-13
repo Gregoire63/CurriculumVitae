@@ -189,6 +189,77 @@ export interface SwapLike { sets: SetLike[], swap?: boolean }
  */
 export const PERF_DROP_MIN = 0.05
 
+// ─── Variantes : ramener deux machines à la même échelle ─────────────────────
+/**
+ * Une séance sur une autre machine, ramenée à l'échelle de l'exercice de référence.
+ *
+ * C'est l'opération centrale du système de variantes : la charge SAISIE reste celle
+ * qu'on a réellement mise sur la machine — c'est celle qu'on remettra la prochaine
+ * fois —, mais tout ce qui COMPARE dans le temps (courbe, stagnation, baisse de
+ * performance, prochain palier) travaille sur la charge convertie. Sans quoi passer
+ * au squat guidé ferait bondir la courbe de 35 % sans avoir gagné un gramme de
+ * muscle, et y revenir la ferait plonger d'autant.
+ */
+export function rescaleSets<T extends SetLike>(sets: T[], factor: number): T[] {
+  if (!(factor > 0) || factor === 1) return sets
+  return sets.map(s => ({
+    ...s,
+    w: s.w ? s.w * factor : s.w,
+    ...(s.w2 ? { w2: s.w2 * factor } : {}),
+  }))
+}
+
+/** Un rapport en dehors de cette fourchette est une erreur de saisie, pas une machine. */
+export const RATIO_MIN = 0.2
+export const RATIO_MAX = 5
+/** En dessous, un rapport « mesuré » ne mesure qu'une bonne journée. */
+export const RATIO_MIN_SESSIONS = 2
+/** Au-delà, on compare deux niveaux différents plutôt que deux machines. */
+export const RATIO_WINDOW_DAYS = 120
+
+const median = (xs: number[]): number => {
+  const s = [...xs].sort((a, b) => a - b)
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+export interface RatioSample { date: string, sets: SetLike[], variant?: string }
+export interface MeasuredRatio { ratio: number, sessions: number, refSessions: number }
+
+/**
+ * Le rapport réel entre une variante et la référence, mesuré sur SES séances.
+ *
+ * Le coefficient du catalogue est un ordre de grandeur ; celui-ci est un fait. On
+ * compare les 1RM estimés médians des deux mouvements — le 1RM plutôt que la charge
+ * affichée parce qu'il tient compte des reps, la médiane plutôt que la moyenne parce
+ * qu'une séance ratée ne doit pas déplacer le rapport.
+ *
+ * Deux garde-fous, et ils comptent autant que le calcul :
+ *   • une fenêtre glissante, sinon on compare le squat d'il y a un an à la machine
+ *     d'aujourd'hui et le « rapport » ne mesure que la progression ;
+ *   • une fourchette de plausibilité, pour qu'un 425 kg tapé de travers ne réécrive
+ *     pas toute la courbe (le cas s'est déjà produit sur `oiseau`).
+ *
+ * Rend `null` tant qu'il n'y a pas de quoi conclure : le catalogue reprend la main,
+ * et l'écran le dit.
+ */
+export function measuredRatio(
+  history: RatioSample[],
+  variantId: string,
+  todayIso: string,
+  windowDays = RATIO_WINDOW_DAYS,
+): MeasuredRatio | null {
+  const from = shiftIso(todayIso, -windowDays)
+  const recent = history.filter(h => h.date >= from && workSets(h.sets).length)
+  const ref = recent.filter(h => !h.variant).map(h => e1rmOf(h.sets)).filter(v => v > 0)
+  const alt = recent.filter(h => h.variant === variantId).map(h => e1rmOf(h.sets)).filter(v => v > 0)
+  if (ref.length < RATIO_MIN_SESSIONS || alt.length < RATIO_MIN_SESSIONS) return null
+
+  const ratio = median(alt) / median(ref)
+  if (!Number.isFinite(ratio) || ratio < RATIO_MIN || ratio > RATIO_MAX) return null
+  return { ratio: Math.round(ratio * 100) / 100, sessions: alt.length, refSessions: ref.length }
+}
+
 /** L'historique depuis le dernier changement de matériel (celui-ci inclus). */
 export function sinceSwap<T extends SwapLike>(history: T[]): T[] {
   for (let i = history.length - 1; i >= 0; i--) if (history[i].swap) return history.slice(i)

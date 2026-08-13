@@ -128,6 +128,30 @@ async function encode(src: ImageBitmap | HTMLImageElement, max: number, quality:
   return jpeg
 }
 
+/**
+ * Espace de noms des photos de matériel : `ex:<exercice>` pour le mouvement du
+ * programme, `ex:<variante>` pour une machine de remplacement. Elles vivent dans le
+ * même stockage que les photos de plats — un seul mécanisme de redimensionnement,
+ * de persistance et de vignettes — mais elles n'obéissent pas au même nettoyage.
+ */
+export const GEAR_PHOTO_PREFIX = 'ex:'
+export const gearPhotoId = (id: string) => `${GEAR_PHOTO_PREFIX}${id}`
+export const isGearPhoto = (id: string) => id.startsWith(GEAR_PHOTO_PREFIX)
+
+/**
+ * Les photos à supprimer : celles dont le plat n'existe plus.
+ *
+ * Fonction pure et exportée parce que c'est la seule partie DESTRUCTRICE du
+ * stockage, et la seule qu'on puisse tester sans IndexedDB. Les photos de matériel
+ * en sont exclues : la bibliothèque de plats est le seul écran qui sache ce qui
+ * existe encore, mais elle ne sait rien des machines — sans ce filtre, ouvrir
+ * l'onglet « Plats » effacerait en silence toutes les photos prises à la salle.
+ */
+export function orphanPhotoIds(all: string[], knownDishIds: string[]): string[] {
+  const known = new Set(knownDishIds)
+  return all.filter(id => !isGearPhoto(id) && !known.has(id))
+}
+
 export function usePhotos() {
   /** Charge les métadonnées (pas les blobs : on ne veut pas 20 Mo en RAM au démarrage). */
   async function hydrate() {
@@ -199,10 +223,16 @@ export function usePhotos() {
     metas.value = next
   }
 
-  /** Supprime les photos dont le plat n'existe plus — sinon elles occupent l'espace à vie. */
+  /**
+   * Supprime les photos dont le plat n'existe plus — sinon elles occupent l'espace à vie.
+   *
+   * Le nettoyage ne vaut QUE pour les plats. La bibliothèque de plats est le seul
+   * écran qui sache ce qui existe encore, mais elle ne sait rien des photos de
+   * machines : sans ce garde-fou, ouvrir l'onglet « Plats » effacerait en silence
+   * toutes les photos de matériel prises à la salle.
+   */
   async function prune(knownIds: string[]) {
-    const known = new Set(knownIds)
-    const orphans = Object.keys(metas.value).filter(id => !known.has(id))
+    const orphans = orphanPhotoIds(Object.keys(metas.value), knownIds)
     for (const id of orphans) await remove(id)
     return orphans.length
   }

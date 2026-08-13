@@ -660,3 +660,80 @@ describe('objectif de sprint', () => {
     expect(sprintGoal([], '2026-08-04')).toBeNull()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Variantes : ramener deux machines à la même échelle
+import { RATIO_MAX, measuredRatio, rescaleSets } from '../../utils/sportStats'
+
+describe('conversion d\'une machine à l\'autre', () => {
+  it('ne touche qu\'aux charges, jamais aux reps ni à l\'échauffement', () => {
+    const sets = [{ w: 100, r: 8 }, { w: 60, r: 10, warm: true }, { w: 80, r: 8, w2: 40, r2: 12 }]
+    const out = rescaleSets(sets, 0.5)
+    expect(out.map(s => s.w)).toEqual([50, 30, 40])
+    expect(out.map(s => s.r)).toEqual([8, 10, 8])
+    expect(out[1].warm).toBe(true)
+    expect(out[2].w2).toBe(20) // le 2e mouvement d'un superset suit
+    expect(sets[0].w).toBe(100) // l'original n'est pas modifié
+  })
+
+  it('rend les séries telles quelles quand il n\'y a rien à convertir', () => {
+    const sets = [{ w: 100, r: 8 }]
+    expect(rescaleSets(sets, 1)).toBe(sets)
+    expect(rescaleSets(sets, 0)).toBe(sets) // un facteur absurde ne doit pas tout écraser
+  })
+})
+
+describe('le rapport mesuré entre deux machines', () => {
+  const sess = (date: string, w: number, variant?: string) => ({
+    date, sets: [{ w, r: 8 }, { w, r: 8 }], ...(variant ? { variant } : {}),
+  })
+
+  it('se tait tant qu\'il n\'y a pas de quoi conclure', () => {
+    // Une séance de chaque côté ne mesure qu'une bonne journée : le catalogue garde
+    // la main, et l'écran le dit.
+    const h = [sess('2026-08-01', 100), sess('2026-08-03', 135, 'v')]
+    expect(measuredRatio(h, 'v', '2026-08-10')).toBeNull()
+  })
+
+  it('compare les 1RM estimés, pas les charges affichées', () => {
+    // 130 kg × 8 contre 100 kg × 8 : le rapport doit sortir à 1,3 — et il sortirait
+    // pareil avec des reps différentes, c'est tout l'intérêt du 1RM.
+    const h = [
+      sess('2026-08-01', 100), sess('2026-08-04', 100),
+      sess('2026-08-02', 130, 'v'), sess('2026-08-05', 130, 'v'),
+    ]
+    const m = measuredRatio(h, 'v', '2026-08-10')
+    expect(m).not.toBeNull()
+    expect(m!.ratio).toBe(1.3)
+    expect(m!.sessions).toBe(2)
+  })
+
+  it('résiste à une séance ratée grâce à la médiane', () => {
+    const h = [
+      sess('2026-08-01', 100), sess('2026-08-04', 100), sess('2026-08-06', 100),
+      sess('2026-08-02', 130, 'v'), sess('2026-08-05', 130, 'v'), sess('2026-08-07', 70, 'v'),
+    ]
+    expect(measuredRatio(h, 'v', '2026-08-10')!.ratio).toBe(1.3)
+  })
+
+  it('refuse un rapport aberrant plutôt que de réécrire la courbe', () => {
+    // Le 425 kg tapé de travers sur `oiseau` avait déjà ruiné une régression. Ici il
+    // ferait un rapport de 10 : on rend null, le catalogue reprend la main.
+    const h = [
+      sess('2026-08-01', 100), sess('2026-08-04', 100),
+      sess('2026-08-02', 1000, 'v'), sess('2026-08-05', 1000, 'v'),
+    ]
+    expect(measuredRatio(h, 'v', '2026-08-10')).toBeNull()
+    expect(RATIO_MAX).toBeLessThan(10)
+  })
+
+  it('ignore ce qui est trop vieux pour être comparable', () => {
+    // Sans fenêtre, on comparerait le squat d'il y a un an à la machine
+    // d'aujourd'hui : le « rapport » ne mesurerait que la progression.
+    const h = [
+      sess('2025-01-01', 100), sess('2025-01-08', 100),
+      sess('2026-08-02', 130, 'v'), sess('2026-08-05', 130, 'v'),
+    ]
+    expect(measuredRatio(h, 'v', '2026-08-10')).toBeNull()
+  })
+})

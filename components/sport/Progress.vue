@@ -24,10 +24,25 @@ function sessionMuscles(s: Session): string[] {
 
 const progressSession = ref<string | null>(PROGRAM[0]?.id ?? null)
 const progressSessionObj = computed(() => (progressSession.value ? PROGRAM.find(p => p.id === progressSession.value) ?? null : null))
+/**
+ * La courbe est en ÉQUIVALENT référence : une séance faite sur une autre machine y
+ * est convertie, sinon passer au squat guidé ferait bondir le tracé de 35 % sans
+ * avoir gagné un gramme de muscle. On garde donc à part le nombre de machines
+ * traversées, pour le dire au lieu de le cacher.
+ */
 function exStats(exId: string) {
   const d = chartData(exId)
   if (!d.length) return null
-  return { max: d[d.length - 1].charge, gain: d[d.length - 1].charge - d[0].charge, e1rm: d[d.length - 1].e1rm, data: d }
+  const machines = new Set(d.map(p => p.variant).filter(Boolean))
+  const last = d[d.length - 1]
+  return {
+    max: last.charge,
+    gain: Math.round((last.charge - d[0].charge) * 10) / 10,
+    e1rm: last.e1rm,
+    data: d,
+    converted: machines.size > 0,
+    lastReal: last.variant ? last.realCharge : null,
+  }
 }
 const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).map(e => ({ e, stats: exStats(e.id) })))
 </script>
@@ -63,6 +78,12 @@ const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).m
               <span class="pk"><b class="mono">{{ stats.e1rm }}</b> kg 1RM</span>
             </div>
           </div>
+          <p v-if="stats?.converted" class="muted prog-conv">
+            🔁 Courbe en équivalent «&nbsp;{{ e.name }}&nbsp;» : les séances faites sur une
+            autre machine y sont converties, pour qu'un changement de matériel ne se lise
+            pas comme un gain.
+            <template v-if="stats.lastReal"> Dernière séance&nbsp;: {{ stats.lastReal }} kg réels.</template>
+          </p>
           <LazySportSvgChart v-if="stats" :data="stats.data" y-key="charge" :color="progressSessionObj.color" :height="150" />
           <div v-else class="muted prog-empty">Pas encore de données — enregistre une séance avec cet exercice.</div>
         </div>

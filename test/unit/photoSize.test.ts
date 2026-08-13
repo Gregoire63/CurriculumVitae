@@ -116,3 +116,31 @@ describe('storageVerdict', () => {
     expect(v.note).toContain('Supprime')
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+import { gearPhotoId, isGearPhoto, orphanPhotoIds } from '../../composables/usePhotos'
+
+// Le nettoyage des photos est la seule opération DESTRUCTRICE du stockage : c'est
+// celle qu'il faut border. Les photos de plats et les photos de machines partagent
+// la même base — même redimensionnement, même persistance — mais pas le même cycle
+// de vie, et un seul écran connaît la liste des plats encore valides.
+describe('nettoyage des photos', () => {
+  it('supprime les photos de plats disparus', () => {
+    const all = ['boite-a', 'din-saumon', 'plat-supprime']
+    expect(orphanPhotoIds(all, ['boite-a', 'din-saumon'])).toEqual(['plat-supprime'])
+  })
+
+  it('ne touche jamais aux photos de matériel', () => {
+    // Sans ce garde-fou, ouvrir l'onglet « Plats » effacerait en silence toutes les
+    // photos de machines prises à la salle : la bibliothèque ne passe que des
+    // identifiants de plats, tout le reste lui paraît orphelin.
+    const all = ['boite-a', gearPhotoId('squat-vsquat'), gearPhotoId('squat')]
+    expect(orphanPhotoIds(all, ['boite-a'])).toEqual([])
+    expect(orphanPhotoIds(all, [])).toEqual(['boite-a'])
+  })
+
+  it('reconnaît une photo de matériel à son espace de noms', () => {
+    expect(isGearPhoto(gearPhotoId('squat-presse'))).toBe(true)
+    expect(isGearPhoto('boite-a')).toBe(false)
+  })
+})

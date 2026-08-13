@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import type { Food, Recipe } from '~/data/nutritionProgram'
-import type { DayOverride, DayPlan, Extra, Library, MenuWeek, PrepMode, PriceMap, ShoppingList, WeekTemplate } from '~/lib/nutritionStats'
+import type { DayOverride, DayPlan, Extra, Library, MenuDay, MenuWeek, PrepMode, PriceMap, ShoppingList, WeekTemplate } from '~/lib/nutritionStats'
 import {
   DEFAULT_WEEK, basketTotal, blankWeekDays, buildDay, builtinWeeks, cookPlan, cookSelection,
   atFatPct, dairySwapCost, isAdjustableDairy,
@@ -391,6 +391,27 @@ export function useNutrition() {
     patchMenu(id, w => ({ ...w, days: w.days.map((d, i) => (i === dow ? { ...d, off: !d.off } : d)) }))
   }
   /** Duplique la semaine active sous un nouveau nom et bascule dessus. */
+  /**
+   * Crée une semaine complète d'un coup, et la nomme.
+   *
+   * Il n'existait que `duplicateMenu` + `setMenuSlot` créneau par créneau : quatorze
+   * écritures et autant d'occasions de laisser une semaine à moitié écrite si l'une
+   * d'elles échouait. Une semaine proposée par le connecteur arrive entière ou pas
+   * du tout — elle s'écrit donc entière ou pas du tout.
+   */
+  function createMenu(name: string, days: MenuDay[]): string | null {
+    if (!Array.isArray(days) || days.length !== 7) return null
+    const id = `w-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`
+    const week: MenuWeek = {
+      id,
+      name: name.trim() || 'Semaine',
+      days: days.map(d => ({ off: !!d.off, slots: { ...d.slots } })),
+    }
+    menus.value = [...menus.value, week]
+    saveMenus()
+    return id
+  }
+
   function duplicateMenu(name?: string): string | null {
     const src = activeWeek.value
     if (!src) return null
@@ -648,7 +669,7 @@ export function useNutrition() {
     hydrate, dayPlanFor,
     setWeekDay, resetWeek, dayFor, setOverride, clearOverride, hasOverride, ttConfirmed, stepsFor, setSteps,
     menus, activeMenu, activeWeek, menuFor, appliedFrom, gymDays,
-    setActiveMenu, applyMenuFrom, setMenuSlot, toggleMenuDayOff,
+    setActiveMenu, applyMenuFrom, setMenuSlot, toggleMenuDayOff, createMenu,
     duplicateMenu, renameMenu, removeMenu, blankMenu,
     selection, selectionSummary, selectionShopping, cookSessions, daysCovered, stock, pickedFor, setPicked,
     freezer, setFreezer,

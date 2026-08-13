@@ -6,8 +6,10 @@ import type { SessionRecord } from '~/composables/useWorkout'
 import { choicesForSlot } from '~/lib/nutritionStats'
 import { useNutrition } from '~/composables/useNutrition'
 import { useProfile } from '~/composables/useProfile'
+import { useTraining } from '~/composables/useTraining'
 import { useWithings } from '~/composables/useWithings'
 import { EFFORT_OPTIONS } from '~/utils/sportStats'
+import { variantName } from '~/data/exerciseVariants'
 import {
   bmrMifflin, buildDay, dayBurn, dayEnergy, roundMacros, sessionsOn,
 } from '~/lib/nutritionStats'
@@ -103,6 +105,26 @@ const canEatEdit = computed(() => !isFuture.value && !plan.value?.off)
  * pas de second mécanisme à maintenir, et le plat choisi compte dans le stock comme
  * une portion engagée.
  */
+/**
+ * Ce qui est PRÉVU ce jour-là, et les deux gestes qui le changent.
+ *
+ * La feuille ne racontait que le passé : « aucune séance enregistrée ». Or la
+ * question qu'on se pose devant une date à venir est l'inverse — « je ne serai pas
+ * dispo vendredi midi, je la fais quand ? ». Y répondre ailleurs (dans la semaine
+ * type) aurait réécrit toutes les semaines pour un empêchement d'une seule.
+ *
+ * Annuler et déplacer touchent le planning ET la journée alimentaire d'un seul
+ * geste — cf. `useTraining`.
+ */
+const { plannedFor, isPlanMoved, cancelTraining, moveTraining, resetTraining } = useTraining()
+const planned = computed(() => plannedFor(props.iso))
+const planMoved = computed(() => isPlanMoved(props.iso))
+const moving = ref(false)
+function move(to: string) {
+  moveTraining(props.iso, to)
+  moving.value = false
+}
+
 const swapping = ref<string | null>(null)
 const swapable = (slot: string) => choicesForSlot(slot, library.value, stock.value)
 const swapMeal = computed(() => plan.value?.meals.find(m => m.slot === swapping.value) ?? null)
@@ -167,16 +189,47 @@ function swap(slot: string, id: string | null) {
               <span class="mono muted">{{ s.at.slice(11, 16) }}<template v-if="s.durationMin"> · {{ s.durationMin }} min</template></span>
             </div>
             <div class="ds-s-ex">
-              <span v-for="e in s.entries" :key="e.exId" class="ds-s-line">
-                {{ exName(e.exId) }} <span v-if="effortIcon(e.effort)">{{ effortIcon(e.effort) }}</span>
-                <span class="mono muted">{{ e.sets.map(x => `${x.w}×${x.r}`).join(' · ') }}</span>
-              </span>
+              <template v-for="e in s.entries" :key="e.exId">
+                <span class="ds-s-line">
+                  {{ exName(e.exId) }} <span v-if="effortIcon(e.effort)">{{ effortIcon(e.effort) }}</span>
+                  <span class="mono muted">{{ e.sets.map(x => `${x.w}×${x.r}`).join(' · ') }}</span>
+                </span>
+                <span v-if="e.variant" class="ds-s-exnote">🔁 {{ variantName(e.exId, e.variant, '') }}</span>
+                <span v-if="e.note" class="ds-s-exnote">💬 {{ e.note }}</span>
+              </template>
             </div>
             <div v-if="s.note" class="ds-s-note">📝 {{ s.note }}</div>
             <div class="ds-s-edit muted">✏️ Touche pour modifier cette séance</div>
           </button>
         </div>
-        <div v-else class="muted ds-empty">Aucune séance enregistrée ce jour-là.</div>
+        <!-- Pas de séance enregistrée : c'est le planning qui parle, et il est
+             modifiable ici. Une fois la séance faite, ces boutons n'ont plus de
+             sens et disparaissent. -->
+        <div v-else class="ds-plan" :class="{ rest: !planned }" :style="planned ? { '--c': planned.color } : {}">
+          <div class="ds-p-top">
+            <span class="ds-p-dot" />
+            <span class="ds-p-name">{{ planned ? planned.name : 'Repos' }}</span>
+            <span v-if="planMoved" class="ds-p-flag">planning modifié</span>
+          </div>
+          <p class="ds-p-hint muted">
+            {{ planned
+              ? 'Prévu, pas encore enregistré. Annuler ou déplacer ajuste les calories des deux journées.'
+              : 'Rien de prévu : journée de repos, cible calorique réduite.' }}
+          </p>
+          <div class="ds-p-acts">
+            <button v-if="planned" class="ds-p-act" @click="cancelTraining(iso)">✕ Annuler</button>
+            <button v-if="planned" class="ds-p-act" @click="moving = true">⇄ Déplacer</button>
+            <button v-if="planMoved" class="ds-p-act ghost" @click="resetTraining(iso)">↺ Reprendre le planning</button>
+          </div>
+        </div>
+        <SportMoveSheet
+          v-if="moving && planned"
+          :iso="iso"
+          :name="planned.name"
+          :today-iso="todayIso"
+          @pick="move"
+          @close="moving = false"
+        />
 
         <!-- Repas -->
         <div class="ds-section">

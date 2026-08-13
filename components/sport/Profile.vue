@@ -4,6 +4,7 @@ import { useWorkout } from '~/composables/useWorkout'
 import { useNutrition } from '~/composables/useNutrition'
 import { useWithings } from '~/composables/useWithings'
 import { useProfile } from '~/composables/useProfile'
+import { useSnapshot } from '~/composables/useSnapshot'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useMealReminders } from '~/composables/useMealReminders'
 import { DAY_NAMES, minutesOf, slotsOf } from '~/lib/nutritionStats'
@@ -13,6 +14,8 @@ const props = defineProps<{ todayIso: string | null, withingsError?: string | nu
 const emit = defineEmits<{ flash: [msg: string] }>()
 
 const { bodyWeight, exportJSON, importJSON, lastExportAt, daysSinceExport, backupDate, restoreBackup } = useWorkout()
+// Un seul assemblage des données, partagé par l'export manuel et par le miroir.
+const { buildSnapshot } = useSnapshot()
 
 // Sauvegarde : tout vit dans le navigateur, donc on affiche l'âge du dernier export
 // et on propose l'instantané de secours écrit automatiquement (1×/jour).
@@ -26,7 +29,7 @@ function onRestore() {
   emit('flash', restoreBackup() ? 'Instantané restauré ✓' : 'Aucun instantané disponible')
 }
 
-const { profile, weekPlan, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
+const { profile, weekPlan, planDays, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
 // Le module nutrition part dans la même sauvegarde : une seule sauvegarde à gérer.
 const { exportData: nutritionData, restore: restoreNutrition, week, setWeekDay, resetWeek, hydrate: hydrateNutrition } = useNutrition()
 hydrateNutrition()
@@ -107,7 +110,7 @@ async function onImport(ev: Event) {
   if (!file) return
   try {
     await importJSON(file, (data) => {
-      restoreProfile(data as { profile?: typeof profile.value; weekPlan?: typeof weekPlan.value })
+      restoreProfile(data as { profile?: typeof profile.value; weekPlan?: typeof weekPlan.value; planDays?: typeof planDays.value })
       restoreNutrition(data as Parameters<typeof restoreNutrition>[0])
       restoreWithings(data)
     })
@@ -219,6 +222,9 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
       </div>
     </div>
 
+    <!-- Le coffre : miroir des données et boîte de réception des propositions -->
+    <SportVault :snapshot="buildSnapshot" @flash="emit('flash', $event)" />
+
     <!-- Rappels de repas -->
     <div class="card">
       <div class="row-between mb-8">
@@ -264,16 +270,12 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
       <!-- Dire la vérité sur la portée : un rappel auquel on se fie et qui ne vient
            pas est pire que pas de rappel du tout. -->
       <div class="muted mt-6">
-        <template v-if="meal.canSchedule()">
-          Les rappels sont programmés dans le téléphone : ils arrivent <b>même application
-          fermée</b>, et se relaient à la montre comme le chrono de repos.
-        </template>
-        <template v-else>
-          ⚠️ Cet appareil ne sait pas programmer de notification à l'avance. Les rappels
-          ne partiront donc <b>que si l'application est ouverte</b> — en arrière-plan
-          suffit, mais pas fermée. Sur Android avec Chrome, ils fonctionnent app fermée.
-        </template>
-        Ils se reposent à chaque ouverture de l'app, pour la journée en cours.
+        ⚠️ Sans serveur, aucun navigateur ne sait aujourd'hui faire sonner une notification
+        <b>application fermée</b> : l'API qui le permettait a été abandonnée par Chrome.
+        Les rappels partent donc tant que l'application tourne — en arrière-plan suffit.
+        Si le téléphone a mis l'onglet en veille entre-temps, le rappel manqué part
+        <b>dès que tu reprends ton téléphone</b>, en annonçant son retard, jusqu'à 1 h 30
+        après l'heure prévue. Au-delà, il est abandonné plutôt que de sonner à contretemps.
       </div>
     </div>
 
@@ -295,7 +297,7 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
     <div class="card">
       <div class="section-label mb-8">Données</div>
       <div class="nav-row">
-        <button class="btn flex-1" @click="exportJSON({ profile, weekPlan, nutrition: nutritionData(), ...withingsData() })">⬇ Exporter</button>
+        <button class="btn flex-1" @click="exportJSON(buildSnapshot())">⬇ Exporter</button>
         <label class="btn flex-1 center">⬆ Importer<input type="file" accept=".json" class="hidden-input" @change="onImport"></label>
         <button class="btn flex-1" @click="resetPlan()">↺ Réinit. planning</button>
       </div>

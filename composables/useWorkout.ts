@@ -4,8 +4,9 @@ import type { Exercise } from '~/data/sportProgram'
 import {
   workSets, topWeight, volumeOf, e1rmOf, setTop, detectPRs, sameWeightStreak, nextLoad,
   muscleSetCounts, withProgramMuscles, isEffort, assessFatigue, perfRegressed, startOfWeek, shiftIso, STALL_SESSIONS,
-  nextMilestone, sprintGoal, sprintSessionOf,
+  nextMilestone, sprintGoal, sprintSessionOf, measuredRatio, rescaleSets, roundToStep,
 } from '~/utils/sportStats'
+import { defaultRatio } from '~/data/exerciseVariants'
 import type { Effort, PrKind, SetLike, SprintSession, WeekStats } from '~/utils/sportStats'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
@@ -15,12 +16,18 @@ const working = <T extends SetLike>(sets: T[]) => workSets(sets)
 // effort : ressenti de l'exercice sur cette séance (sert à auto-réguler la charge)
 // swap : « matériel différent de la fois d'avant ». La séance compte normalement
 // dans le volume et l'historique, mais les COMPARAISONS de charge repartent d'ici.
-export interface SessionLog { date: string; sets: SetLog[]; durationMin?: number; effort?: Effort; swap?: boolean }
+// note : commentaire propre à CET exercice ce jour-là. La note de séance dit
+// comment allait la journée ; celle-ci dit pourquoi ce mouvement-là a bougé — banc
+// occupé, épaule qui tire, prise changée. C'est ce qu'on veut relire au moment de
+// refaire l'exercice, pas trois semaines plus tard en bas d'une séance.
+// variant : identifiant de la machine réellement utilisée (cf. data/exerciseVariants).
+// Absent = l'exercice de référence, celui du programme.
+export interface SessionLog { date: string; sets: SetLog[]; durationMin?: number; effort?: Effort; swap?: boolean; note?: string; variant?: string }
 export type Logs = Record<string, SessionLog[]>
 export interface BodyWeightEntry { date: string; kg: number }
 // Effort de sprint (course) : ex. « 3 × 20 s @ 16 km/h »
 export interface SprintEffort { kind: 'echauffement' | 'sprint'; count: number; duration: string; intensity: string }
-export interface SessionEntry { exId: string; sets: SetLog[]; effort?: Effort; swap?: boolean }
+export interface SessionEntry { exId: string; sets: SetLog[]; effort?: Effort; swap?: boolean; note?: string; variant?: string }
 // Enregistrement au niveau séance : garde l'ordre, la date ET l'heure
 export interface SessionRecord {
   at: string // ISO complet (date + heure)
@@ -51,6 +58,13 @@ let hydrated = false
 function safeParse<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback
   try { return JSON.parse(raw) as T } catch { return fallback }
+}
+
+/** `{ note }` si la note a du contenu, `{}` sinon — pour ne jamais écrire une clé
+ *  vide dans le stockage (elle repartirait dans l'export et dans les comparaisons). */
+const trimmed = (note?: string): { note?: string } => {
+  const t = note?.trim()
+  return t ? { note: t } : {}
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -103,10 +117,76 @@ export function useWorkout() {
     return h && h.length ? h[h.length - 1] : null
   }
 
+  // ─── Variantes ─────────────────────────────────────────────────────────────
+  // « Le rack est pris, j'ai fait autre chose. » Ce qui suit sert à ce que cette
+  // phrase ne coûte plus l'historique de l'exercice. Trois briques :
+  //   onVariant()  — l'historique d'UNE machine, pour les records (à machine égale) ;
+  //   ratioFor()   — le rapport entre une machine et la référence ;
+  //   comparable() — l'historique entier, ramené à l'échelle de la référence.
+
+  /** L'historique d'un exercice sur une machine donnée (absent = la référence). */
+  function onVariant(exId: string, variant?: string): SessionLog[] {
+    return (logs.value[exId] || []).filter(s => (s.variant ?? undefined) === (variant || undefined))
+  }
+
+  /** La dernière séance faite sur cette machine-là. */
+  function lastOn(exId: string, variant?: string): SessionLog | null {
+    const h = onVariant(exId, variant)
+    return h.length ? h[h.length - 1] : null
+  }
+
+  /**
+   * Le rapport de charge entre une machine et l'exercice de référence.
+   *
+   * Le catalogue donne un ordre de grandeur, ses propres séances donnent un fait :
+   * dès qu'il y a de quoi mesurer, la mesure gagne. La SOURCE est rendue avec le
+   * chiffre parce qu'elle change ce qu'on a le droit d'en conclure — et parce qu'un
+   * coefficient sans provenance ne se conteste pas.
+   */
+  function ratioFor(exId: string, variant?: string, todayIso = localDate()): {
+    ratio: number
+    source: 'reference' | 'measured' | 'default'
+    sessions: number
+  } {
+    if (!variant) return { ratio: 1, source: 'reference', sessions: 0 }
+    const m = measuredRatio(logs.value[exId] || [], variant, todayIso)
+    if (m) return { ratio: m.ratio, source: 'measured', sessions: m.sessions }
+    return { ratio: defaultRatio(exId, variant), source: 'default', sessions: onVariant(exId, variant).length }
+  }
+
+  /**
+   * L'historique complet d'un exercice, toutes machines confondues, ramené à
+   * l'échelle de la référence.
+   *
+   * C'est ce que lisent la courbe, la stagnation, la baisse de performance et le
+   * prochain palier — tout ce qui compare des dates entre elles. Ce qui s'AFFICHE
+   * et ce qui se SAISIT reste en kilos réellement mis sur la machine.
+   */
+  function comparable(exId: string): SessionLog[] {
+    const h = logs.value[exId] || []
+    if (!h.some(s => s.variant)) return h // cas courant : rien à convertir
+    return h.map((s) => {
+      if (!s.variant) return s
+      const { ratio } = ratioFor(exId, s.variant, s.date)
+      return ratio === 1 ? s : { ...s, sets: rescaleSets(s.sets, 1 / ratio) }
+    })
+  }
+
+  /** Les machines sur lesquelles cet exercice a déjà été fait, la référence comprise. */
+  function variantsUsed(exId: string): (string | undefined)[] {
+    const seen: (string | undefined)[] = []
+    for (const s of logs.value[exId] || []) {
+      const v = s.variant ?? undefined
+      if (!seen.includes(v)) seen.push(v)
+    }
+    return seen
+  }
+
   // Charge max jamais réalisée. Compte le 2e mouvement des supersets (setTop), qui
   // était auparavant ignoré : l'exercice n'avait donc ni record ni courbe.
-  function bestCharge(exId: string): number {
-    const h = logs.value[exId] || []
+  // Sans machine précisée, toutes confondues — c'est un maximum brut, pas un record.
+  function bestCharge(exId: string, variant?: string | null): number {
+    const h = variant === undefined ? (logs.value[exId] || []) : onVariant(exId, variant ?? undefined)
     const all = h.map(s => topWeight(s.sets)).filter(w => w > 0)
     return all.length ? Math.max(...all) : 0
   }
@@ -125,10 +205,10 @@ export function useWorkout() {
     return bodyWeight.value.length ? bodyWeight.value[0].kg : null
   }
 
-  /** Records d'un exercice, avec la date où ils ont été posés. Dérivé des logs :
-   *  aucun stockage supplémentaire, donc rien à migrer et pas de désynchronisation. */
-  function recordsOf(exId: string): { charge: number; chargeDate: string; e1rm: number; e1rmDate: string; reps: number; repsDate: string } | null {
-    const h = (logs.value[exId] || []).filter(s => working(s.sets).length)
+  /** Records d'un exercice SUR UNE MACHINE donnée (par défaut : celle du programme).
+   *  Un record est un poids qu'on a réellement soulevé, jamais une conversion. */
+  function recordsOf(exId: string, variant?: string): { charge: number; chargeDate: string; e1rm: number; e1rmDate: string; reps: number; repsDate: string } | null {
+    const h = onVariant(exId, variant).filter(s => working(s.sets).length)
     if (!h.length) return null
     let charge = 0, chargeDate = '', e1rm = 0, e1rmDate = '', reps = 0, repsDate = ''
     for (const s of h) {
@@ -160,15 +240,17 @@ export function useWorkout() {
     const at = localDateTime(now) // heure locale
     const date = localDate(now)
     const prs: { name: string; kinds: PrKind[] }[] = []
-    for (const { exId, sets, effort, swap } of entries) {
+    for (const { exId, sets, effort, swap, note: exNote, variant } of entries) {
       if (!sets.length) continue
-      const kinds = detectPRs(logs.value[exId] || [], sets)
+      // Les records se comparent À MACHINE ÉGALE : 140 kg au squat guidé ne battent
+      // pas 100 kg au squat barre, ils ne se soulèvent simplement pas de la même façon.
+      const kinds = detectPRs(onVariant(exId, variant), sets)
       if (kinds.length) {
         const ex = ALL_EXERCISES.find(e => e.id === exId)
         prs.push({ name: ex ? ex.name : exId, kinds })
       }
       if (!logs.value[exId]) logs.value[exId] = []
-      logs.value[exId].push({ date, sets, durationMin, ...(effort ? { effort } : {}), ...(swap ? { swap } : {}) })
+      logs.value[exId].push({ date, sets, durationMin, ...(effort ? { effort } : {}), ...(swap ? { swap } : {}), ...trimmed(exNote), ...(variant ? { variant } : {}) })
     }
     persistLogs()
 
@@ -182,7 +264,7 @@ export function useWorkout() {
         sessionId: meta?.sessionId ?? null,
         name: meta?.name ?? 'Séance',
         durationMin,
-        entries: recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}) })),
+        entries: recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}), ...trimmed(e.note), ...(e.variant ? { variant: e.variant } : {}) })),
         ...(sprintClean.length ? { sprint: sprintClean } : {}),
         ...(note ? { note } : {}),
       })
@@ -216,12 +298,12 @@ export function useWorkout() {
     const recorded = entries.filter(e => e.sets.length)
     for (const e of recorded) {
       if (!logs.value[e.exId]) logs.value[e.exId] = []
-      logs.value[e.exId].push({ date, sets: e.sets, durationMin, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}) })
+      logs.value[e.exId].push({ date, sets: e.sets, durationMin, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}), ...trimmed(e.note), ...(e.variant ? { variant: e.variant } : {}) })
     }
     // 3) met à jour l'enregistrement séance en place
     const sprintClean = (sprint ?? []).filter(s => s.duration.trim() || s.intensity.trim())
     rec.durationMin = durationMin
-    rec.entries = recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}) }))
+    rec.entries = recorded.map(e => ({ exId: e.exId, sets: e.sets, ...(e.effort ? { effort: e.effort } : {}), ...(e.swap ? { swap: e.swap } : {}), ...trimmed(e.note), ...(e.variant ? { variant: e.variant } : {}) }))
     if (sprintClean.length) rec.sprint = sprintClean
     else delete rec.sprint
     const cleanNote = note?.trim()
@@ -240,28 +322,54 @@ export function useWorkout() {
   // réserve. La borne BASSE de la fourchette est ce qui sépare « à l'échec à 8
   // reps sur du 8-10 » — la série voulue — de « à l'échec à 5 » — trop lourd.
   // Cf. nextLoad() dans utils/sportStats.
-  function suggestWeight(ex: Exercise) {
-    const last = lastPerf(ex.id)
-    if (!last) return { weight: 0, base: 0, inc: suggestedIncrement(ex), streak: 0, reason: 'none' as const }
-    return nextLoad({
+  /**
+   * `variant` = la machine sur laquelle on s'apprête à travailler.
+   *
+   * Le conseil se calcule en équivalent référence — c'est là que l'historique est
+   * continu — puis se reconvertit dans les kilos de CETTE machine, arrondis au
+   * demi-disque. Sans quoi on lirait « passe à 82,5 kg » devant une V-Squat où l'on
+   * met 110.
+   */
+  function suggestWeight(ex: Exercise, variant?: string) {
+    const hist = comparable(ex.id)
+    const last = hist.length ? hist[hist.length - 1] : null
+    const inc = suggestedIncrement(ex)
+    if (!last) return { weight: 0, base: 0, inc, streak: 0, reason: 'none' as const, ratio: 1 }
+    const advice = nextLoad({
       lastSets: last.sets,
       plannedSets: ex.sets,
       topReps: topOfRange(ex.reps),
       bottomReps: bottomOfRange(ex.reps),
-      inc: suggestedIncrement(ex),
-      streak: sameWeightStreak(logs.value[ex.id] || []),
+      inc,
+      streak: sameWeightStreak(hist),
       effort: lastEffort(ex.id),
     })
+    const { ratio } = ratioFor(ex.id, variant)
+    if (ratio === 1) return { ...advice, ratio }
+    return {
+      ...advice,
+      weight: roundToStep(advice.weight * ratio, 2.5),
+      base: roundToStep(advice.base * ratio, 2.5),
+      inc: roundToStep(advice.inc * ratio, 2.5) || advice.inc,
+      ratio,
+    }
   }
 
   const e1rm = (sets: SetLog[]) => e1rmOf(sets)
 
+  /** La courbe de progression : en équivalent référence, donc continue d'un bout à
+   *  l'autre même si la machine a changé en route. Chaque point garde le nom de la
+   *  machine où il a été fait — une remontée expliquée par un changement de matériel
+   *  ne doit pas se lire comme un gain. */
   function chartData(exId: string) {
-    return (logs.value[exId] || []).map(sess => ({
+    const raw = logs.value[exId] || []
+    return comparable(exId).map((sess, i) => ({
       date: sess.date.slice(5),
-      charge: topWeight(sess.sets),
+      charge: Math.round(topWeight(sess.sets) * 10) / 10,
       volume: volumeOf(sess.sets),
       e1rm: e1rmOf(sess.sets),
+      variant: raw[i]?.variant,
+      realCharge: topWeight(raw[i]?.sets ?? sess.sets),
     })).filter(d => d.charge > 0)
   }
 
@@ -330,7 +438,7 @@ export function useWorkout() {
     for (const [exId, ss] of Object.entries(logs.value)) {
       if (!ss.length || !ALL_EXERCISES.some(e => e.id === exId)) continue
       if (ss[ss.length - 1].date < sinceIso) continue
-      if (sameWeightStreak(ss) >= STALL_SESSIONS) n++
+      if (sameWeightStreak(comparable(exId)) >= STALL_SESSIONS) n++
     }
     return n
   }
@@ -346,7 +454,7 @@ export function useWorkout() {
       if (ss[ss.length - 1].date < sinceIso) continue
       if (ss.length < 2) continue // rien à comparer
       tracked++
-      if (perfRegressed(ss)) dropped++
+      if (perfRegressed(comparable(exId))) dropped++
     }
     return { dropped, tracked }
   }
@@ -362,7 +470,7 @@ export function useWorkout() {
   // ─── Objectifs atteignables ────────────────────────────────────────────
   /** Prochain palier de charge d'un exercice et sa date estimée. */
   function milestoneOf(ex: Exercise, todayIso: string) {
-    return nextMilestone(logs.value[ex.id] || [], suggestedIncrement(ex), todayIso)
+    return nextMilestone(comparable(ex.id), suggestedIncrement(ex), todayIso)
   }
 
   /** Les séances de sprint réduites à ce qui se suit : vitesse max et temps d'effort.
@@ -465,6 +573,57 @@ export function useWorkout() {
     if (import.meta.client) { try { localStorage.setItem('gr-seeded-v1', '1') } catch { /* ignore */ } }
   }
 
+  // ─── Corrections ───────────────────────────────────────────────────────────
+  // Une donnée fausse ne se contourne pas, elle se corrige. Mais corriger, c'est
+  // écrire par-dessus quelque chose qu'on ne pourra pas reconstituer — d'où la
+  // vérification préalable : on ne remplace QUE si la valeur en place est bien
+  // celle qu'on croyait remplacer.
+
+  /** La série `index` d'un exercice à une date, ou `null` si la cible est ambiguë.
+   *  Deux séances du même exercice le même jour arrivent (une reprise l'après-midi) :
+   *  dans ce cas on préfère ne rien désigner plutôt que de tirer au sort. */
+  function setAt(exId: string, date: string, index: number): SetLog | null {
+    const days = (logs.value[exId] || []).filter(l => l.date === date)
+    if (days.length !== 1) return null
+    return days[0].sets[index] ?? null
+  }
+
+  /**
+   * Remplace une série. Touche les DEUX stockages — le log de l'exercice (courbes,
+   * records) et le journal de séance —, sinon la progression et l'historique
+   * raconteraient deux choses différentes du même jour.
+   */
+  function fixSet(exId: string, date: string, index: number, next: { w: number, r: number }): boolean {
+    const days = (logs.value[exId] || []).filter(l => l.date === date)
+    if (days.length !== 1) return false
+    const log = days[0]
+    const before = log.sets[index]
+    if (!before) return false
+    const after = { ...before, w: next.w, r: next.r }
+    const oldSets = [...log.sets]
+    log.sets = log.sets.map((s, i) => (i === index ? after : s))
+
+    for (const rec of sessionHistory.value) {
+      if (rec.at.slice(0, 10) !== date) continue
+      const entry = rec.entries.find(e => e.exId === exId && JSON.stringify(e.sets) === JSON.stringify(oldSets))
+      if (entry) entry.sets = log.sets
+    }
+    persistLogs(); persistSessions()
+    return true
+  }
+
+  /** Supprime une pesée — le cas d'une saisie manuelle en double, ou d'un chiffre
+   *  aberrant qui tire toutes les moyennes. */
+  function removeBodyWeight(date: string): boolean {
+    const before = bodyWeight.value.length
+    bodyWeight.value = bodyWeight.value.filter(e => e.date !== date)
+    if (bodyWeight.value.length === before) return false
+    persistBW()
+    return true
+  }
+
+  const weightAt = (date: string): number | null => bodyWeight.value.find(e => e.date === date)?.kg ?? null
+
   function addBodyWeight(kg: number) {
     setBodyWeightAt(localDate(), kg)
   }
@@ -552,11 +711,12 @@ export function useWorkout() {
 
   return {
     logs, bodyWeight, sessionHistory, lastExportAt,
-    lastPerf, lastEffort, bestCharge, recordsOf, bodyWeightAt,
+    lastPerf, lastOn, lastEffort, bestCharge, recordsOf, bodyWeightAt,
+    onVariant, ratioFor, comparable, variantsUsed,
     recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     muscleSets, muscleSetsWithGaps, weeklyStats, fatigue, stalledCount,
     milestoneOf, sprintSessions, sprintObjective,
-    addBodyWeight, setBodyWeightAt, exportJSON, importJSON, seedDemo, clearAll,
+    addBodyWeight, setBodyWeightAt, removeBodyWeight, weightAt, setAt, fixSet, exportJSON, importJSON, seedDemo, clearAll,
     daysSinceExport, restoreBackup, backupDate,
   }
 }
