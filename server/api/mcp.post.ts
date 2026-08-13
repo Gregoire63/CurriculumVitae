@@ -225,11 +225,23 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     return { total: all.length, propositions: all.slice(-20).reverse() }
   }
 
+  /**
+   * Les RÉFÉRENCES n'ont pas besoin du miroir, les données personnelles si.
+   *
+   * Le catalogue des plats, celui des aliments et le programme sont livrés avec
+   * l'application : ils existent avant qu'un seul octet ait été poussé. Les exiger
+   * quand même rendait le connecteur inutile pendant la fenêtre exacte où l'on
+   * essaie de le mettre en route — juste après l'avoir branché, avant la première
+   * ouverture de l'app — et avec un message qui parle d'autre chose.
+   *
+   * Le miroir n'ajoute à ces trois-là que ce que l'utilisateur a créé lui-même.
+   */
+  const PERSONNELS = ['etat', 'profil', 'seances', 'exercice', 'poids', 'nutrition']
   const mirror = await readMirror()
-  if (!mirror) {
-    throw new Error('Aucune donnée : le téléphone n\'a pas encore poussé son miroir. Ouvre l\'application une fois.')
+  if (!mirror && PERSONNELS.includes(name)) {
+    throw new Error('Aucune donnée personnelle : le téléphone n\'a pas encore poussé son miroir. Demande-lui d\'ouvrir l\'application une fois. Les catalogues (plats, aliments, programme) restent lisibles.')
   }
-  const d = mirror.data as Record<string, unknown>
+  const d = (mirror?.data ?? {}) as Record<string, unknown>
 
   switch (name) {
     case 'plats': {
