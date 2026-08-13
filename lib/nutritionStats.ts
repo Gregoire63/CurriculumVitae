@@ -367,6 +367,47 @@ export function ingredientLines(recipe: Recipe, lib: Library = BUILTIN): Ingredi
   return out
 }
 
+/** Les ingrédients d'un plat, séparés en deux listes : le plat, puis le pot. */
+export interface SplitIngredients {
+  /** Ce qui va dans la poêle, avec le grammage propre au plat. */
+  dish: { food: string, g: number, total: number }[]
+  /** Ce qui va dans le pot à part. Vide s'il n'y a pas de sauce. */
+  sauce: { food: string, g: number, total: number }[]
+  sauceName: string | null
+}
+
+/**
+ * Sépare les ingrédients du plat de ceux de la sauce, avec pour chacun le TOTAL à
+ * sortir du frigo quand il sert des deux côtés.
+ *
+ * C'est le retour d'une liste unique fusionnée, et l'aller-retour mérite d'être
+ * expliqué. La fusion réglait un vrai problème — le citron du dîner poisson
+ * apparaissait deux fois, 20 g puis 10 g, et il fallait faire l'addition de tête. Mais
+ * elle en créait un autre, plus gênant en cuisine : on ne savait plus quelle part va
+ * dans la poêle et quelle part va dans le pot. Une annotation collée au nom de
+ * l'ingrédient ne suffit pas à porter cette distinction, elle se lit comme une note de
+ * bas de page alors que c'est une étape de la recette.
+ *
+ * Deux listes titrées, donc, et le total en clair sur les ingrédients partagés : les
+ * deux questions — « qu'est-ce que je sors du frigo » et « qu'est-ce que je mets où » —
+ * ont chacune leur réponse, au lieu d'une réponse pour la première et une devinette
+ * pour la seconde.
+ */
+export function splitIngredients(recipe: Recipe, lib: Library = BUILTIN): SplitIngredients {
+  const sauce = recipe.sauce ? lib.recipes[recipe.sauce] ?? RECIPE_BY_ID[recipe.sauce] : null
+  const totals = new Map<string, number>()
+  const add = (f: string, g: number) => totals.set(f, Math.round(((totals.get(f) ?? 0) + g) * 100) / 100)
+  for (const it of recipe.items) add(it.food, it.g)
+  for (const it of sauce?.items ?? []) add(it.food, it.g)
+
+  const line = (it: RecipeItem) => ({ food: it.food, g: it.g, total: totals.get(it.food) ?? it.g })
+  return {
+    dish: recipe.items.map(line),
+    sauce: (sauce?.items ?? []).map(line),
+    sauceName: sauce?.name ?? null,
+  }
+}
+
 const EMPTY: Macros = { kcal: 0, p: 0, g: 0, l: 0 }
 
 /** Macros d'une liste d'ingrédients. Un aliment inconnu est ignoré plutôt que de faire planter la vue. */

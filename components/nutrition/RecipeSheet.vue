@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
-import { expandItems, ingredientLines, keepsOf, macrosOf, roundMacros } from '~/lib/nutritionStats'
+import { FAT_STEPS, expandItems, keepsOf, macrosOf, rebalanceDairy, roundMacros, splitIngredients } from '~/lib/nutritionStats'
 
 // LA fiche d'un plat : photo, ingrédients, recette. Une seule, ouverte depuis
 // n'importe quelle carte de l'application.
@@ -13,7 +13,7 @@ import { expandItems, ingredientLines, keepsOf, macrosOf, roundMacros } from '~/
 const props = defineProps<{ id: string }>()
 const emit = defineEmits<{ close: [] }>()
 
-const { library } = useNutrition()
+const { library, setFatPct, fatPct, dairyFoods } = useNutrition()
 
 const KIND_LABELS: Record<string, string> = {
   pdj: 'Petit-déjeuner',
@@ -41,13 +41,42 @@ const sauceMacros = computed(() => (sauce.value
 const keeps = computed(() => (recipe.value ? keepsOf(recipe.value, library.value) : null))
 
 /**
- * Les ingrédients, sauce comprise, chacun une seule fois.
+ * Les ingrédients, en DEUX listes titrées : le plat, puis le pot.
  *
- * Le citron du dîner poisson apparaissait deux fois — 20 g dans le plat, 10 g dans la
- * sauce — et pareil pour l'ail et les herbes. Devant le frigo, ça oblige à faire
- * l'addition de tête. On additionne ici, et la part sauce reste en annotation.
+ * Elles portent les grammages RÉELLEMENT à peser, taux de matière grasse déclaré
+ * compris. `rebalanceDairy` est appliqué ici comme il l'est dans la journée : sans lui,
+ * la fiche annoncerait 200 g de fromage blanc pendant que le plan en sert 100, et on
+ * pèserait le chiffre de la fiche.
  */
-const lines = computed(() => (recipe.value ? ingredientLines(recipe.value, library.value) : []))
+const split = computed(() => {
+  const r = recipe.value
+  if (!r) return { dish: [], sauce: [], sauceName: null }
+  const balanced = { ...r, items: rebalanceDairy(r.items, library.value.foods) }
+  return splitIngredients(balanced, library.value)
+})
+
+/**
+ * Les laitiers de ce plat dont le taux se règle, avec le taux déclaré.
+ *
+ * On interroge `dairyFoods`, qui juge sur la fiche AVANT application du taux — et pas
+ * `library`, qui la porte après. La nuance a coûté un bug : `isAdjustableDairy` exige
+ * un produit maigre au départ (moins de 1 g de lipides), donc dès qu'on déclarait 5 %
+ * le fromage blanc cessait d'être « réglable » et le bouton disparaissait. On se
+ * retrouvait bloqué sur son propre choix, sans moyen de revenir à 0 %.
+ */
+const adjustable = computed(() => new Map(dairyFoods.value.map(d => [d.base.id, d])))
+const dairy = (id: string) => adjustable.value.get(id) ?? null
+
+/**
+ * Le nom sans son « 0 % » quand un autre taux est déclaré : « Fromage blanc 0 % »
+ * affiché à côté d'un bouton « 5 % de MG », c'est la fiche qui se contredit.
+ */
+const dairyName = (id: string) => {
+  const d = dairy(id)
+  const name = library.value.foods[id]?.name ?? id
+  return d && d.pct ? name.replace(/\s*\d+([.,]\d+)?\s*%\s*$/, '') : name
+}
+const openFat = ref<string | null>(null)
 </script>
 
 <template>
@@ -74,31 +103,68 @@ const lines = computed(() => (recipe.value ? ingredientLines(recipe.value, libra
       </template>
 
       <template #default>
-        <!-- UNE seule liste, sauce comprise. Chaque ingrédient n'y figure qu'une fois,
-             avec son total : c'est la réponse à « qu'est-ce que je sors du frigo ».
-             La part qui va dans le pot est en annotation, pas sur une deuxième ligne. -->
-        <div class="section-label">Ingrédients<template v-if="sauce"> — sauce comprise</template></div>
+        <!-- DEUX listes titrées. Une annotation collée au nom ne portait pas la
+             distinction « dans la poêle » / « dans le pot » : elle se lisait comme une
+             note de bas de page alors que c'est une étape de la recette. -->
+        <div class="section-label">{{ sauce ? 'Pour le plat' : 'Ingrédients' }}</div>
         <ul class="rs-items">
-          <li v-for="l in lines" :key="l.food" class="rs-item">
+          <li v-for="l in split.dish" :key="l.food" class="rs-item">
             <span class="rs-q mono">{{ l.g }} g</span>
             <span class="rs-n">
-              {{ foodName(l.food) }}
-              <span v-if="l.sauceOnly" class="rs-tag">pour la sauce</span>
-              <span v-else-if="l.sauceG" class="rs-tag">dont {{ l.sauceG }} g pour la sauce</span>
-              <span v-if="foodBuy(l.food)" class="muted">{{ foodBuy(l.food) }}</span>
+              {{ dairy(l.food) ? dairyName(l.food) : foodName(l.food) }}
+              <span v-if="l.total > l.g" class="muted">{{ l.total }} g en tout avec la sauce</span>
+              <span v-else-if="foodBuy(l.food)" class="muted">{{ foodBuy(l.food) }}</span>
+              <!-- Le taux se règle ICI, sur l'ingrédient, au moment où on a le pot en
+                   main. Le réglage existait déjà mais vivait dans un autre onglet :
+                   inutilisable à 9 h du matin devant un fromage blanc à 3 %. -->
+              <button
+                v-if="dairy(l.food)"
+                class="rs-fat" :class="{ set: dairy(l.food)!.pct }"
+                @click="openFat = openFat === l.food ? null : l.food"
+              >{{ dairy(l.food)!.pct ? `${dairy(l.food)!.pct} % de MG` : 'autre taux de MG ?' }}</button>
+              <span v-if="openFat === l.food" class="rs-fat-steps">
+                <button
+                  v-for="step in FAT_STEPS" :key="step"
+                  class="rs-fat-step" :class="{ on: dairy(l.food)!.pct === step }"
+                  @click="setFatPct(l.food, step); openFat = null"
+                >{{ step }} %</button>
+              </span>
             </span>
           </li>
         </ul>
         <p class="muted italic rs-raw">Viandes, poissons et féculents : toujours pesés crus.</p>
 
-        <!-- La sauce se prépare à part, dans un pot : sa préparation mérite son bloc.
-             Ses ingrédients, eux, sont déjà dans la liste ci-dessus. -->
+        <!-- La sauce a sa propre liste ET sa préparation : c'est un pot à part, on ne
+             la mélange pas au plat. -->
         <template v-if="sauce">
-          <div class="section-label">{{ sauce.name }}</div>
+          <div class="section-label">Pour la sauce — {{ sauce.name }}</div>
+          <ul class="rs-items">
+            <li v-for="l in split.sauce" :key="l.food" class="rs-item">
+              <span class="rs-q mono">{{ l.g }} g</span>
+              <span class="rs-n">
+                {{ dairy(l.food) ? dairyName(l.food) : foodName(l.food) }}
+                <span v-if="l.total > l.g" class="muted">{{ l.total }} g en tout avec le plat</span>
+                <!-- Le yaourt grec des sauces est un laitier comme un autre : il se
+                     règle ici aussi, sinon le réglage manquerait sur tous les dîners. -->
+                <button
+                  v-if="dairy(l.food)"
+                  class="rs-fat" :class="{ set: dairy(l.food)!.pct }"
+                  @click="openFat = openFat === `s:${l.food}` ? null : `s:${l.food}`"
+                >{{ dairy(l.food)!.pct ? `${dairy(l.food)!.pct} % de MG` : 'autre taux de MG ?' }}</button>
+                <span v-if="openFat === `s:${l.food}`" class="rs-fat-steps">
+                  <button
+                    v-for="step in FAT_STEPS" :key="step"
+                    class="rs-fat-step" :class="{ on: dairy(l.food)!.pct === step }"
+                    @click="setFatPct(l.food, step); openFat = null"
+                  >{{ step }} %</button>
+                </span>
+              </span>
+            </li>
+          </ul>
           <p class="nu-note">{{ sauce.steps }}</p>
           <p v-if="sauceMacros" class="muted mono rs-raw">
             Elle compte pour {{ sauceMacros.kcal }} kcal et {{ sauceMacros.p }} g de protéines,
-            déjà inclus dans le total ci-dessus.
+            déjà inclus dans le total en haut de la fiche.
           </p>
         </template>
 

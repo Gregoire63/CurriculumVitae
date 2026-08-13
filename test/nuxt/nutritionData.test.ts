@@ -1,3 +1,4 @@
+import { rebalanceDairy } from '../../lib/nutritionStats'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Ces tests couvrent le CÂBLAGE du module nutrition (localStorage, aller-retour
@@ -515,5 +516,35 @@ describe('rattrapage d\'une journée passée', () => {
     n.toggleEaten('2026-08-05', 'snack')
     n.toggleEaten('2026-08-05', 'snack')
     expect(n.eatenSlots('2026-08-05')).toEqual([])
+  })
+})
+
+// ─── Le taux de MG reste réglable après l'avoir réglé ────────────────────────
+describe('taux de matière grasse, réglable depuis la fiche du plat', () => {
+  it('garde le laitier dans la liste réglable une fois un taux déclaré', async () => {
+    // LE bug de la fiche recette : `isAdjustableDairy` exige un produit maigre au
+    // départ (≤ 1 g de lipides). Jugé sur la fiche APRÈS application du taux, un
+    // fromage blanc déclaré à 5 % cessait d'être « réglable » — le bouton
+    // disparaissait et on restait bloqué sur son propre choix, sans retour possible.
+    const n = await load()
+    expect(n.dairyFoods.value.some(d => d.base.id === 'fromage-blanc-0')).toBe(true)
+    n.setFatPct('fromage-blanc-0', 5)
+    const apres = n.dairyFoods.value.find(d => d.base.id === 'fromage-blanc-0')
+    expect(apres, 'le laitier doit rester réglable').toBeDefined()
+    expect(apres!.pct).toBe(5)
+    expect(apres!.food.l).toBe(5) // macros dérivées
+    expect(apres!.base.l).toBeLessThanOrEqual(1) // fiche d'origine intacte
+    // …et on peut revenir en arrière
+    n.setFatPct('fromage-blanc-0', 0)
+    expect(n.dairyFoods.value.find(d => d.base.id === 'fromage-blanc-0')!.pct).toBe(0)
+  })
+
+  it('adapte la quantité du plat au taux déclaré', async () => {
+    const n = await load()
+    const base = n.library.value.recipes['pdj-croquant'].items.find(i => i.food === 'fromage-blanc-0')!.g
+    n.setFatPct('fromage-blanc-0', 5)
+    const items = rebalanceDairy(n.library.value.recipes['pdj-croquant'].items, n.library.value.foods)
+    expect(items.find(i => i.food === 'fromage-blanc-0')!.g).toBeLessThan(base)
+    n.setFatPct('fromage-blanc-0', 0)
   })
 })

@@ -11,7 +11,7 @@ import {
   resolveDay, slugify, timelineOf, validateFood, validateRecipe, weekBalance,
   CYCLE_EPOCH, cycleIndexOf, dayBurn, dayStatus, DEFAULT_TRAINED, dinnerAdjustment, fmtQty, isDayPlayed,
   adjustSignature, ingredientLines,
-  atFatPct, isAdjustableDairy, rebalanceDairy, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
+  atFatPct, isAdjustableDairy, rebalanceDairy, splitIngredients, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   fatRatioOf, leanMassOf, proteinPerKgLean, proteinPlan,
   PROTEIN_FAT_HIGH, PROTEIN_FAT_LOW, PROTEIN_LEAN_MAX, PROTEIN_LEAN_MIN,
@@ -1820,6 +1820,20 @@ describe('les sauces', () => {
       const g = Math.round(it.g * n * 10) / 10
       expect(ligne, `${base.name} × ${n} doit servir ${g} g de ${it.food}`).toContain(`${g} g`)
     }
+    //
+    // On vérifie la MULTIPLICATION, pas un nombre écrit en dur. La version
+    // précédente attendait « 4 portions » : un chiffre qui ne dépendait que de
+    // l'ordre des plats dans le cycle, et qui est tombé à la première rotation
+    // retouchée — alors que la règle testée, elle, n'avait pas bougé d'un pouce.
+    const ligne = sauces.lines.find(l => /(\d+) portions/.test(l))!
+    expect(ligne).toBeDefined()
+    const n = Number(ligne.match(/(\d+) portions/)![1])
+    expect(n).toBeGreaterThan(1)
+    const base = RECIPE_BY_ID[Object.keys(RECIPE_BY_ID).find(id => RECIPE_BY_ID[id].kind === 'sauce' && ligne.startsWith(RECIPE_BY_ID[id].name))!]
+    for (const it of base.items) {
+      const g = Math.round(it.g * n * 10) / 10
+      expect(ligne, `${base.name} × ${n} doit servir ${g} g de ${it.food}`).toContain(`${g} g`)
+    }
   })
 
   it('restent légères : aucune ne dépasse 90 kcal la portion', () => {
@@ -2164,5 +2178,65 @@ describe('rotation des dîners sur le cycle', () => {
     expect(vd.pct).toBeGreaterThanOrEqual(75)
     const o3 = microCoverage(plans).find(m => m.key === 'o3')!
     expect(o3.pct).toBeGreaterThanOrEqual(100)
+  })
+})
+
+// ─── Deux listes plutôt qu'une ───────────────────────────────────────────────
+describe('ingrédients séparés plat / sauce', () => {
+  it('met dans la poêle ce qui va dans la poêle, dans le pot ce qui va dans le pot', () => {
+    const s = splitIngredients(RECIPE_BY_ID['din-poisson'])
+    expect(s.sauceName).toBe(RECIPE_BY_ID['sauce-blanche'].name)
+    expect(s.dish.map(l => l.food)).toEqual(RECIPE_BY_ID['din-poisson'].items.map(i => i.g && i.food))
+    expect(s.sauce.map(l => l.food)).toEqual(RECIPE_BY_ID['sauce-blanche'].items.map(i => i.food))
+    // le yaourt grec n'existe QUE dans le pot
+    expect(s.dish.some(l => l.food === 'yaourt-grec-0')).toBe(false)
+    expect(s.sauce.some(l => l.food === 'yaourt-grec-0')).toBe(true)
+  })
+
+  it('donne le total à sortir du frigo sur les ingrédients partagés', () => {
+    // C'est ce que la fusion réglait et qu'il ne faut pas reperdre : le citron du
+    // dîner poisson est à 20 g dans le plat et 10 g dans la sauce. Les deux lignes
+    // portent « 30 g en tout », personne n'a d'addition à faire devant le frigo.
+    const s = splitIngredients(RECIPE_BY_ID['din-poisson'])
+    const dishCitron = s.dish.find(l => l.food === 'citron')!
+    const sauceCitron = s.sauce.find(l => l.food === 'citron')!
+    expect(dishCitron.g).toBe(20)
+    expect(sauceCitron.g).toBe(10)
+    expect(dishCitron.total).toBe(30)
+    expect(sauceCitron.total).toBe(30)
+  })
+
+  it('ne perd pas un gramme : les deux listes réunies font le plat servi', () => {
+    // Le garde-fou qui vaut les autres. Si la séparation oubliait une ligne ou en
+    // comptait une en trop, la fiche afficherait des ingrédients qui ne font pas les
+    // calories annoncées juste au-dessus — et personne ne le verrait à l'œil.
+    for (const r of Object.values(RECIPE_BY_ID)) {
+      const s = splitIngredients(r)
+      const parListes = macrosOf([...s.dish, ...s.sauce].map(l => ({ food: l.food, g: l.g })))
+      const parPlat = macrosOf(expandItems(r))
+      expect(parListes.kcal, r.name).toBeCloseTo(parPlat.kcal, 6)
+      expect(parListes.p, r.name).toBeCloseTo(parPlat.p, 6)
+    }
+  })
+
+  it('rend une liste vide de sauce quand le plat n\'en a pas', () => {
+    const sans = Object.values(RECIPE_BY_ID).find(r => !r.sauce && r.items.length > 1)!
+    const s = splitIngredients(sans)
+    expect(s.sauce).toEqual([])
+    expect(s.sauceName).toBeNull()
+    // et chaque total vaut sa propre quantité : rien n'est partagé
+    for (const l of s.dish) expect(l.total).toBe(l.g)
+  })
+
+  it('affiche les grammages APRÈS rééquilibrage du laitier', () => {
+    // La fiche annonçait 200 g de fromage blanc pendant que le plan en servait 100
+    // dès qu'un taux de MG était déclaré — et c'est le chiffre de la fiche qu'on pèse.
+    const foods = { ...FOOD_BY_ID, 'fromage-blanc-0': atFatPct(FOOD_BY_ID['fromage-blanc-0'], 5) }
+    const pdj = RECIPE_BY_ID['pdj-croquant']
+    const brut = pdj.items.find(i => i.food === 'fromage-blanc-0')!.g
+    const equilibre = rebalanceDairy(pdj.items, foods).find(i => i.food === 'fromage-blanc-0')!.g
+    expect(equilibre).toBeLessThan(brut)
+    const s = splitIngredients({ ...pdj, items: rebalanceDairy(pdj.items, foods) })
+    expect(s.dish.find(l => l.food === 'fromage-blanc-0')!.g).toBe(equilibre)
   })
 })
