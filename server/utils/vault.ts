@@ -126,7 +126,13 @@ export async function resolveProposal(id: string, status: 'applied' | 'refused',
 
 // ─── Passkey enregistré ──────────────────────────────────────────────────────
 export interface StoredCredential { id: string, publicKey: string, counter: number, at: string }
-export const readCredential = () => readJson<StoredCredential | null>(KEY_CREDENTIAL, null)
+
+/** Un enregistrement vide vaut « aucun passkey » : c'est ce qu'écrit la remise à
+ *  zéro, faute d'opération de suppression dans le stockage. */
+export async function readCredential(): Promise<StoredCredential | null> {
+  const c = await readJson<StoredCredential | null>(KEY_CREDENTIAL, null)
+  return c && c.id && c.publicKey ? c : null
+}
 export const writeCredential = (c: StoredCredential) => writeJson(KEY_CREDENTIAL, c)
 
 // ─── Jetons signés ───────────────────────────────────────────────────────────

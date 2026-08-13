@@ -24,8 +24,37 @@ const emit = defineEmits<{ flash: [msg: string] }>()
 const v = useVault()
 const bootstrap = ref('')
 const showDetail = ref<string | null>(null)
+const showReset = ref(false)
 
-onMounted(() => { void v.hydrate() })
+/**
+ * Le diagnostic du serveur, affiché tant que tout n'est pas en place.
+ *
+ * Une variable d'environnement oubliée se manifestait par « Aucun passkey » —
+ * c'est-à-dire exactement ce qu'affiche une installation saine où l'on n'a encore
+ * rien fait. On cherchait donc côté navigateur un problème qui était côté serveur.
+ */
+interface Health { pret: boolean, env: Record<string, boolean>, store: string, driver: string }
+const health = ref<Health | null>(null)
+
+onMounted(async () => {
+  await v.hydrate()
+  try { health.value = await $fetch<Health>('/api/vault/health') }
+  catch { health.value = null }
+})
+
+const manquantes = computed(() =>
+  Object.entries(health.value?.env ?? {}).filter(([, ok]) => !ok).map(([k]) => k))
+
+async function doReset() {
+  try {
+    await $fetch('/api/auth/reset', { method: 'POST', body: { bootstrap: bootstrap.value.trim() } })
+    bootstrap.value = ''
+    showReset.value = false
+    await v.refresh()
+    emit('flash', 'Passkey effacé — tu peux en poser un nouveau')
+  }
+  catch { emit('flash', 'Code de démarrage invalide') }
+}
 
 const statut = computed(() => {
   if (!v.state.value.registered) return 'a-poser'
@@ -101,6 +130,17 @@ async function doRefuse(p: RawProposal) {
       </span>
     </div>
 
+    <!-- Ce qui manque côté serveur, dit avant qu'on cherche ailleurs -->
+    <div v-if="health && !health.pret" class="vt-warn">
+      <b>Le serveur n'est pas prêt.</b>
+      <template v-if="manquantes.length">
+        Variables absentes dans Netlify : <b>{{ manquantes.join(', ') }}</b>.
+      </template>
+      <template v-if="health.store !== 'ok'">
+        Stockage ({{ health.driver }}) : {{ health.store }}.
+      </template>
+    </div>
+
     <!-- 1. Poser le premier passkey -->
     <template v-if="statut === 'a-poser'">
       <p class="muted vt-txt">
@@ -144,6 +184,19 @@ async function doRefuse(p: RawProposal) {
         <button class="btn flex-1" @click="v.loadPending()">↻ Relever</button>
         <button class="btn flex-1" @click="v.logout()">Verrouiller</button>
       </div>
+      <!-- Le double des clés. Sans lui, un téléphone perdu ferme le coffre pour
+           toujours : il n'y a qu'un passkey et rien ne sait le supprimer. -->
+      <button class="vt-p-toggle mt-6" @click="showReset = !showReset">
+        {{ showReset ? '▲ Annuler' : 'Téléphone perdu ? Reposer un passkey' }}
+      </button>
+      <template v-if="showReset">
+        <p class="muted vt-txt">
+          Efface le passkey enregistré pour pouvoir en poser un nouveau. Demande le code
+          de démarrage de tes variables Netlify — c'est le même que la première fois.
+        </p>
+        <input v-model="bootstrap" class="note-input mt-6" type="password" placeholder="Code de démarrage" autocomplete="off">
+        <button class="btn mt-6 vt-go" :disabled="!bootstrap.trim()" @click="doReset">🗝 Effacer le passkey</button>
+      </template>
 
       <!-- Boîte de réception -->
       <div class="section-label mt-6">
