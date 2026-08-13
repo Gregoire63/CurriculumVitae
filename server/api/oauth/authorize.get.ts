@@ -26,7 +26,7 @@ export default defineEventHandler((event) => {
   const challenge = String(q.code_challenge ?? '')
   const method = String(q.code_challenge_method ?? '')
 
-  const expectedClient = process.env.NUXT_MCP_CLIENT_ID || ''
+  const expectedClient = (process.env.NUXT_MCP_CLIENT_ID || '').trim()
   if (!expectedClient) throw createError({ statusCode: 503, statusMessage: 'NUXT_MCP_CLIENT_ID non configuré' })
   if (clientId !== expectedClient) throw createError({ statusCode: 400, statusMessage: 'client_id inconnu' })
   if (!redirectUri.startsWith('https://')) throw createError({ statusCode: 400, statusMessage: 'redirect_uri invalide' })

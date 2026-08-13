@@ -23,8 +23,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'unsupported_grant_type' })
   }
 
-  const expectedId = process.env.NUXT_MCP_CLIENT_ID || ''
-  const expectedSecret = process.env.NUXT_MCP_CLIENT_SECRET || ''
+  const expectedId = (process.env.NUXT_MCP_CLIENT_ID || '').trim()
+  const expectedSecret = (process.env.NUXT_MCP_CLIENT_SECRET || '').trim()
   if (!expectedId || !expectedSecret) {
     throw createError({ statusCode: 503, statusMessage: 'Client MCP non configuré' })
   }

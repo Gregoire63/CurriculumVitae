@@ -15,7 +15,7 @@ import { SESSION_TTL, readCredential, signToken, verifyToken, writeCredential } 
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ bootstrap?: string, response?: Record<string, unknown> }>(event)
-  const expected = process.env.NUXT_VAULT_BOOTSTRAP || ''
+  const expected = (process.env.NUXT_VAULT_BOOTSTRAP || '').trim()
   if (!expected) throw createError({ statusCode: 503, statusMessage: 'NUXT_VAULT_BOOTSTRAP non configuré' })
   if (!body?.bootstrap || body.bootstrap !== expected) {
     throw createError({ statusCode: 403, statusMessage: 'Code de démarrage invalide' })

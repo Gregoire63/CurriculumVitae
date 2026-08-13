@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { planFor, detailLines } from '../../lib/proposals'
+import { planFor, detailLines, checkFieldFix, twinPath } from '../../lib/proposals'
 import type { RawProposal } from '../../lib/proposals'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,5 +299,119 @@ describe('correction de donnée', () => {
   it('refuse un poids qui n\'a pas de sens humain', () => {
     expect(planFor(prop('correction', { quoi: 'pesee', date: '2026-08-12', de: 77.4, vers: 7.7 }), CTX)).toBeNull()
     expect(planFor(prop('correction', { quoi: 'pesee', date: '2026-08-12', de: 77.4, vers: 770 }), CTX)).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La correction de n'importe quel champ
+//
+// Le passe-partout existe parce que figer une liste de champs modifiables
+// condamnait à revenir en ajouter un à chaque besoin — la durée d'une séance, par
+// exemple, n'y était pas. Il n'assouplit rien sur la garde : le chemin doit
+// exister, la valeur de départ doit correspondre, et on n'écrit qu'un scalaire.
+const SNAP = () => ({
+  sessions: [{ at: '2026-08-13T13:00', name: 'Jambes', durationMin: 50, entries: [] }],
+  bodyWeight: [{ date: '2026-08-12', kg: 77.4 }],
+  profile: { heightCm: 179, sex: 'h', birthYear: 1997 },
+})
+const CTX_CHAMP = { ...CTX, snapshot: SNAP }
+const champ = (patch: Record<string, unknown>) => prop('correction', { quoi: 'champ', ...patch })
+
+describe('correction d\'un champ quelconque', () => {
+  it('accepte une durée de séance corrigée', () => {
+    expect(planFor(champ({ chemin: '/sessions/0/durationMin', de: 50, vers: 65 }), CTX_CHAMP))
+      .toEqual({ kind: 'correction-champ', chemin: '/sessions/0/durationMin', vers: 65 })
+  })
+
+  it('accepte un texte et un booléen, pas seulement des nombres', () => {
+    expect(planFor(champ({ chemin: '/sessions/0/name', de: 'Jambes', vers: 'Jambes (léger)' }), CTX_CHAMP))
+      .toMatchObject({ vers: 'Jambes (léger)' })
+    expect(planFor(champ({ chemin: '/profile/sex', de: 'h', vers: 'h' }), CTX_CHAMP)).not.toBeNull()
+  })
+
+  it('REFUSE si la valeur en place n\'est pas celle qu\'on croyait remplacer', () => {
+    expect(planFor(champ({ chemin: '/sessions/0/durationMin', de: 45, vers: 65 }), CTX_CHAMP)).toBeNull()
+  })
+
+  it('tolère un nombre écrit en texte dans « de »', () => {
+    // « 50 » et 50 désignent la même durée ; refuser pour ça n'aiderait personne.
+    expect(planFor(champ({ chemin: '/sessions/0/durationMin', de: '50', vers: 65 }), CTX_CHAMP)).not.toBeNull()
+  })
+
+  it('refuse un chemin qui ne mène nulle part', () => {
+    for (const chemin of ['/sessions/9/durationMin', '/profile/poids', 'sessions/0', '']) {
+      expect(planFor(champ({ chemin, de: 50, vers: 65 }), CTX_CHAMP)).toBeNull()
+    }
+  })
+
+  it('refuse d\'écraser un objet ou une liste', () => {
+    expect(planFor(champ({ chemin: '/sessions/0', de: 'x', vers: 'y' }), CTX_CHAMP)).toBeNull()
+    expect(planFor(champ({ chemin: '/sessions', de: 'x', vers: 'y' }), CTX_CHAMP)).toBeNull()
+  })
+
+  it('refuse une valeur de remplacement qui n\'est pas simple', () => {
+    expect(planFor(champ({ chemin: '/sessions/0/durationMin', de: 50, vers: { a: 1 } }), CTX_CHAMP)).toBeNull()
+  })
+
+  it('ne peut rien faire sans instantané : pas de vérification, pas d\'écriture', () => {
+    // Sans la valeur en place, « corriger » redeviendrait « écrire par-dessus ».
+    expect(planFor(champ({ chemin: '/sessions/0/durationMin', de: 50, vers: 65 }), CTX)).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La garde côté serveur
+//
+// `planFor` protège les DONNÉES : elle refuse d'appliquer une proposition
+// incohérente. Elle ne protège pas l'ATTENTION — une proposition invalide arrive
+// quand même dans la boîte, et c'est Grégoire qui la lit, comprend qu'elle est
+// inapplicable et la range. Le serveur a le miroir sous la main au moment du dépôt ;
+// s'il se tait, il déplace le coût de mon erreur sur lui.
+const DATA = {
+  sessions: [{ at: '2026-08-13T13:00', name: 'Jambes', durationMin: 50, entries: [] }],
+  logs: { squat: [{ date: '2026-08-13', sets: [{ kg: 60, reps: 8 }], durationMin: 50 }] },
+  profile: { heightCm: 179, sex: 'h', birthYear: 1997 },
+}
+const refuse = (detail: Record<string, unknown>, motif: RegExp) =>
+  expect(() => checkFieldFix(detail, DATA)).toThrow(motif)
+
+describe('vérification au dépôt d\'une correction de champ', () => {
+  it('laisse passer une correction cohérente', () => {
+    expect(() => checkFieldFix({ chemin: '/sessions/0/durationMin', de: 50, vers: 65 }, DATA)).not.toThrow()
+  })
+
+  it('rend la valeur réelle quand « de » se trompe, pour que je puisse me corriger', () => {
+    refuse({ chemin: '/sessions/0/durationMin', de: 99, vers: 65 }, /vaut 50, pas 99/)
+  })
+
+  it('tolère le nombre écrit en texte', () => {
+    expect(() => checkFieldFix({ chemin: '/sessions/0/durationMin', de: '50', vers: 65 }, DATA)).not.toThrow()
+  })
+
+  it('refuse un chemin absent, un objet, une liste', () => {
+    refuse({ chemin: '/sessions/0/nawak', de: 1, vers: 2 }, /Aucune valeur/)
+    refuse({ chemin: '/sessions/0', de: 1, vers: 2 }, /un objet/)
+    refuse({ chemin: '/sessions', de: 1, vers: 2 }, /une liste/)
+    refuse({ chemin: '', de: 1, vers: 2 }, /obligatoire/)
+  })
+
+  it('refuse une valeur de remplacement composite, et exige « de »', () => {
+    refuse({ chemin: '/sessions/0/durationMin', de: 50, vers: { a: 1 } }, /valeur simple/)
+    refuse({ chemin: '/sessions/0/durationMin', vers: 65 }, /« de » est obligatoire/)
+  })
+
+  it('détourne vers le champ réellement affiché', () => {
+    // La durée est recopiée sur chaque exercice de la séance, et cette copie-là
+    // n'est lue nulle part. Corriger la copie « réussirait » sans rien changer à
+    // l'écran — c'est le pire des retours possibles.
+    expect(twinPath('/logs/squat/0/durationMin', DATA)).toBe('/sessions/0/durationMin')
+    refuse({ chemin: '/logs/squat/0/durationMin', de: 50, vers: 65 }, /Corrige \/sessions\/0\/durationMin/)
+  })
+
+  it('ne détourne rien quand il n\'y a pas de jumeau', () => {
+    expect(twinPath('/sessions/0/durationMin', DATA)).toBeNull()
+    expect(twinPath('/logs/squat/0/date', DATA)).toBeNull()
+    // Une séance sans journal correspondant : pas de jumeau à désigner.
+    expect(twinPath('/logs/squat/0/durationMin', { logs: DATA.logs, sessions: [] })).toBeNull()
   })
 })

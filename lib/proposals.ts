@@ -1,3 +1,8 @@
+// Import relatif et non par alias : ce module est testé dans le projet « unit »,
+// qui tourne en Node pur sans la résolution de chemins de Nuxt.
+import { getAt, isScalar } from './pointer'
+import type { Scalar } from './pointer'
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Ce qu'une proposition venue du connecteur a le droit de changer.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -33,6 +38,7 @@ export type Plan =
   | { kind: 'semaine-type', seances?: (string | null)[], salle?: boolean[], teletravail?: boolean[] }
   | { kind: 'correction-serie', exercice: string, date: string, index: number, vers: { w: number, r: number } }
   | { kind: 'correction-pesee', date: string, vers: number | null }
+  | { kind: 'correction-champ', chemin: string, vers: Scalar }
 
 export interface RecipeSpec {
   name: string
@@ -55,6 +61,8 @@ export interface PlanCtx {
   foodKnown?: (id: string) => boolean
   setAt?: (exId: string, date: string, index: number) => { w: number, r: number } | null
   weightAt?: (date: string) => number | null
+  /** L'instantané complet de la sauvegarde, pour vérifier un champ quelconque. */
+  snapshot?: () => Record<string, unknown>
 }
 
 /** Un jour de menu proposé. Les créneaux absents gardent ce que la semaine prévoyait. */
@@ -288,6 +296,30 @@ export function fixFor(p: RawProposal, ctx: PlanCtx): Plan | null {
     return { kind: 'correction-serie', exercice, date, index: Math.trunc(index), vers: { w, r } }
   }
 
+  if (quoi === 'champ') {
+    // Le passe-partout : n'importe quel champ SIMPLE de la sauvegarde, désigné par
+    // un pointeur JSON. Il existe parce que figer une liste de champs modifiables
+    // condamnait à revenir en ajouter un à chaque besoin — et à laisser en attente
+    // celui qu'on n'avait pas prévu, comme la durée d'une séance.
+    //
+    // Ce qu'il ne dispense PAS de faire : le chemin doit exister, la valeur en
+    // place doit être celle qu'on croit remplacer, et on n'écrit qu'un scalaire.
+    // Un objet entier réécrit à partir d'une phrase reste hors de portée.
+    const chemin = pick(d, ['chemin', 'path'])
+    const de = pick(d, ['de', 'avant'])
+    const vers = pick(d, ['vers', 'apres'])
+    if (typeof chemin !== 'string' || !isScalar(vers) || !isScalar(de)) return null
+    const snap = ctx.snapshot?.()
+    if (!snap) return null
+    const current = getAt(snap, chemin)
+    if (current === undefined || !isScalar(current)) return null
+    // Comparaison souple sur les nombres écrits en texte : « 50 » et 50 désignent
+    // la même durée, et refuser pour ça n'aiderait personne.
+    const same = current === de || (typeof current === 'number' && Number(de) === current)
+    if (!same) return null
+    return { kind: 'correction-champ', chemin, vers }
+  }
+
   if (quoi === 'pesee') {
     const date = pick(d, ['date'])
     const de = num(pick(d, ['de', 'avant']), 0, 500)
@@ -302,6 +334,65 @@ export function fixFor(p: RawProposal, ctx: PlanCtx): Plan | null {
   }
 
   return null
+}
+
+/**
+ * La durée d'une séance est écrite à deux endroits ; un seul est lu.
+ *
+ * `recordSession` l'inscrit sur la séance ET sur chaque exercice de cette séance.
+ * L'application n'affiche jamais la seconde — ni le rapport, ni la fiche du jour,
+ * ni le calendrier ne la regardent. Elle reste pourtant dans la sauvegarde, donc
+ * visible d'ici, et c'est un piège exact : corriger `/logs/dev-couche/3/durationMin`
+ * réussit, l'application confirme, et l'écran continue d'afficher l'ancienne durée.
+ *
+ * On ne la masque pas et on ne la répare pas en douce — un outil qui écrit ailleurs
+ * que là où on pointe ne serait plus vérifiable. On dit simplement, à la lecture,
+ * laquelle des deux compte.
+ */
+export function twinPath(chemin: string, d: Record<string, unknown>): string | null {
+  const m = /^\/logs\/(.+)\/(\d+)\/durationMin$/.exec(chemin)
+  if (!m) return null
+  const entry = getAt(d, `/logs/${m[1]}/${m[2]}`) as { date?: string } | undefined
+  const jour = entry?.date
+  if (!jour) return null
+  const sessions = Array.isArray(d.sessions) ? d.sessions : []
+  const i = sessions.findIndex(s => String((s as { at?: string }).at ?? '').slice(0, 10) === jour)
+  return i < 0 ? null : `/sessions/${i}/durationMin`
+}
+
+/**
+ * Une correction de champ vérifiée AVANT le dépôt, pas seulement à l'application.
+ *
+ * L'application refusera de toute façon un chemin qui n'existe pas ou un « de » qui
+ * ne correspond pas — c'est la garantie de fond, et elle reste. Mais si le serveur
+ * se tait ici, la proposition part quand même : Grégoire la découvre dans sa boîte,
+ * lit « l'app ne sait pas appliquer ça », et c'est LUI qui paie une erreur que le
+ * serveur pouvait voir tout de suite, miroir en main.
+ *
+ * Rendre l'erreur au connecteur la met au bon endroit : je la lis, je relis le champ,
+ * je repropose. Rien n'atteint la boîte de réception tant que ce n'est pas cohérent.
+ */
+export function checkFieldFix(detail: Record<string, unknown>, data: Record<string, unknown>): void {
+  const chemin = typeof detail.chemin === 'string' ? detail.chemin : ''
+  if (!chemin) throw new Error('« chemin » est obligatoire pour une correction de champ (ex. « /sessions/12/durationMin »).')
+  const actuel = getAt(data, chemin)
+  if (actuel === undefined) throw new Error(`Aucune valeur à « ${chemin} ». Vérifie le chemin avec l'outil « champ ».`)
+  const double = twinPath(chemin, data)
+  if (double) throw new Error(`« ${chemin} » est une copie que l'application n'affiche pas : la corriger ne changerait rien à l'écran. Corrige ${double}.`)
+  if (actuel !== null && typeof actuel === 'object') {
+    throw new Error(`« ${chemin} » désigne ${Array.isArray(actuel) ? 'une liste' : 'un objet'} : on ne remplace que des valeurs simples. Descends d'un cran.`)
+  }
+  const vers = detail.vers
+  if (vers !== null && ['object', 'undefined', 'function'].includes(typeof vers)) {
+    throw new Error('« vers » doit être une valeur simple : nombre, texte, booléen ou null.')
+  }
+  // Tolérance nombre/texte : le connecteur relit souvent « 50 » là où la sauvegarde
+  // porte 50. C'est la même valeur, et refuser là-dessus n'apprend rien à personne.
+  const de = detail.de
+  if (de === undefined) throw new Error(`« de » est obligatoire : la valeur actuellement enregistrée est ${JSON.stringify(actuel)}.`)
+  if (de !== actuel && String(de) !== String(actuel)) {
+    throw new Error(`« de » ne correspond pas : ${JSON.stringify(chemin)} vaut ${JSON.stringify(actuel)}, pas ${JSON.stringify(de)}. Relis-le avec « champ », puis repropose.`)
+  }
 }
 
 /** Les lignes affichées sous la phrase : ce qui change, en clair. */

@@ -32,3 +32,5 @@ lerna-debug.log*
 
 # Netlify
 .netlify
+# Coffre local (miroir, propositions et passkey en développement)
+.data/vault/

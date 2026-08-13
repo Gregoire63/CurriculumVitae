@@ -1,5 +1,7 @@
 import { addProposal, readMirror, readProposals, verifyToken } from '../utils/vault'
 import { KIND_GROUP_LABELS, builtinWeeks, mergeFoods, mergeRecipes } from '~/lib/nutritionStats'
+import { getAt } from '~/lib/pointer'
+import { checkFieldFix, twinPath } from '~/lib/proposals'
 import { PROGRAM } from '~/data/sportProgram'
 import { VARIANTS } from '~/data/exerciseVariants'
 
@@ -173,6 +175,14 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'champ',
+    description: 'Lit UNE valeur de la sauvegarde par son chemin (pointeur JSON, ex. « /sessions/12/durationMin »). À appeler AVANT toute correction de champ, pour connaître la valeur exacte à mettre dans « de ». Sans argument, renvoie la carte des sections avec leur taille et un exemple de chemin.',
+    inputSchema: {
+      type: 'object',
+      properties: { chemin: { type: 'string', description: 'Pointeur JSON, commençant par /' } },
+    },
+  },
+  {
     name: 'propositions',
     description: 'Les modifications déjà proposées et leur sort (en attente, appliquée, refusée).',
     inputSchema: { type: 'object', properties: {} },
@@ -200,6 +210,7 @@ const TOOLS = [
             '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", items: [ { food: "<id d\'aliment>", g: 120 } ] }',
             '• correction, série : { quoi: "serie", exercice: "<id>", date: "AAAA-MM-JJ", serie: 0, de: { w, r }, vers: { w, r } }',
             '• correction, pesée : { quoi: "pesee", date: "AAAA-MM-JJ", de: 77.4, vers: 76.9 } — « vers: null » supprime la pesée',
+            '• correction, champ quelconque : { quoi: "champ", chemin: "/sessions/12/durationMin", de: 50, vers: 65 } — n\'importe quelle valeur SIMPLE de la sauvegarde (nombre, texte, booléen). Le chemin doit exister, on ne crée rien, et on ne remplace jamais un objet ou un tableau entier. Lis-le d\'abord avec l\'outil « champ ».',
             'Les corrections portent « de » : la valeur actuellement enregistrée. Si elle ne correspond pas, l\'application REFUSE — c\'est ce qui empêche d\'écraser une donnée qu\'on avait mal lue. Lis-la d\'abord avec « exercice » ou « poids ».',
           ].join('\n'),
         },
@@ -213,6 +224,14 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
   if (name === 'proposer_modification') {
     const resume = String(args.resume ?? '').trim()
     if (!resume) throw new Error('« resume » est obligatoire : c\'est la phrase que Grégoire lira avant de valider.')
+    const detail = (args.detail ?? {}) as Record<string, unknown>
+    // Sur « quoi », pas sur « cible » : l'intention est déjà sans ambiguïté, et une
+    // cible mal choisie ne doit pas faire sauter la vérification.
+    if (detail.quoi === 'champ') {
+      const m = await readMirror()
+      if (!m) throw new Error('Aucune donnée personnelle : le téléphone n\'a pas encore poussé son miroir, impossible de vérifier le champ visé.')
+      checkFieldFix(detail, m.data as Record<string, unknown>)
+    }
     const p = await addProposal({
       action: String(args.cible ?? 'autre'),
       summary: resume,
@@ -236,7 +255,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
    *
    * Le miroir n'ajoute à ces trois-là que ce que l'utilisateur a créé lui-même.
    */
-  const PERSONNELS = ['etat', 'profil', 'seances', 'exercice', 'poids', 'nutrition']
+  const PERSONNELS = ['etat', 'profil', 'seances', 'exercice', 'poids', 'nutrition', 'champ']
   const mirror = await readMirror()
   if (!mirror && PERSONNELS.includes(name)) {
     throw new Error('Aucune donnée personnelle : le téléphone n\'a pas encore poussé son miroir. Demande-lui d\'ouvrir l\'application une fois. Les catalogues (plats, aliments, programme) restent lisibles.')
@@ -306,6 +325,35 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         mes_semaines: mine.map(m => ({ id: m.id, nom: m.name, jours: m.days })),
         semaine_active: nut.activeMenu ?? null,
         appliquees: nut.menuAssign ?? {},
+      }
+    }
+    case 'champ': {
+      const chemin = typeof args.chemin === 'string' ? args.chemin : ''
+      if (!chemin) {
+        // Sans chemin, on donne la CARTE : sections, taille, et un exemple de
+        // chemin valide. Deviner « /sessions/12/durationMin » sans savoir que
+        // « sessions » existe ni combien il en contient n'aurait pas de sens.
+        const sections = Object.entries(d).map(([k, v]) => {
+          const n = Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : null)
+          return {
+            section: k,
+            type: Array.isArray(v) ? 'liste' : typeof v,
+            elements: n,
+            exemple: Array.isArray(v) && v.length ? `/${k}/0` : `/${k}`,
+          }
+        })
+        return { sections, rappel: 'Appelle « champ » avec un chemin pour lire une valeur précise.' }
+      }
+      const val = getAt(d, chemin)
+      if (val === undefined) throw new Error(`Aucune valeur à « ${chemin} ». Vérifie le chemin avec « champ » sans argument.`)
+      const simple = val === null || ['string', 'number', 'boolean'].includes(typeof val)
+      const double = twinPath(chemin, d)
+      return {
+        chemin,
+        valeur: val,
+        modifiable: simple,
+        ...(simple ? {} : { note: 'C\'est un objet ou une liste : on ne remplace que des valeurs simples. Descends d\'un cran.' }),
+        ...(double ? { affiche: false, note: `Cette copie n'est PAS celle que l'application affiche. La durée montrée est ${double} — corrige plutôt celle-là.` } : {}),
       }
     }
     case 'etat': {

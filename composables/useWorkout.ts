@@ -685,6 +685,27 @@ export function useWorkout() {
     return safeParse<{ date?: string }>(localStorage.getItem(BACKUP_KEY), {}).date ?? null
   }
 
+  /**
+   * Restaure depuis un OBJET déjà en mémoire, sans passer par un fichier.
+   *
+   * C'était le corps de `importJSON`, coincé dans un `FileReader`. Il en sort parce
+   * qu'une correction de champ suit exactement le même chemin qu'un import : on
+   * reconstruit l'instantané, on y change une valeur, et on le réinjecte. Passer
+   * par le mécanisme d'import déjà éprouvé vaut mieux qu'écrire dans localStorage
+   * derrière le dos des composables — qui, eux, ne verraient rien changer.
+   */
+  function restoreData(data: Record<string, unknown>) {
+    if (data.logs) {
+      logs.value = data.logs as Logs
+      bodyWeight.value = (data.bodyWeight as BodyWeightEntry[]) || []
+      sessionHistory.value = (data.sessions as SessionRecord[]) || []
+    }
+    else {
+      logs.value = data as unknown as Logs
+    }
+    persistLogs(); persistBW(); persistSessions()
+  }
+
   // onExtra : reçoit les données brutes pour restaurer profil/planning côté appelant
   function importJSON(file: File, onExtra?: (data: Record<string, unknown>) => void): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -692,14 +713,7 @@ export function useWorkout() {
       r.onload = () => {
         try {
           const data = JSON.parse(r.result as string)
-          if (data.logs) {
-            logs.value = data.logs
-            bodyWeight.value = data.bodyWeight || []
-            sessionHistory.value = data.sessions || []
-          } else {
-            logs.value = data
-          }
-          persistLogs(); persistBW(); persistSessions()
+          restoreData(data)
           if (onExtra) onExtra(data)
           resolve()
         } catch { reject(new Error('Fichier invalide')) }
@@ -716,7 +730,7 @@ export function useWorkout() {
     recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     muscleSets, muscleSetsWithGaps, weeklyStats, fatigue, stalledCount,
     milestoneOf, sprintSessions, sprintObjective,
-    addBodyWeight, setBodyWeightAt, removeBodyWeight, weightAt, setAt, fixSet, exportJSON, importJSON, seedDemo, clearAll,
+    addBodyWeight, setBodyWeightAt, removeBodyWeight, weightAt, setAt, fixSet, exportJSON, importJSON, restoreData, seedDemo, clearAll,
     daysSinceExport, restoreBackup, backupDate,
   }
 }

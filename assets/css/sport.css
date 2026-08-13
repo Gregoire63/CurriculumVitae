@@ -273,6 +273,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .note-card { margin-top: 4px; }
 /* Coffre / connecteur Claude */
 .vt-txt { font-size: 12.5px; line-height: 1.55; margin-top: 6px; }
+.vt-hint { font-size: 11.5px; line-height: 1.5; margin-top: 6px; }
 .vt-go { width: 100%; }
 .vt-row { margin-top: 4px; }
 .vt-warn { background: #f6ece1; border: 1px solid #e6c3b0; color: #b5502f; border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; margin-top: 8px; }

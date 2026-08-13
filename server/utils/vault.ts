@@ -144,7 +144,7 @@ export const writeCredential = (c: StoredCredential) => writeJson(KEY_CREDENTIAL
 const b64u = (b: Buffer) => b.toString('base64url')
 
 function secret(): string {
-  const s = process.env.NUXT_VAULT_SECRET || ''
+  const s = (process.env.NUXT_VAULT_SECRET || '').trim()
   if (!s || s.length < 24) throw new Error('NUXT_VAULT_SECRET manquant ou trop court (32 caractères minimum)')
   return s
 }

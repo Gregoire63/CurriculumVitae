@@ -15,7 +15,7 @@ import { readCredential, writeCredential } from '../../utils/vault'
  */
 export default defineEventHandler(async (event) => {
   const { bootstrap } = await readBody<{ bootstrap?: string }>(event) ?? {}
-  const expected = process.env.NUXT_VAULT_BOOTSTRAP || ''
+  const expected = (process.env.NUXT_VAULT_BOOTSTRAP || '').trim()
   if (!expected) throw createError({ statusCode: 503, statusMessage: 'NUXT_VAULT_BOOTSTRAP non configuré' })
   if (!bootstrap || bootstrap !== expected) throw createError({ statusCode: 403, statusMessage: 'Code de démarrage invalide' })
   if (!(await readCredential())) return { ok: true, deja: true }

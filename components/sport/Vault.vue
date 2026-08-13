@@ -33,7 +33,15 @@ const showReset = ref(false)
  * c'est-à-dire exactement ce qu'affiche une installation saine où l'on n'a encore
  * rien fait. On cherchait donc côté navigateur un problème qui était côté serveur.
  */
-interface Health { pret: boolean, env: Record<string, boolean>, store: string, driver: string }
+interface Health {
+  pret: boolean
+  env: Record<string, boolean>
+  bootstrap?: { longueur: number, espaces_parasites: boolean }
+  store: string
+  driver: string
+  miroir?: { pousse_le: string, seances: number, pesees: number } | null
+  propositions_en_attente?: number
+}
 const health = ref<Health | null>(null)
 
 onMounted(async () => {
@@ -99,6 +107,23 @@ function semaine(p: RawProposal) {
   }
 }
 
+/**
+ * Un code refusé ne dit rien tout seul.
+ *
+ * « 403 » laisse chercher entre une faute de frappe, un remplissage automatique du
+ * navigateur et un retour à la ligne collé dans la variable Netlify. Comparer les
+ * deux LONGUEURS tranche en une seconde, et ne révèle rien du code.
+ */
+const indice = computed(() => {
+  const b = health.value?.bootstrap
+  if (!b || !b.longueur) return ''
+  const tape = bootstrap.value.trim().length
+  if (b.espaces_parasites) return `⚠️ La variable Netlify contient un espace ou un retour à la ligne parasite — retire-le.`
+  if (!tape) return `Le serveur attend un code de ${b.longueur} caractères.`
+  if (tape !== b.longueur) return `Tu tapes ${tape} caractères, le serveur en attend ${b.longueur}.`
+  return `${tape} caractères des deux côtés : la longueur correspond.`
+})
+
 async function doRegister() {
   if (await v.register(bootstrap.value.trim())) {
     bootstrap.value = ''
@@ -141,6 +166,16 @@ async function doRefuse(p: RawProposal) {
       </template>
     </div>
 
+    <!-- Le serveur va bien mais n'a rien à lire.
+         C'est le manque qui se diagnostique le plus mal : côté conversation, Claude
+         dit « je n'ai pas accès à tes données », ce qui se lit comme une panne du
+         connecteur. Vu d'ici, c'est un bouton à presser une fois. -->
+    <div v-else-if="health && health.pret && health.miroir === null" class="vt-warn">
+      <b>Le serveur est prêt, mais il n'a encore aucune donnée.</b>
+      Tant que le miroir n'est pas envoyé, Claude répondra qu'il n'a rien à lire.
+      Déverrouille et touche <b>⬆ Envoyer maintenant</b>.
+    </div>
+
     <!-- 1. Poser le premier passkey -->
     <template v-if="statut === 'a-poser'">
       <p class="muted vt-txt">
@@ -152,9 +187,16 @@ async function doRefuse(p: RawProposal) {
       </div>
       <template v-else>
         <input v-model="bootstrap" class="note-input mt-6" type="password" placeholder="Code de démarrage" autocomplete="off">
+        <p v-if="indice" class="muted vt-hint mono">{{ indice }}</p>
         <button class="btn-primary vt-go mt-6" :disabled="v.busy.value || !bootstrap.trim()" @click="doRegister">
           🔐 Enregistrer mon passkey
         </button>
+        <p class="muted vt-txt">
+          Tu n'as pas encore de passkey&nbsp;: <b>ton appareil va en créer un</b>. Après ce
+          bouton, il te demandera ton visage, ton empreinte ou ton code de déverrouillage.
+          Le champ ci-dessus n'est pas le passkey, c'est le code de démarrage de tes
+          variables Netlify.
+        </p>
       </template>
     </template>
 

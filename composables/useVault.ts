@@ -6,6 +6,9 @@ import { useNutrition } from '~/composables/useNutrition'
 import { useTraining } from '~/composables/useTraining'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
+import { useWithings } from '~/composables/useWithings'
+import { useSnapshot } from '~/composables/useSnapshot'
+import { setAt as setPointer } from '~/lib/pointer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le côté téléphone du coffre.
@@ -54,6 +57,8 @@ export function useVault() {
   const training = useTraining()
   const workout = useWorkout()
   const profileStore = useProfile()
+  const withings = useWithings()
+  const { buildSnapshot } = useSnapshot()
 
   /**
    * Ce que le validateur doit savoir du monde réel.
@@ -68,6 +73,7 @@ export function useVault() {
     foodKnown: (id: string) => !!nutrition.library.value.foods[id],
     setAt: workout.setAt,
     weightAt: workout.weightAt,
+    snapshot: buildSnapshot,
   }
 
   async function hydrate() {
@@ -181,6 +187,21 @@ export function useVault() {
         error.value = 'La série visée n\'existe plus telle quelle.'
         return false
       }
+    }
+    else if (plan.kind === 'correction-champ') {
+      // On repasse par le chemin d'IMPORT : instantané → modification → restauration
+      // complète. Écrire dans localStorage directement laisserait les composables
+      // sur leur ancienne valeur en mémoire, et l'écran continuerait d'afficher
+      // ce qu'on vient de corriger.
+      const snap = buildSnapshot()
+      if (!setPointer(snap, plan.chemin, plan.vers)) {
+        error.value = 'Ce champ n\'existe plus, ou n\'est pas modifiable.'
+        return false
+      }
+      workout.restoreData(snap)
+      profileStore.restore(snap as never)
+      nutrition.restore({ nutrition: snap.nutrition } as never)
+      withings.restore(snap as never)
     }
     else if (plan.kind === 'correction-pesee') {
       const ok = plan.vers === null

@@ -39,6 +39,12 @@ créneau, conservation), `aliments` (les ingrédients : identifiants et macros p
 100 g), `programme` (séances, exercices, machines de remplacement avec leur
 coefficient), `menus` (ses semaines de menus et à quel lundi elles sont appliquées).
 
+**Atteindre n'importe quel champ** — `champ`. Sans argument il rend la carte de la
+sauvegarde : les sections, leur taille, un exemple de chemin. Avec un chemin
+(pointeur JSON, `/sessions/12/durationMin`) il rend la valeur et dit si elle est
+modifiable. C'est le passage obligé avant toute correction de champ : il donne la
+valeur exacte à mettre dans `de`.
+
 **Proposer** — `proposer_modification`, `propositions` (l'historique des tiennes).
 
 > **N'invente jamais un identifiant.** Un plat plausible mais inexistant est refusé
@@ -206,6 +212,37 @@ conversation.
 utile pour une saisie en double ou un chiffre aberrant qui tire les moyennes. Une
 correction de série met à jour l'historique de l'exercice **et** le journal de
 séance : les courbes et le journal ne peuvent pas diverger.
+
+#### Tout le reste de la sauvegarde
+
+`serie` et `pesee` couvrent les deux erreurs fréquentes. Pour n'importe quel autre
+champ — la durée d'une séance, son nom, une note, un réglage du profil — il y a
+`quoi: "champ"`, qui vise par pointeur JSON.
+
+```json
+{ "resume": "Séance du 10 août : durée 50 → 65 min",
+  "cible": "correction",
+  "detail": { "quoi": "champ", "chemin": "/sessions/12/durationMin",
+              "de": 50, "vers": 65 } }
+```
+
+**Appelle `champ` avant.** Sans le chemin exact et la valeur exacte, la proposition
+est refusée au dépôt — tu recevras l'erreur, pas Grégoire, mais c'est un aller-retour
+perdu. `champ` sans argument donne la carte, `champ` avec un chemin donne la valeur.
+
+Trois choses sont impossibles, et le serveur les refuse tout de suite :
+
+- **créer un champ.** Le chemin doit exister de bout en bout ; une faute de frappe
+  fabriquerait sinon une clé fantôme que rien ne lit ;
+- **remplacer un objet ou une liste.** Seules les valeurs simples passent — nombre,
+  texte, booléen, `null`. Réécrire une séance entière depuis une phrase, c'est
+  exactement ce qu'on refuse depuis le début. Descends d'un cran ;
+- **se tromper de `de`.** Le serveur compare à la valeur enregistrée et te rend
+  celle qu'il a. Relis, repropose.
+
+Une correction de champ touche **exactement** l'endroit visé, rien d'autre. C'est
+pour ça que `serie` existe à part : une série vit à deux endroits, et seul `serie`
+les tient ensemble.
 
 ### « Où j'en suis au squat ? »
 
