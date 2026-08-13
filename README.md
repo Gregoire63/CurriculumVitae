@@ -13,6 +13,7 @@ This setup includes:
 - **Prettier & ESLint**: Code formatting and linting for maintaining clean and consistent code.
 - **Husky & lint-staged**: Git hooks and automated formatting/linting before commits.
 
+
 ---
 
 ## Features
