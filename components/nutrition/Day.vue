@@ -208,6 +208,8 @@ const swapping = ref<string | null>(null)
  * changer de petit-déjeuner ou de collation le matin même.
  */
 const swapable = (slot: string) => choicesForSlot(slot, library.value, stock.value)
+/** Le repas en cours de remplacement : la feuille a besoin de son nom et de son plat. */
+const swapMeal = computed(() => day.value?.meals.find(m => m.slot === swapping.value) ?? null)
 function swap(slot: string, id: string | null) {
   setPicked(props.todayIso, slot, id)
   swapping.value = null
@@ -369,22 +371,22 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
           </button>
         </div>
 
-        <!-- Le frigo : ce qu'il reste de la sélection, moins ce qui a déjà été pris. -->
-        <div v-if="swapping === m.slot" class="nu-swap-list">
-          <button
-            v-for="alt in swapable(m.slot)" :key="alt.id"
-            class="nu-swap-opt" :class="{ on: alt.id === m.recipeId }"
-            @click="swap(m.slot, alt.id)"
-          >
-            <span class="flex-1">{{ alt.name }}</span>
-            <span v-if="alt.left !== null" class="mono muted">reste {{ alt.left }}</span>
-          </button>
-          <button v-if="pickedFor(props.todayIso, m.slot)" class="nu-swap-opt" @click="swap(m.slot, null)">
-            ↺ Reprendre le plat proposé
-          </button>
-        </div>
+
       </div>
     </div>
+
+    <!-- La feuille de choix : dix-sept plats ne tiennent pas dépliés sous la carte,
+         et une liste qui pousse le repas hors de l'écran fait perdre le contexte. -->
+    <NutritionPickSheet
+      v-if="swapping && swapMeal"
+      :iso="props.todayIso"
+      :slot-id="swapping"
+      :slot-label="swapMeal.label"
+      :current="swapMeal.recipeId"
+      :picked="pickedFor(props.todayIso, swapping)"
+      @pick="swap(swapping, $event)"
+      @close="swapping = null"
+    />
 
     <!-- Ce qui a été mangé en plus du plan -->
     <div class="section-label">En plus du plan</div>

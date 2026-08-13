@@ -105,6 +105,7 @@ const canEatEdit = computed(() => !isFuture.value && !plan.value?.off)
  */
 const swapping = ref<string | null>(null)
 const swapable = (slot: string) => choicesForSlot(slot, library.value, stock.value)
+const swapMeal = computed(() => plan.value?.meals.find(m => m.slot === swapping.value) ?? null)
 function swap(slot: string, id: string | null) {
   setPicked(props.iso, slot, id)
   swapping.value = null
@@ -211,21 +212,22 @@ function swap(slot: string, id: string | null) {
             >
               {{ pickedFor(iso, m.slot) ? '✎ plat choisi' : '✎ changer de plat' }}
             </button>
-            <div v-if="swapping === m.slot" class="ds-m-list">
-              <button
-                v-for="alt in swapable(m.slot)" :key="alt.id"
-                class="ds-m-opt" :class="{ on: alt.id === m.recipeId }"
-                @click="swap(m.slot, alt.id)"
-              >
-                <span class="flex-1">{{ alt.name }}</span>
-                <span v-if="alt.left !== null" class="mono muted">reste {{ alt.left }}</span>
-              </button>
-              <button v-if="pickedFor(iso, m.slot)" class="ds-m-opt" @click="swap(m.slot, null)">
-                ↺ Reprendre le plat prévu
-              </button>
-            </div>
+
           </div>
         </div>
+        <!-- Même feuille de choix qu'à l'accueil : un seul composant, donc un seul
+             endroit à corriger. Elle s'empile par-dessus la feuille de date. -->
+        <NutritionPickSheet
+          v-if="swapping && swapMeal"
+          :iso="iso"
+          :slot-id="swapping"
+          :slot-label="swapMeal.label"
+          :current="swapMeal.recipeId"
+          :picked="pickedFor(iso, swapping)"
+          @pick="swap(swapping, $event)"
+          @close="swapping = null"
+        />
+
         <button v-if="canEatEdit" class="btn-primary ds-open" @click="eatSheet = true">
           🍽 {{ isToday ? 'Compléter les repas' : 'Corriger les repas de ce jour' }}
         </button>

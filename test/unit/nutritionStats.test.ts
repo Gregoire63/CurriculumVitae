@@ -11,7 +11,7 @@ import {
   resolveDay, slugify, timelineOf, validateFood, validateRecipe, weekBalance,
   CYCLE_EPOCH, cycleIndexOf, dayBurn, dayStatus, DEFAULT_TRAINED, dinnerAdjustment, fmtQty, isDayPlayed,
   adjustSignature, ingredientLines,
-  atFatPct, isAdjustableDairy, rebalanceDairy, splitIngredients, choicesForSlot, slotKind, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
+  atFatPct, isAdjustableDairy, rebalanceDairy, splitIngredients, choicesForSlot, slotKind, slotKinds, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   fatRatioOf, leanMassOf, proteinPerKgLean, proteinPlan,
   PROTEIN_FAT_HIGH, PROTEIN_FAT_LOW, PROTEIN_LEAN_MAX, PROTEIN_LEAN_MIN,
@@ -2231,14 +2231,35 @@ describe('ingrédients séparés plat / sauce', () => {
 describe('choix du plat d\'un créneau', () => {
   const LIB = { foods: FOOD_BY_ID, recipes: RECIPE_BY_ID }
 
-  it('propose TOUS les plats du bon type, cuisinés ou non', () => {
+  it('propose TOUS les plats de la famille, cuisinés ou non', () => {
     // Le stock filtrait la liste : on ne pouvait pas dire « aujourd'hui je mange autre
     // chose » si cet autre chose n'avait pas été coché à la session de cuisine. Or ce
     // choix ne gère pas un frigo, il donne les bonnes quantités pour la journée.
     const midi = choicesForSlot('lunch', LIB, {})
-    const boites = activeRecipes(LIB, 'boite')
-    expect(midi).toHaveLength(boites.length)
+    const attendu = activeRecipes(LIB, 'boite').length + activeRecipes(LIB, 'diner').length
+    expect(midi).toHaveLength(attendu)
     expect(midi.every(c => c.left === null)).toBe(true) // stock inconnu, pas zéro
+  })
+
+  it('accepte un dîner à midi, et une boîte le soir', () => {
+    // L'erreur venait de moi : j'ai conseillé de mettre la dinde et le saumon — deux
+    // recettes de DÎNER — dans les boîtes du midi lors d'une session de batch cooking.
+    // L'app refusait ensuite de les proposer à midi, et il ne restait que les trois
+    // boîtes. Un plat n'appartient pas à une heure de la journée.
+    const midi = choicesForSlot('lunch', LIB).map(c => c.id)
+    expect(midi).toContain('din-dinde')
+    expect(midi).toContain('din-saumon')
+    expect(choicesForSlot('dinner', LIB).map(c => c.id)).toContain('boite-a')
+  })
+
+  it('garde le type du créneau EN TÊTE de liste', () => {
+    // Élargir ne doit pas noyer le choix évident : à midi les boîtes d'abord.
+    expect(slotKinds('lunch')).toEqual(['boite', 'diner'])
+    expect(slotKinds('dinner')).toEqual(['diner', 'boite'])
+    expect(slotKinds('pdj')).toEqual(['pdj', 'collation'])
+    expect(slotKinds('snack')).toEqual(['collation', 'pdj'])
+    expect(choicesForSlot('lunch', LIB)[0].kind).toBe('boite')
+    expect(choicesForSlot('dinner', LIB)[0].kind).toBe('diner')
   })
 
   it('rend le stock quand il est connu, sans jamais s\'en servir pour filtrer', () => {

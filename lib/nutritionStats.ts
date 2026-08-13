@@ -1870,6 +1870,27 @@ export function slotKind(slotId: string): Recipe['kind'] | null {
 }
 
 /**
+ * Les types de plats qu'un créneau accepte VRAIMENT, le sien en tête.
+ *
+ * Filtrer sur le seul type du créneau était trop strict, et l'erreur venait de moi :
+ * j'ai conseillé de mettre la dinde et le saumon — deux recettes de DÎNER — dans les
+ * boîtes du midi lors d'une session de batch cooking. L'app refusait ensuite de les
+ * proposer à midi, et il ne restait que les trois boîtes. Un plat n'appartient pas à
+ * une heure de la journée : une boîte se mange le soir, un dîner part au bureau.
+ *
+ * On garde l'ordre : le type naturel du créneau d'abord, les autres ensuite. Le bon
+ * choix reste évident, le reste est accessible.
+ */
+export function slotKinds(slotId: string): Recipe['kind'][] {
+  const own = slotKind(slotId)
+  if (!own) return []
+  const MAIN: Recipe['kind'][] = ['boite', 'diner']
+  const LIGHT: Recipe['kind'][] = ['pdj', 'collation']
+  const family = MAIN.includes(own) ? MAIN : LIGHT
+  return [own, ...family.filter(k => k !== own)]
+}
+
+/**
  * Tout ce qu'on peut mettre à un créneau donné, un jour donné.
  *
  * Le stock N'EST PAS un filtre, et c'est tout le sujet. La version précédente ne
@@ -1882,17 +1903,26 @@ export function slotKind(slotId: string): Recipe['kind'] | null {
  * Le stock reste RENDU, en annotation : savoir qu'il reste deux portions au frigo aide
  * à choisir. Il informe, il n'interdit plus.
  */
-export interface SlotChoice { id: string, name: string, left: number | null }
+export interface SlotChoice { id: string, name: string, kind: Recipe['kind'], left: number | null }
 export function choicesForSlot(
   slotId: string,
   lib: Library,
   stock: Record<string, number> = {},
 ): SlotChoice[] {
-  const kind = slotKind(slotId)
-  if (!kind) return []
-  return activeRecipes(lib, kind)
-    .map(r => ({ id: r.id, name: r.name, left: r.id in stock ? stock[r.id] : null }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  return slotKinds(slotId).flatMap(kind =>
+    activeRecipes(lib, kind)
+      .map(r => ({ id: r.id, name: r.name, kind, left: r.id in stock ? stock[r.id] : null }))
+      .sort((a, b) => a.name.localeCompare(b.name)))
+}
+
+/** Intitulés des familles, pour les titres de la feuille de choix. Distinct du
+ * KIND_LABELS local de la fiche recette, qui nomme UN plat et non un groupe. */
+export const KIND_GROUP_LABELS: Record<string, string> = {
+  boite: 'Déjeuners (boîtes)',
+  diner: 'Dîners',
+  pdj: 'Petits-déjeuners',
+  collation: 'Collations',
+  sauce: 'Sauces',
 }
 
 /** Les deux repas qu'on choisit vraiment. Le reste tourne autour. */
