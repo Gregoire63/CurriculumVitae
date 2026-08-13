@@ -108,3 +108,34 @@ describe('restauration depuis une sauvegarde', () => {
     expect(p.weekPlan.value).toEqual(DEFAULT_PLAN)
   })
 })
+
+describe('exceptions de planning par date', () => {
+  it('n\'écrase pas la semaine type et se retire proprement', async () => {
+    const p = await load()
+    // 2026-08-14 est un vendredi : « s4 » dans la semaine type.
+    expect(p.sessionIdFor('2026-08-14')).toBe('s4')
+
+    p.setDayPlan('2026-08-14', null)
+    expect(p.sessionIdFor('2026-08-14')).toBeNull()
+    expect(p.isPlanMoved('2026-08-14')).toBe(true)
+    // La semaine type, elle, n'a pas bougé — le vendredi suivant reste prévu.
+    expect(p.weekPlan.value[4]).toBe('s4')
+    expect(p.sessionIdFor('2026-08-21')).toBe('s4')
+
+    p.clearDayPlan('2026-08-14')
+    expect(p.isPlanMoved('2026-08-14')).toBe(false)
+    expect(p.sessionIdFor('2026-08-14')).toBe('s4')
+  })
+
+  it('réinitialiser le planning efface aussi les exceptions', async () => {
+    // Sinon « ↺ Réinit. planning » rendait une semaine type propre… toujours
+    // contredite par des exceptions invisibles.
+    const p = await load()
+    p.setDayPlan('2026-08-14', null)
+    p.setDay(0, null)
+    p.resetPlan()
+    expect(p.weekPlan.value).toEqual(DEFAULT_PLAN)
+    expect(p.isPlanMoved('2026-08-14')).toBe(false)
+    expect(p.sessionIdFor('2026-08-14')).toBe('s4')
+  })
+})
