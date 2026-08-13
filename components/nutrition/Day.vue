@@ -6,7 +6,7 @@ import { useWithings } from '~/composables/useWithings'
 import { useWorkout } from '~/composables/useWorkout'
 import type { DayMeal, DayStatus } from '~/lib/nutritionStats'
 import {
-  DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, dayBurn,
+  DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, choicesForSlot, dayBurn,
   dayEnergy, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
   isDayPlayed, macroSplit, proteinPlan, quickExtra, roundMacros, sessionsOn, sumMacros,
 } from '~/lib/nutritionStats'
@@ -196,19 +196,18 @@ function addQuick() {
 const swapping = ref<string | null>(null)
 
 /**
- * Les plats encore disponibles pour un créneau : ceux de la sélection dont il reste
- * des portions, du bon type de repas. On propose aussi celui déjà servi, sinon on ne
- * pourrait pas revenir en arrière une fois la dernière portion « consommée ».
+ * Tout ce qu'on peut mettre à ce créneau — pas seulement ce qui a été cuisiné.
+ *
+ * Le stock filtrait la liste : impossible de dire « aujourd'hui je mange autre chose »
+ * si cet autre chose n'avait pas été coché à la session de cuisine. Or ce choix ne sert
+ * pas à gérer un frigo, il sert à donner les bonnes quantités pour la journée en
+ * fonction de ce qu'on va réellement manger. Le stock est toujours affiché quand il est
+ * connu : il informe, il n'interdit plus.
+ *
+ * Et ça marche maintenant sur TOUS les créneaux, pas seulement midi et soir : on peut
+ * changer de petit-déjeuner ou de collation le matin même.
  */
-function swapable(slot: string) {
-  const kind = slot === 'lunch' ? 'boite' : slot === 'dinner' ? 'diner' : null
-  if (!kind) return []
-  const current = pickedFor(props.todayIso, slot)
-  return Object.entries(stock.value)
-    .filter(([id, left]) => library.value.recipes[id]?.kind === kind && (left > 0 || id === current))
-    .map(([id, left]) => ({ id, left, name: library.value.recipes[id].name }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
+const swapable = (slot: string) => choicesForSlot(slot, library.value, stock.value)
 function swap(slot: string, id: string | null) {
   setPicked(props.todayIso, slot, id)
   swapping.value = null
@@ -378,7 +377,7 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
             @click="swap(m.slot, alt.id)"
           >
             <span class="flex-1">{{ alt.name }}</span>
-            <span class="mono muted">reste {{ alt.left }}</span>
+            <span v-if="alt.left !== null" class="mono muted">reste {{ alt.left }}</span>
           </button>
           <button v-if="pickedFor(props.todayIso, m.slot)" class="nu-swap-opt" @click="swap(m.slot, null)">
             ↺ Reprendre le plat proposé

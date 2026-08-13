@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
+import { choicesForSlot } from '~/lib/nutritionStats'
 import { useNutrition } from '~/composables/useNutrition'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
@@ -26,7 +27,7 @@ const props = defineProps<{ iso: string, todayIso: string | null }>()
 const emit = defineEmits<{ close: [], edit: [rec: SessionRecord] }>()
 
 const { sessionLog, bodyWeight } = useWorkout()
-const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots } = useNutrition()
+const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots, library, stock, pickedFor, setPicked } = useNutrition()
 const { profile } = useProfile()
 const { entries: bodyEntries, suspectAts } = useWithings()
 
@@ -88,6 +89,26 @@ const weighIns = computed(() =>
  */
 const isFuture = computed(() => !!props.todayIso && props.iso > props.todayIso)
 const canEatEdit = computed(() => !isFuture.value && !plan.value?.off)
+
+/**
+ * Changer le plat d'un créneau, n'importe quel jour — passé, présent ou à venir.
+ *
+ * Le futur était en lecture seule : on ne pouvait que constater ce que le cycle
+ * proposait. Or c'est précisément là que le choix sert à quelque chose — « jeudi je
+ * mange chez mes parents », « vendredi je finis le saumon ». Décider à l'avance, c'est
+ * ce qui permet à la liste de courses et aux quantités d'être justes le jour venu, au
+ * lieu de corriger après coup.
+ *
+ * On réutilise `setPicked`, déjà daté et déjà prioritaire dans la résolution du jour :
+ * pas de second mécanisme à maintenir, et le plat choisi compte dans le stock comme
+ * une portion engagée.
+ */
+const swapping = ref<string | null>(null)
+const swapable = (slot: string) => choicesForSlot(slot, library.value, stock.value)
+function swap(slot: string, id: string | null) {
+  setPicked(props.iso, slot, id)
+  swapping.value = null
+}
 </script>
 
 <template>
@@ -181,13 +202,36 @@ const canEatEdit = computed(() => !isFuture.value && !plan.value?.off)
               </span>
               <span class="ds-m-state">{{ done.has(m.slot) ? '✓ pris' : '—' }}</span>
             </div>
+            <!-- Le choix du plat, à toute date. C'est ce qui permet de dire « ce
+                 jour-là je mangerai ça » AVANT le jour, au lieu de corriger après. -->
+            <button
+              v-if="swapable(m.slot).length"
+              class="ds-m-swap" :class="{ set: pickedFor(iso, m.slot) }"
+              @click="swapping = swapping === m.slot ? null : m.slot"
+            >
+              {{ pickedFor(iso, m.slot) ? '✎ plat choisi' : '✎ changer de plat' }}
+            </button>
+            <div v-if="swapping === m.slot" class="ds-m-list">
+              <button
+                v-for="alt in swapable(m.slot)" :key="alt.id"
+                class="ds-m-opt" :class="{ on: alt.id === m.recipeId }"
+                @click="swap(m.slot, alt.id)"
+              >
+                <span class="flex-1">{{ alt.name }}</span>
+                <span v-if="alt.left !== null" class="mono muted">reste {{ alt.left }}</span>
+              </button>
+              <button v-if="pickedFor(iso, m.slot)" class="ds-m-opt" @click="swap(m.slot, null)">
+                ↺ Reprendre le plat prévu
+              </button>
+            </div>
           </div>
         </div>
         <button v-if="canEatEdit" class="btn-primary ds-open" @click="eatSheet = true">
           🍽 {{ isToday ? 'Compléter les repas' : 'Corriger les repas de ce jour' }}
         </button>
         <p v-else-if="isFuture" class="muted ds-empty">
-          Journée à venir : les repas se cochent une fois mangés.
+          Journée à venir : les repas se cochent une fois mangés. Tu peux déjà choisir
+          ce que tu mangeras — les quantités et les courses suivront.
         </p>
 
         <!-- Corps -->

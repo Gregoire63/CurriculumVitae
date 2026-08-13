@@ -913,3 +913,12 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .ob-goal small { font-size: 12px; line-height: 1.45; color: var(--text-muted); }
 .ob-goal.spd { background: #eef2f9; border-left: 3px solid #4a6fa5; }
 .ob-goal.vol { background: #f6ecd6; border-left: 3px solid #a97b1e; }
+
+/* Choisir le plat d'un créneau depuis la feuille de date — passé comme à venir */
+.ds-m-swap { margin-top: 6px; background: none; border: 1px dashed var(--bg-accent); border-radius: 8px; padding: 4px 9px; font-family: var(--font-body); font-size: 11.5px; color: var(--text-muted); cursor: pointer; transition: all 0.15s; }
+.ds-m-swap:hover { border-color: var(--accent-secondary); color: var(--text-primary); }
+.ds-m-swap.set { border-style: solid; border-color: #4a6fa5; background: #eef2f9; color: #4a6fa5; font-weight: 600; }
+.ds-m-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.ds-m-opt { display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; text-align: left; background: var(--bg-secondary); border: 1px solid var(--bg-accent); border-radius: 8px; padding: 8px 10px; font-family: var(--font-body); font-size: 12.5px; color: var(--text-primary); cursor: pointer; }
+.ds-m-opt:hover { border-color: var(--accent-secondary); }
+.ds-m-opt.on { border-color: #4a6fa5; background: #eef2f9; font-weight: 600; }

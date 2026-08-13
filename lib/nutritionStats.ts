@@ -1853,6 +1853,48 @@ export interface MenuWeek {
 /** Nombre de portions à cuisiner, par identifiant de plat. Zéro = non retenu. */
 export type Selection = Record<string, number>
 
+/**
+ * Le type de plat qu'un créneau accepte — donc ce qu'on peut y mettre à la place.
+ *
+ * `creatine` renvoie `null` volontairement : c'est une poudre à avaler dans le
+ * petit-déjeuner, pas un repas qu'on remplace. Elle est enregistrée comme une
+ * « collation » pour que ses zéros calories entrent dans les totaux, mais la proposer
+ * en alternative à une collation n'aurait aucun sens.
+ */
+export function slotKind(slotId: string): Recipe['kind'] | null {
+  if (slotId === 'lunch') return 'boite'
+  if (slotId === 'dinner') return 'diner'
+  if (slotId === 'pdj') return 'pdj'
+  if (slotId === 'pre' || slotId === 'snack' || slotId === 'night') return 'collation'
+  return null
+}
+
+/**
+ * Tout ce qu'on peut mettre à un créneau donné, un jour donné.
+ *
+ * Le stock N'EST PAS un filtre, et c'est tout le sujet. La version précédente ne
+ * proposait que les plats de la sélection dont il restait des portions : on ne pouvait
+ * pas dire « aujourd'hui je mange autre chose » si cet autre chose n'avait pas été
+ * coché à la session de cuisine. Or ce choix ne sert pas à gérer un frigo, il sert à
+ * donner les bonnes quantités pour la journée en fonction de ce qu'on va RÉELLEMENT
+ * manger — et ce qu'on va manger n'a pas demandé la permission au planning.
+ *
+ * Le stock reste RENDU, en annotation : savoir qu'il reste deux portions au frigo aide
+ * à choisir. Il informe, il n'interdit plus.
+ */
+export interface SlotChoice { id: string, name: string, left: number | null }
+export function choicesForSlot(
+  slotId: string,
+  lib: Library,
+  stock: Record<string, number> = {},
+): SlotChoice[] {
+  const kind = slotKind(slotId)
+  if (!kind) return []
+  return activeRecipes(lib, kind)
+    .map(r => ({ id: r.id, name: r.name, left: r.id in stock ? stock[r.id] : null }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 /** Les deux repas qu'on choisit vraiment. Le reste tourne autour. */
 export const MAIN_KINDS: Recipe['kind'][] = ['boite', 'diner']
 

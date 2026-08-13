@@ -11,7 +11,7 @@ import {
   resolveDay, slugify, timelineOf, validateFood, validateRecipe, weekBalance,
   CYCLE_EPOCH, cycleIndexOf, dayBurn, dayStatus, DEFAULT_TRAINED, dinnerAdjustment, fmtQty, isDayPlayed,
   adjustSignature, ingredientLines,
-  atFatPct, isAdjustableDairy, rebalanceDairy, splitIngredients, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
+  atFatPct, isAdjustableDairy, rebalanceDairy, splitIngredients, choicesForSlot, slotKind, dairySwapCost, FAT_PCT_MAX, DAIRY_KEEP_MIN,
   macroSplit, macrosOf, microCoverage, mondayOf, proteinTarget, roundMacros, scaleItems,
   fatRatioOf, leanMassOf, proteinPerKgLean, proteinPlan,
   PROTEIN_FAT_HIGH, PROTEIN_FAT_LOW, PROTEIN_LEAN_MAX, PROTEIN_LEAN_MIN,
@@ -1820,20 +1820,6 @@ describe('les sauces', () => {
       const g = Math.round(it.g * n * 10) / 10
       expect(ligne, `${base.name} × ${n} doit servir ${g} g de ${it.food}`).toContain(`${g} g`)
     }
-    //
-    // On vérifie la MULTIPLICATION, pas un nombre écrit en dur. La version
-    // précédente attendait « 4 portions » : un chiffre qui ne dépendait que de
-    // l'ordre des plats dans le cycle, et qui est tombé à la première rotation
-    // retouchée — alors que la règle testée, elle, n'avait pas bougé d'un pouce.
-    const ligne = sauces.lines.find(l => /(\d+) portions/.test(l))!
-    expect(ligne).toBeDefined()
-    const n = Number(ligne.match(/(\d+) portions/)![1])
-    expect(n).toBeGreaterThan(1)
-    const base = RECIPE_BY_ID[Object.keys(RECIPE_BY_ID).find(id => RECIPE_BY_ID[id].kind === 'sauce' && ligne.startsWith(RECIPE_BY_ID[id].name))!]
-    for (const it of base.items) {
-      const g = Math.round(it.g * n * 10) / 10
-      expect(ligne, `${base.name} × ${n} doit servir ${g} g de ${it.food}`).toContain(`${g} g`)
-    }
   })
 
   it('restent légères : aucune ne dépasse 90 kcal la portion', () => {
@@ -2238,5 +2224,61 @@ describe('ingrédients séparés plat / sauce', () => {
     expect(equilibre).toBeLessThan(brut)
     const s = splitIngredients({ ...pdj, items: rebalanceDairy(pdj.items, foods) })
     expect(s.dish.find(l => l.food === 'fromage-blanc-0')!.g).toBe(equilibre)
+  })
+})
+
+// ─── Choisir son plat, sans demander la permission au frigo ──────────────────
+describe('choix du plat d\'un créneau', () => {
+  const LIB = { foods: FOOD_BY_ID, recipes: RECIPE_BY_ID }
+
+  it('propose TOUS les plats du bon type, cuisinés ou non', () => {
+    // Le stock filtrait la liste : on ne pouvait pas dire « aujourd'hui je mange autre
+    // chose » si cet autre chose n'avait pas été coché à la session de cuisine. Or ce
+    // choix ne gère pas un frigo, il donne les bonnes quantités pour la journée.
+    const midi = choicesForSlot('lunch', LIB, {})
+    const boites = activeRecipes(LIB, 'boite')
+    expect(midi).toHaveLength(boites.length)
+    expect(midi.every(c => c.left === null)).toBe(true) // stock inconnu, pas zéro
+  })
+
+  it('rend le stock quand il est connu, sans jamais s\'en servir pour filtrer', () => {
+    const midi = choicesForSlot('lunch', LIB, { 'boite-a': 0 })
+    const a = midi.find(c => c.id === 'boite-a')!
+    expect(a, 'boite-a doit rester proposée même à zéro portion').toBeDefined()
+    expect(a.left).toBe(0)
+  })
+
+  it('couvre tous les créneaux d\'une journée, pas seulement midi et soir', () => {
+    // On change aussi de petit-déjeuner ou de collation, et c'était impossible.
+    expect(choicesForSlot('pdj', LIB).length).toBeGreaterThan(1)
+    expect(choicesForSlot('snack', LIB).length).toBeGreaterThan(1)
+    expect(choicesForSlot('night', LIB).length).toBeGreaterThan(1)
+    expect(choicesForSlot('pre', LIB).length).toBeGreaterThan(1)
+    expect(choicesForSlot('dinner', LIB).length).toBeGreaterThan(1)
+  })
+
+  it('ne propose rien pour la créatine : ce n\'est pas un repas', () => {
+    // Elle est rangée en « collation » pour que ses zéros calories entrent dans les
+    // totaux. La proposer en alternative à une collation n'aurait aucun sens.
+    expect(slotKind('creatine')).toBeNull()
+    expect(choicesForSlot('creatine', LIB)).toEqual([])
+  })
+
+  it('associe chaque créneau au bon type de plat', () => {
+    for (const slots of [SLOTS_GYM, SLOTS_REST]) {
+      for (const s of slots) {
+        const kind = slotKind(s.id)
+        if (!kind) continue
+        // Le plat par défaut du créneau doit appartenir au type proposé, sinon la
+        // liste de remplacement n'inclurait pas le plat qu'on est en train de manger.
+        const def = s.recipe ?? (s.from === 'lunch' ? CYCLE[0].lunch : CYCLE[0].dinner)
+        expect(RECIPE_BY_ID[def].kind, `${s.id} → ${def}`).toBe(kind)
+      }
+    }
+  })
+
+  it('trie par nom : on cherche un plat, pas un identifiant', () => {
+    const noms = choicesForSlot('diner', LIB).map(c => c.name)
+    expect(noms).toEqual([...noms].sort((a, b) => a.localeCompare(b)))
   })
 })
