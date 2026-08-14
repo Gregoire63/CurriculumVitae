@@ -1,8 +1,10 @@
 import { addProposal, readMirror, readProposals, verifyToken } from '../utils/vault'
 import { noteCall } from '../utils/trace'
-import { KIND_GROUP_LABELS, builtinWeeks, mergeFoods, mergeRecipes } from '~/lib/nutritionStats'
+import { DAY_NAMES, KIND_GROUP_LABELS, builtinWeeks, dowIndex, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, recipeForSlot } from '~/lib/nutritionStats'
+import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { getAt } from '~/lib/pointer'
 import { checkFieldFix, twinPath } from '~/lib/proposals'
+import { weightTrend } from '~/lib/bilan'
 import { PROGRAM } from '~/data/sportProgram'
 import { VARIANTS } from '~/data/exerciseVariants'
 
@@ -106,8 +108,19 @@ Réponds en français, en t'appuyant sur ses chiffres réels plutôt que sur des
 
 const TOOLS = [
   {
+    name: 'bilan',
+    description: 'LE PREMIER OUTIL À APPELER. Rend d\'un seul coup tout ce par quoi commence une conversation : fraîcheur du miroir, séance et repas prévus aujourd\'hui, dernières séances en résumé, tendance de poids sur 7 et 30 jours, propositions en attente. Évite d\'enchaîner « etat », « seances », « poids » et « nutrition » — n\'appelle les outils détaillés qu\'ensuite, pour ce qui manque.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'Jour de référence AAAA-MM-JJ (défaut : aujourd\'hui)' },
+        seances: { type: 'integer', description: 'Nombre de séances récentes à résumer (défaut 5, maximum 15)' },
+      },
+    },
+  },
+  {
     name: 'etat',
-    description: 'Fraîcheur du miroir et volume de données disponibles. À appeler en premier pour savoir de quand datent les informations.',
+    description: 'Fraîcheur du miroir et volume de données disponibles, sans le reste. Préfère « bilan », qui contient déjà ça.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -295,12 +308,14 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
    *
    * Le miroir n'ajoute à ces trois-là que ce que l'utilisateur a créé lui-même.
    */
-  const PERSONNELS = ['etat', 'profil', 'seances', 'exercice', 'poids', 'nutrition', 'champ']
+  const PERSONNELS = ['bilan', 'etat', 'profil', 'seances', 'exercice', 'poids', 'nutrition', 'champ']
   const mirror = await readMirror()
   if (!mirror && PERSONNELS.includes(name)) {
     throw new Error('Aucune donnée personnelle : le téléphone n\'a pas encore poussé son miroir. Demande-lui d\'ouvrir l\'application une fois. Les catalogues (plats, aliments, programme) restent lisibles.')
   }
   const d = (mirror?.data ?? {}) as Record<string, unknown>
+
+  if (name === 'bilan') return bilan(d, mirror!.at, args, await readProposals())
 
   switch (name) {
     case 'plats': {
@@ -433,6 +448,120 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     }
     default:
       throw new Error(`Outil inconnu : ${name}`)
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Le bilan : une seule traversée au lieu de quatre.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Presque toutes les conversations commencent pareil — de quand datent les données,
+// qu'est-ce qui est prévu aujourd'hui, comment se sont passées les dernières
+// séances, où en est le poids. Répondre demandait quatre appels : `etat`, `seances`,
+// `poids`, `nutrition`. Quatre allers-retours pour une seule question.
+//
+// Ça coûtait déjà du contexte — quatre réponses qui se recoupent — mais c'est la
+// passerelle qui a tranché : elle échoue une fois sur deux, et chaque traversée
+// évitée est une chance de moins de tomber dessus. Un bilan en un appel, c'est
+// statistiquement quatre fois moins d'échecs pour ouvrir une conversation.
+//
+// Le contenu est un RÉSUMÉ, délibérément : les séries détaillées restent dans
+// `seances`, l'historique d'un mouvement dans `exercice`. Tout regrouper aurait juste
+// déplacé le problème dans la fenêtre de contexte.
+
+function bilan(
+  d: Record<string, unknown>,
+  pousseLe: string,
+  args: Record<string, unknown>,
+  props: { status: string }[],
+): unknown {
+  const jour = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date)
+    ? args.date
+    : new Date().toISOString().slice(0, 10)
+  const combien = clampInt(args.seances, 5, 1, 15)
+  const nut = (d.nutrition ?? {}) as Record<string, unknown>
+
+  // ─── Ce qui est prévu aujourd'hui ────────────────────────────────────────
+  // Même règle que l'application : une exception de planning l'emporte sur la
+  // semaine type. Les redéfinir autrement ferait diverger ce que je dis de ce que
+  // l'écran montre, et c'est exactement le genre d'écart qu'on ne voit jamais venir.
+  const dow = dowIndex(jour)
+  const exceptions = (d.planDays ?? {}) as Record<string, string | null>
+  const semaine = asArray(d.weekPlan) as (string | null)[]
+  const seanceId = Object.hasOwn(exceptions, jour) ? exceptions[jour] : (semaine[dow] ?? null)
+  const seanceDuJour = PROGRAM.find(p => p.id === seanceId) ?? null
+  const salle = !!seanceDuJour
+
+  // La semaine de menus appliquée à cette date : la dernière assignée avant elle.
+  const assign = (nut.menuAssign ?? {}) as Record<string, string>
+  const mesSemaines = asArray(nut.menus).map(normalizeWeek).filter(Boolean)
+  const passees = Object.keys(assign).filter(m => m <= mondayOf(jour)).sort()
+  const voulue = passees.length ? assign[passees.at(-1)!] : (nut.activeMenu as string | null)
+  const toutes = [...builtinWeeks(), ...mesSemaines] as ReturnType<typeof builtinWeeks>
+  const menu = toutes.find(w => w.id === voulue) ?? toutes[0]
+
+  const recettes = mergeRecipes(
+    asArray(nut.userRecipes) as never,
+    (nut.recipePatches ?? {}) as never,
+    asArray(nut.disabledRecipes) as never,
+  )
+  const nomDe = (id: string | undefined) => (id ? recettes[id]?.name ?? id : null)
+  // Le plat RÉELLEMENT pris l'emporte sur celui du plan : c'est ce qu'il a mangé.
+  const pris = ((nut.picked ?? {}) as Record<string, Record<string, string>>)[jour] ?? {}
+  const repas = (salle ? SLOTS_GYM : SLOTS_REST)
+    .filter(sl => sl.id === 'lunch' || sl.id === 'dinner')
+    .map(sl => ({
+      creneau: sl.id,
+      heure: sl.time,
+      plat: nomDe(pris[sl.id] ?? recipeForSlot(menu, dow, sl)),
+      remplace: Object.hasOwn(pris, sl.id),
+    }))
+
+  // ─── Les dernières séances, en une ligne chacune ─────────────────────────
+  const sessions = asArray(d.sessions) as Record<string, unknown>[]
+  const recentes = sessions.slice(-combien).reverse().map((s) => {
+    const entries = asArray(s.entries) as { sets?: unknown[], effort?: string }[]
+    const durs = entries.map(e => e.effort).filter(Boolean)
+    return {
+      date: String(s.at ?? '').slice(0, 10),
+      nom: s.name ?? null,
+      duree_min: s.durationMin ?? null,
+      exercices: entries.length,
+      series: entries.reduce((n, e) => n + asArray(e.sets).length, 0),
+      a_l_echec: durs.filter(e => e === 'fail').length,
+      note: s.note ?? null,
+    }
+  })
+
+  // ─── Le poids : la tendance, pas la liste ────────────────────────────────
+  // Le calcul est dans lib/bilan.ts, avec ses tests : c'est la seule partie du bilan
+  // qui puisse être fausse sans que ça se voie.
+  const poids = weightTrend(asArray(d.bodyWeight) as { date?: string, kg?: number }[], jour)
+  // La fraîcheur du miroir se mesure à MAINTENANT, pas au jour demandé : c'est une
+  // propriété du serveur, pas de la question posée.
+  const heures = Math.round((Date.now() - Date.parse(pousseLe)) / 3600000)
+
+  return {
+    miroir: {
+      pousse_le: pousseLe,
+      // Le retard est LE chiffre à lire avant de conclure quoi que ce soit.
+      retard_h: heures > 0 ? heures : 0,
+      a_jour: heures < 24,
+    },
+    aujourdhui: {
+      date: jour,
+      jour: DAY_NAMES[dow],
+      seance_prevue: seanceDuJour ? { id: seanceDuJour.id, nom: seanceDuJour.name } : null,
+      jour_de_salle: salle,
+      semaine_de_menus: menu?.name ?? null,
+      repas,
+    },
+    seances_recentes: recentes,
+    // Le rythme, pas un verdict : la cible dépend de sa composition corporelle, et ce
+    // sont `poids` et `profil` qui portent ces chiffres-là.
+    poids,
+    propositions_en_attente: props.filter(p => p.status === 'pending').length,
+    pour_aller_plus_loin: 'Séries détaillées : « seances ». Historique d\'un mouvement : « exercice ». Un champ précis : « champ ».',
   }
 }
 
