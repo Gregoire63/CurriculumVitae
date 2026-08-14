@@ -415,3 +415,45 @@ describe('vérification au dépôt d\'une correction de champ', () => {
     expect(twinPath('/logs/squat/0/durationMin', { logs: DATA.logs, sessions: [] })).toBeNull()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Le repas du dehors, proposé depuis une conversation
+//
+// C'est la seule forme où Claude apporte des CHIFFRES au lieu d'un identifiant à
+// vérifier contre un catalogue. Rien ne peut donc l'invalider de l'extérieur — d'où
+// les bornes, et d'où le marquage de provenance.
+const libre = (detail: Record<string, unknown>) => prop('repas-libre', detail)
+
+describe('proposition de repas du dehors', () => {
+  it('accepte un repas complet et marque sa provenance', () => {
+    expect(planFor(libre({ date: '2026-08-14', slot: 'lunch', vers: { label: 'Kebab', kcal: 1050, p: 45, g: 95, l: 50 } }), CTX))
+      .toEqual({ kind: 'repas-libre', date: '2026-08-14', slot: 'lunch',
+                 repas: { label: 'Kebab', kcal: 1050, p: 45, g: 95, l: 50, from: 'claude' } })
+  })
+
+  it('accepte les champs à plat, sans enveloppe « vers »', () => {
+    expect(planFor(libre({ date: '2026-08-14', creneau: 'dinner', label: 'Pizza', kcal: 800, proteines: 32 }), CTX))
+      .toMatchObject({ slot: 'dinner', repas: { label: 'Pizza', kcal: 800, p: 32, g: 0, l: 0 } })
+  })
+
+  it('retire le repas sur « vers: null », rendant le créneau au plat prévu', () => {
+    expect(planFor(libre({ date: '2026-08-14', slot: 'lunch', vers: null }), CTX))
+      .toEqual({ kind: 'repas-libre', date: '2026-08-14', slot: 'lunch', repas: null })
+  })
+
+  it('refuse un créneau inconnu et une date qui n\'en est pas une', () => {
+    expect(planFor(libre({ date: '2026-08-14', slot: 'gouter', vers: { label: 'X', kcal: 300 } }), CTX)).toBeNull()
+    expect(planFor(libre({ date: 'demain', slot: 'lunch', vers: { label: 'X', kcal: 300 } }), CTX)).toBeNull()
+  })
+
+  it('refuse un repas qui occuperait le créneau sans rien y compter', () => {
+    expect(planFor(libre({ date: '2026-08-14', slot: 'lunch', vers: { label: 'Kebab' } }), CTX)).toBeNull()
+    expect(planFor(libre({ date: '2026-08-14', slot: 'lunch', vers: { kcal: 900 } }), CTX)).toBeNull()
+  })
+
+  it('impose « claude » comme provenance, même si la proposition prétend autre chose', () => {
+    // Sans ça, une valeur estimée pourrait se relire plus tard comme une étiquette lue.
+    expect(planFor(libre({ date: '2026-08-14', slot: 'lunch', vers: { label: 'Kebab', kcal: 1050, from: 'catalogue' } }), CTX))
+      .toMatchObject({ repas: { from: 'claude' } })
+  })
+})

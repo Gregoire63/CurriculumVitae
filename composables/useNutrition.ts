@@ -7,6 +7,9 @@ import {
   dowIndex, emptyDay, mergeFoods, mergeRecipes, mondayOf, normalizeWeek, resolveDay, selectionTotals,
   shoppingFromWeek, slugify, stockOf, weekDaysOn,
 } from '~/lib/nutritionStats'
+import { freeMealFrom, withFreeMeals } from '~/lib/freeMeal'
+import type { FreeMeal } from '~/lib/freeMeal'
+import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { isoOf } from '~/utils/sportStats'
 
 // État du module nutrition, persisté en localStorage — même pattern que useWorkout :
@@ -33,6 +36,8 @@ const PICKED_KEY = 'gr-nutri-picked-v1' // plat réellement pris, quand il diff�
 const BAG_KEY = 'gr-nutri-bag-v1' // sac de sport : ce qui est déjà dedans, par date
 const ADJUST_KEY = 'gr-nutri-adjust-v1' // ajustement du soir confirmé, par date
 const FATPCT_KEY = 'gr-nutri-fatpct-v1' // taux de MG réellement acheté, par laitier
+const FREE_KEY = 'gr-nutri-libre-v1' // repas du dehors, par date et créneau
+const FREEPRESET_KEY = 'gr-nutri-libre-mes-v1' // repas du dehors gardés pour resservir
 // Clé de l'ancienne sélection « plat → portions », remplacée par la semaine type.
 // Les portions ne se saisissent plus à la main : elles se comptent dans la semaine.
 const LEGACY_SEL_KEY = 'gr-nutri-selection-v1'
@@ -97,6 +102,16 @@ const disabledRecipes = ref<string[]>([])
  * de nombres que personne ne reconnaît.
  */
 const fatPct = ref<Record<string, number>>({})
+/**
+ * Repas du dehors : ce qu'on a vraiment mangé à la place du plat prévu.
+ *
+ * Séparé de `picked`, qui ne stocke qu'un identifiant de la bibliothèque, et séparé
+ * des `extras`, qui s'ajoutent au plan au lieu de s'y substituer. Voir lib/freeMeal.ts
+ * pour le raisonnement complet.
+ */
+const freeMeals = ref<Record<string, Record<string, FreeMeal>>>({})
+/** Ceux qu'on a demandé à garder : le kebab du coin revient plus d'une fois. */
+const freePresets = ref<FreeMeal[]>([])
 let hydrated = false
 let seq = 0
 function safeParse<T>(raw: string | null, fb: T): T {
@@ -136,6 +151,8 @@ export function useNutrition() {
     userRecipes.value = safeParse(localStorage.getItem(RECIPES_KEY), [])
     recipePatches.value = safeParse(localStorage.getItem(RECIPEPATCH_KEY), {})
     disabledRecipes.value = safeParse(localStorage.getItem(OFF_KEY), [])
+    freeMeals.value = safeParse(localStorage.getItem(FREE_KEY), {})
+    freePresets.value = safeParse(localStorage.getItem(FREEPRESET_KEY), [])
     const w = safeParse<unknown>(localStorage.getItem(WEEK_KEY), null)
     if (isWeek(w)) week.value = w
     const pm = localStorage.getItem(PREP_KEY)
@@ -518,7 +535,7 @@ export function useNutrition() {
     const day = mw?.days[dow]
     const over = dayFor(iso).menu
     const pick = picked.value[iso] ?? {}
-    if (day?.off && !Object.keys(pick).length) return emptyDay(dow, trained)
+    if (day?.off && !Object.keys(pick).length) return withFree(emptyDay(dow, trained), iso, trained)
 
     const slots = { ...day?.slots, ...pick }
     // Semaine vierge : on ne propose PAS le menu du cycle en douce. Un repas affiché
@@ -531,8 +548,70 @@ export function useNutrition() {
     // Une exception de planning ne porte que sur les deux repas principaux.
     if (over.lunch && !pick.lunch) slots.lunch = over.lunch
     if (over.dinner && !pick.dinner) slots.dinner = over.dinner
-    return buildDay(dow, trained, library.value, { slots })
+    return withFree(buildDay(dow, trained, library.value, { slots }), iso, trained)
   }
+
+  /**
+   * Un repas du dehors l'emporte sur tout le reste, y compris sur `picked`.
+   *
+   * L'ordre n'est pas arbitraire : c'est la couche la plus proche de ce qui a
+   * réellement été mangé, et c'est la règle que suit déjà tout le fichier.
+   *
+   * Le cas du jour marqué absent est traité plus haut par un retour anticipé sur
+   * `emptyDay`, ce qui l'aurait privé de ses repas du dehors — d'où la reprise ici
+   * aussi : c'est justement le samedi au restaurant qu'on veut compter.
+   */
+  function withFree(day: DayPlan, iso: string, trained: boolean): DayPlan {
+    const free = freeMeals.value[iso]
+    if (!free || !Object.keys(free).length) return day
+    const slots = trained ? SLOTS_GYM : SLOTS_REST
+    return withFreeMeals(day, free, (id) => {
+      const s = slots.find(x => x.id === id)
+      return s ? { time: s.time, label: s.label } : null
+    })
+  }
+  // ─── Repas du dehors ──────────────────────────────────────────────────────
+  const freeMealFor = (iso: string, slot: string): FreeMeal | null => freeMeals.value[iso]?.[slot] ?? null
+
+  /**
+   * Pose ou retire le repas du dehors d'un créneau. Rend `false` si la saisie ne
+   * veut rien dire — l'écran doit pouvoir le dire plutôt que d'enregistrer un repas
+   * vide qui occuperait le créneau sans rien compter.
+   *
+   * Le ménage est le même que pour `picked` : on efface la clé du créneau, puis
+   * celle de la date si elle se vide. Des objets vides s'accumuleraient sinon dans
+   * la sauvegarde, un par jour où l'on a changé d'avis.
+   */
+  function setFreeMeal(iso: string, slot: string, raw: Partial<FreeMeal> | null): boolean {
+    const jour = { ...(freeMeals.value[iso] ?? {}) }
+    if (raw === null) delete jour[slot]
+    else {
+      const meal = freeMealFrom(raw)
+      if (!meal) return false
+      jour[slot] = meal
+    }
+    const next = { ...freeMeals.value }
+    if (Object.keys(jour).length) next[iso] = jour
+    else delete next[iso]
+    freeMeals.value = next
+    write(FREE_KEY, freeMeals.value)
+    return true
+  }
+
+  /** Garde un repas pour le resservir. Même libellé = même entrée, on remplace. */
+  function addFreePreset(raw: Partial<FreeMeal>): boolean {
+    const meal = freeMealFrom(raw)
+    if (!meal) return false
+    const clef = meal.label.toLowerCase()
+    freePresets.value = [...freePresets.value.filter(m => m.label.toLowerCase() !== clef), meal].slice(-30)
+    write(FREEPRESET_KEY, freePresets.value)
+    return true
+  }
+  function removeFreePreset(label: string) {
+    freePresets.value = freePresets.value.filter(m => m.label !== label)
+    write(FREEPRESET_KEY, freePresets.value)
+  }
+
   // ─── Repas mangés ─────────────────────────────────────────────────────────
   const isEaten = (iso: string, slot: string) => (eaten.value[iso] ?? []).includes(slot)
   function toggleEaten(iso: string, slot: string) {
@@ -627,6 +706,7 @@ export function useNutrition() {
       extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value, fatPct: fatPct.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
       disabledRecipes: disabledRecipes.value,
+      freeMeals: freeMeals.value, freePresets: freePresets.value,
     }
   }
   /** Restauration depuis une sauvegarde. Tout est optionnel : un ancien fichier passe sans erreur. */
@@ -658,6 +738,8 @@ export function useNutrition() {
     if (Array.isArray(n.userRecipes)) { userRecipes.value = n.userRecipes; write(RECIPES_KEY, userRecipes.value) }
     if (n.recipePatches) { recipePatches.value = n.recipePatches; write(RECIPEPATCH_KEY, recipePatches.value) }
     if (Array.isArray(n.disabledRecipes)) { disabledRecipes.value = n.disabledRecipes; write(OFF_KEY, disabledRecipes.value) }
+    if (n.freeMeals) { freeMeals.value = n.freeMeals; write(FREE_KEY, freeMeals.value) }
+    if (Array.isArray(n.freePresets)) { freePresets.value = n.freePresets; write(FREEPRESET_KEY, freePresets.value) }
     // Sauvegardes de la version précédente : les séances annulées étaient une liste à part.
     if (Array.isArray(n.skipped)) {
       for (const iso of n.skipped) setOverride(iso, { gym: false })
@@ -666,6 +748,7 @@ export function useNutrition() {
   return {
     prices, checked, eaten, baskets, pricedCount, prepMode, picked,
     week, overrides, extras, userFoods, userRecipes, disabledRecipes, library,
+    freeMeals, freePresets, freeMealFor, setFreeMeal, addFreePreset, removeFreePreset,
     hydrate, dayPlanFor,
     setWeekDay, resetWeek, dayFor, setOverride, clearOverride, hasOverride, ttConfirmed, stepsFor, setSteps,
     menus, activeMenu, activeWeek, menuFor, appliedFrom, gymDays,

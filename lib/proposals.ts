@@ -1,6 +1,8 @@
 // Import relatif et non par alias : ce module est testé dans le projet « unit »,
 // qui tourne en Node pur sans la résolution de chemins de Nuxt.
 import { getAt, isScalar } from './pointer'
+import { freeMealFrom } from './freeMeal'
+import type { FreeMeal } from './freeMeal'
 import type { Scalar } from './pointer'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,6 +41,7 @@ export type Plan =
   | { kind: 'correction-serie', exercice: string, date: string, index: number, vers: { w: number, r: number } }
   | { kind: 'correction-pesee', date: string, vers: number | null }
   | { kind: 'correction-champ', chemin: string, vers: Scalar }
+  | { kind: 'repas-libre', date: string, slot: string, repas: FreeMeal | null }
 
 export interface RecipeSpec {
   name: string
@@ -158,6 +161,35 @@ export function planFor(p: RawProposal, ctx: PlanCtx = {}): Plan | null {
     if (vers === null) return { kind: 'plat', date, slot, recipeId: null }
     if (!isId(vers)) return null
     return { kind: 'plat', date, slot, recipeId: vers }
+  }
+  /**
+   * Le repas du dehors proposé depuis une conversation.
+   *
+   * C'est la seule forme où Claude apporte des CHIFFRES qu'il a estimés lui-même,
+   * et non un identifiant piochéans un catalogue. Deux garde-fous en découlent :
+   * la mise en forme passe par `freeMealFrom`, la même que la saisie à la main —
+   * mêmes bornes, mêmes refus — et la provenance est marquée `claude`, pour qu'on
+   * puisse relire dans six mois d'où sortait un chiffre.
+   *
+   * `repas: null` retire le repas et rend son créneau au plat prévu.
+   */
+  if (p.action === 'repas-libre') {
+    const date = pick(d, ['date', 'jour'])
+    const slot = pick(d, ['slot', 'creneau'])
+    if (!isIsoDate(date) || typeof slot !== 'string') return null
+    if (!(SLOTS as readonly string[]).includes(slot)) return null
+    const vers = pick(d, ['vers', 'repas'])
+    if (vers === null) return { kind: 'repas-libre', date, slot, repas: null }
+    const source = (vers && typeof vers === 'object' ? vers : d) as Record<string, unknown>
+    const repas = freeMealFrom({
+      label: pick(source, ['label', 'nom', 'plat']),
+      kcal: pick(source, ['kcal', 'calories']),
+      p: pick(source, ['p', 'proteines', 'prot']),
+      g: pick(source, ['g', 'glucides']),
+      l: pick(source, ['l', 'lipides']),
+      from: 'claude',
+    })
+    return repas ? { kind: 'repas-libre', date, slot, repas } : null
   }
   if (p.action === 'planning-seance') {
     const date = pick(d, ['date', 'jour'])

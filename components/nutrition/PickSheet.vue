@@ -21,8 +21,10 @@ const props = defineProps<{
   slotLabel: string
   current: string | null
   picked: string | null
+  /** Un repas du dehors occupe déjà ce créneau : le bouton propose de le modifier. */
+  hasFree?: boolean
 }>()
-const emit = defineEmits<{ close: [], pick: [id: string | null] }>()
+const emit = defineEmits<{ close: [], pick: [id: string | null], libre: [] }>()
 
 const { library, stock } = useNutrition()
 
@@ -47,6 +49,17 @@ const total = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0
     @close="emit('close')"
   >
     <template #default>
+      <!-- En tête, et pas en bas de dix-sept plats : quand on ouvre cette feuille
+           parce qu'on mange dehors, aucun de ces plats ne convient — les faire
+           défiler d'abord, c'est faire défiler la mauvaise réponse. -->
+      <button class="pk-opt fm-new" @click="emit('libre')">
+        <span class="fm-plus">＋</span>
+        <span class="pk-name">
+          <b>{{ hasFree ? 'Modifier mon repas du dehors' : 'Autre chose (restaurant, kebab…)' }}</b>
+          <small class="muted">Saisir les calories d’un repas que tu n’as pas cuisiné</small>
+        </span>
+      </button>
+
       <template v-for="g in groups" :key="g.kind">
         <div class="section-label">{{ g.label }}</div>
         <div class="pk-list">

@@ -448,6 +448,9 @@ export interface DayMeal {
   items: RecipeItem[]
   macros: Macros
   adjusted?: boolean // portion recalculée d'après la dépense réelle de la séance
+  /** Repas saisi à la main qui remplace celui du plan (voir lib/freeMeal.ts). Sans
+   *  ingrédients : ses macros viennent de la saisie, pas d'un calcul. */
+  free?: boolean
 }
 export interface DayPlan {
   index: number // jour de la semaine type, 0 = lundi

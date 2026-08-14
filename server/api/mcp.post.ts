@@ -215,7 +215,7 @@ const TOOLS = [
         resume: { type: 'string', description: 'Une phrase lisible, ex. « Vendredi midi : Boîte B → Saumon patate douce »' },
         cible: {
           type: 'string',
-          enum: ['semaine', 'semaine-type', 'plat', 'planning-seance', 'recette', 'correction', 'autre'],
+          enum: ['semaine', 'semaine-type', 'plat', 'planning-seance', 'recette', 'repas-libre', 'correction', 'autre'],
           description: 'Ce qui est touché',
         },
         detail: {
@@ -224,6 +224,7 @@ const TOOLS = [
             'Le détail exploitable, dont la forme dépend de « cible ». Les deux formes ci-dessous s\'appliquent d\'un tap ; toute autre s\'affiche mais devra être faite à la main.',
             '• plat : { date: "AAAA-MM-JJ", slot: "lunch"|"dinner"|"pdj"|"snack"|"night"|"pre"|"creatine", vers: "<id de plat>" ou null pour revenir au plat prévu }',
             '• planning-seance : { date: "AAAA-MM-JJ", vers: "s1".."s4" ou "repos" }',
+            '• repas-libre : { date: "AAAA-MM-JJ", slot: "lunch", vers: { label: "Kebab galette + frites", kcal: 1050, p: 45, g: 95, l: 50 } } — un repas qu\'il n\'a pas cuisiné, qui REMPLACE le plat prévu de ce créneau et porte ses propres macros. « vers: null » le retire et rend le créneau au plat prévu. C\'est la seule forme où tu fournis des chiffres estimés : donne les quatre, les protéines surtout, et dis dans le résumé sur quoi tu t\'es basé.',
             '• semaine : { lundi: "AAAA-MM-JJ", nom: "…", jours: [ { lunch: "<id>", dinner: "<id>", off?: true }, … 7 entrées, lundi en premier ] }',
             '• semaine-type : { seances?: ["s1","s2",null,"s3","s4",null,null], salle?: [7 booléens], teletravail?: [7 booléens] } — lundi en premier, les trois axes sont indépendants',
             '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", items: [ { food: "<id d\'aliment>", g: 120 } ] }',

@@ -29,7 +29,7 @@ const props = defineProps<{ iso: string, todayIso: string | null }>()
 const emit = defineEmits<{ close: [], edit: [rec: SessionRecord] }>()
 
 const { sessionLog, bodyWeight } = useWorkout()
-const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots, library, stock, pickedFor, setPicked } = useNutrition()
+const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots, library, stock, pickedFor, setPicked, freeMealFor } = useNutrition()
 const { profile } = useProfile()
 const { entries: bodyEntries, suspectAts } = useWithings()
 
@@ -130,6 +130,16 @@ const swapable = (slot: string) => choicesForSlot(slot, library.value, stock.val
 const swapMeal = computed(() => plan.value?.meals.find(m => m.slot === swapping.value) ?? null)
 function swap(slot: string, id: string | null) {
   setPicked(props.iso, slot, id)
+  swapping.value = null
+}
+
+// Le repas du dehors, saisissable aussi depuis le calendrier : on rattrape souvent
+// un restaurant le lendemain, pas sur le moment.
+const libre = ref<string | null>(null)
+const libreMeal = computed(() => (libre.value ? freeMealFor(props.iso, libre.value) : null))
+const libreLabel = computed(() => plan.value?.meals.find(m => m.slot === libre.value)?.label ?? '')
+function openLibre() {
+  libre.value = swapping.value
   swapping.value = null
 }
 </script>
@@ -277,8 +287,20 @@ function swap(slot: string, id: string | null) {
           :slot-label="swapMeal.label"
           :current="swapMeal.recipeId"
           :picked="pickedFor(iso, swapping)"
+          :has-free="!!freeMealFor(iso, swapping)"
           @pick="swap(swapping, $event)"
+          @libre="openLibre()"
           @close="swapping = null"
+        />
+
+        <NutritionFreeMealSheet
+          v-if="libre"
+          :iso="iso"
+          :slot-id="libre"
+          :slot-label="libreLabel"
+          :current="libreMeal"
+          @saved="libre = null"
+          @close="libre = null"
         />
 
         <button v-if="canEatEdit" class="btn-primary ds-open" @click="eatSheet = true">

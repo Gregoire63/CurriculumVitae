@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<{ todayIso: string, past?: boolean }>(), 
 const {
   dayPlanFor, dayFor, stepsFor, isEaten, toggleEaten, eatenSlots, pickedFor, setPicked, stock,
   extrasFor, addExtra, removeExtra, prepMode, library, isPacked, togglePacked, packedCount,
+  freeMealFor,
   isAdjustApplied, setAdjustApplied, clearAdjustApplied,
 } = useNutrition()
 const { profile } = useProfile()
@@ -215,6 +216,20 @@ function swap(slot: string, id: string | null) {
   swapping.value = null
 }
 
+/**
+ * Le créneau dont on saisit un repas du dehors.
+ *
+ * Stocké à part de `swapping` : on passe de la feuille de choix au formulaire, et
+ * garder les deux ouvertes en même temps empilerait deux feuilles.
+ */
+const libre = ref<string | null>(null)
+const libreMeal = computed(() => (libre.value ? freeMealFor(props.todayIso, libre.value) : null))
+const libreLabel = computed(() => day.value?.meals.find(m => m.slot === libre.value)?.label ?? '')
+function openLibre() {
+  libre.value = swapping.value
+  swapping.value = null
+}
+
 const foodName = (id: string) => library.value.foods[id]?.name ?? id
 </script>
 
@@ -334,11 +349,15 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
     </p>
     <div class="nu-meals">
       <div v-for="m in day.meals" :key="m.slot" class="card nu-meal" :class="{ done: isEaten(props.todayIso, m.slot) }">
-        <button class="nu-meal-main" @click="sheet = m">
+        <button class="nu-meal-main" :disabled="m.free" @click="sheet = m">
           <div class="nu-meal-top">
             <span class="nu-time mono">{{ m.time }}</span>
             <span class="nu-slot">{{ m.label }}</span>
             <span v-if="m.adjusted" class="nu-tag">ajusté</span>
+            <!-- Dit d'où viennent les chiffres. Un repas du dehors est saisi de
+                 mémoire ; le lire comme une portion pesée fausserait la confiance
+                 qu'on accorde au total du jour. -->
+            <span v-if="m.free" class="nu-tag nu-tag-free">du dehors</span>
             <span class="nu-kcal mono">{{ Math.round(m.macros.kcal) }} kcal</span>
           </div>
           <div class="nu-meal-name">{{ m.name }}</div>
@@ -346,7 +365,7 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
                pour une information qu'on ne lit pas en cochant un repas, et qui est
                de toute façon dans la fiche, à un clic. Reste ce qui identifie le
                plat — son nom et sa photo. -->
-          <div class="muted nu-meal-more">Voir la recette →</div>
+          <div class="muted nu-meal-more">{{ m.free ? 'Saisi à la main' : 'Voir la recette →' }}</div>
         </button>
         <div class="nu-meal-side">
           <!-- Photo en lecture seule, et en grand : c'est elle qu'on reconnaît d'un
@@ -384,8 +403,21 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
       :slot-label="swapMeal.label"
       :current="swapMeal.recipeId"
       :picked="pickedFor(props.todayIso, swapping)"
+      :has-free="!!freeMealFor(props.todayIso, swapping)"
       @pick="swap(swapping, $event)"
+      @libre="openLibre()"
       @close="swapping = null"
+    />
+
+    <!-- Le repas qu'on n'a pas cuisiné : il remplace celui du plan sur ce créneau. -->
+    <NutritionFreeMealSheet
+      v-if="libre"
+      :iso="props.todayIso"
+      :slot-id="libre"
+      :slot-label="libreLabel"
+      :current="libreMeal"
+      @saved="libre = null"
+      @close="libre = null"
     />
 
     <!-- Ce qui a été mangé en plus du plan -->

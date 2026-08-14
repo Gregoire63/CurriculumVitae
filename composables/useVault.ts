@@ -172,6 +172,12 @@ export function useVault() {
     // planning et la journée alimentaire, donc les calories suivent, que le geste
     // vienne du calendrier ou d'une proposition.
     if (plan.kind === 'plat') { nutrition.setPicked(plan.date, plan.slot, plan.recipeId) }
+    else if (plan.kind === 'repas-libre') {
+      if (!nutrition.setFreeMeal(plan.date, plan.slot, plan.repas)) {
+        error.value = 'Ce repas n\'a pas pu être enregistré.'
+        return false
+      }
+    }
     else if (plan.kind === 'seance') { training.assign(plan.date, plan.sessionId) }
     else if (plan.kind === 'recette') {
       if (plan.id) nutrition.patchRecipe(plan.id, plan.recette)

@@ -76,9 +76,9 @@ valeur exacte à mettre dans `de`.
 
 ## Les formes de proposition applicables d'un tap
 
-`plat` · `planning-seance` · `semaine` · `semaine-type` · `recette` · `correction`.
-Chacune est décrite dans le schéma de `proposer_modification` — lis-le. Toute autre
-forme (`autre`) s'affiche mais devra être faite à la main.
+`plat` · `planning-seance` · `semaine` · `semaine-type` · `recette` · `repas-libre` ·
+`correction`. Chacune est décrite dans le schéma de `proposer_modification` — lis-le.
+Toute autre forme (`autre`) s'affiche mais devra être faite à la main.
 
 ## Ce qu'il faut savoir de son programme
 
@@ -148,6 +148,38 @@ est soit `off: true`, soit rempli. Une fois validée, l'app crée une semaine no
 et l'applique à partir de ce lundi — les semaines livrées ne sont pas écrasées.
 Dis-lui d'ouvrir **Préparation** pour voir les sessions de cuisine et la liste de
 courses qui en découlent.
+
+### « J'ai mangé un kebab à midi » — le repas du dehors
+
+`plat` ne sert à rien ici : il ne sait désigner qu'une recette de sa bibliothèque, et
+sa bibliothèque ne contient que ce qu'il cuisine lui-même. `repas-libre` remplace le
+plat prévu du créneau par ce qu'il a vraiment mangé, avec des macros que **tu**
+estimes.
+
+```json
+{ "resume": "Vendredi midi : kebab galette + frites à la place de la Boîte B (≈ 1050 kcal, 45 g de protéines)",
+  "cible": "repas-libre",
+  "detail": { "date": "2026-08-14", "slot": "lunch",
+              "vers": { "label": "Kebab galette + frites", "kcal": 1050, "p": 45, "g": 95, "l": 50 } } }
+```
+
+C'est **la seule forme où tu fournis des chiffres au lieu d'un identifiant vérifiable**.
+Trois conséquences :
+
+- **donne les quatre valeurs**, surtout les protéines. C'est le chiffre qui pilote la
+  conservation du muscle en déficit, et le laisser à zéro lui ferait croire à un
+  manque qui n'existe pas ;
+- **demande ce qu'il a mangé** avant d'estimer — sauce blanche ou algérienne, avec ou
+  sans frites, taille de la portion. Un kebab va du simple au double ;
+- **dis dans le résumé sur quoi tu t'es basé.** Il valide ta proposition sans pouvoir
+  la recouper : « ≈ 1050 kcal pour une galette avec frites et sauce blanche » se
+  discute, « 1050 kcal » ne se discute pas.
+
+`"vers": null` retire le repas et rend le créneau à son plat prévu.
+
+Il peut aussi le faire seul depuis l'app — la feuille de choix d'un plat a un bouton
+« Autre chose », avec une trentaine de repas courants pré-remplis. Propose plutôt que
+d'insister s'il te dit qu'il l'a déjà saisi.
 
 ### « Je ne peux pas aller à la salle vendredi »
 
