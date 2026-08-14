@@ -1,4 +1,5 @@
 import { addProposal, readMirror, readProposals, verifyToken } from '../utils/vault'
+import { noteCall } from '../utils/trace'
 import { KIND_GROUP_LABELS, builtinWeeks, mergeFoods, mergeRecipes } from '~/lib/nutritionStats'
 import { getAt } from '~/lib/pointer'
 import { checkFieldFix, twinPath } from '~/lib/proposals'
@@ -33,6 +34,12 @@ const MAX_RESULT_BYTES = 40_000
 interface Rpc { jsonrpc: string, id?: string | number | null, method?: string, params?: Record<string, unknown> }
 
 export default defineEventHandler(async (event) => {
+  // Le corps est lu en premier pour pouvoir COMPTER l'appel avant de le juger : ce
+  // qu'on cherche à savoir, c'est si la requête est arrivée jusqu'ici, pas si elle
+  // était en droit d'être servie. Un corps illisible compte aussi — il est arrivé.
+  const rpc = await readBody<Rpc>(event).catch(() => null)
+  noteCall(typeof rpc?.method === 'string' ? rpc.method : '(corps illisible)', new Date())
+
   const auth = getRequestHeader(event, 'authorization') ?? ''
   const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : ''
   const claims = verifyToken(token, Date.now())
@@ -44,7 +51,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Jeton absent ou invalide' })
   }
 
-  const rpc = await readBody<Rpc>(event)
   if (!rpc || typeof rpc.method !== 'string') {
     return { jsonrpc: '2.0', id: rpc?.id ?? null, error: { code: -32600, message: 'Requête invalide' } }
   }

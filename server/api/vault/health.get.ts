@@ -1,4 +1,5 @@
 import { readMirror, readProposals } from '../../utils/vault'
+import { trace } from '../../utils/trace'
 
 /**
  * « Pourquoi ça ne marche pas ? » — répondu par le serveur lui-même.
@@ -67,5 +68,8 @@ export default defineEventHandler(async () => {
     // panne ; vu d'ici, ça se lit en un coup d'œil.
     miroir,
     propositions_en_attente: propositions,
+    // De quoi trancher « la requête n'arrive pas » contre « elle arrive et échoue ».
+    // Voir server/utils/trace.ts : rien n'est écrit, tout est en mémoire du processus.
+    instance: trace(),
   }
 })
