@@ -69,7 +69,18 @@ export default defineNuxtConfig({
         },
     },
     // Configuration des images
+    //
+    // `ipxStatic` et non `ipx` : les variantes sont fabriquées au BUILD et déposées
+    // dans _ipx/, servies ensuite comme n'importe quel fichier statique. Le
+    // redimensionnement à la demande n'a jamais lieu — la seule <NuxtImg> du site est
+    // sur « / », qui est prérendue.
+    //
+    // Ce que ça change : `ipx` embarquait sharp et ses binaires libvips dans le bundle
+    // SERVEUR, soit 38 Mo sur 48. Cette charge partait à chaque déploiement et à
+    // chaque démarrage à froid de la fonction, pour une photo de 20 Ko déjà en WebP et
+    // déjà découpée. Les fichiers produits sont identiques, octet pour octet.
     image: {
+        provider: 'ipxStatic',
         quality: 80,
         format: ['webp', 'avif', 'jpeg'],
         screens: {
@@ -277,4 +288,4 @@ export default defineNuxtConfig({
             },
         },
     },
-})
+})

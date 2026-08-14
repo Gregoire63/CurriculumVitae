@@ -66,7 +66,19 @@ const KEY_CREDENTIAL = 'credential.json'
  * serait exécutable ni testable hors déploiement, et on ne saurait qu'en
  * production si le coffre fonctionne.
  */
-async function store(): Promise<Store> {
+/**
+ * Construit une fois par processus, pas une fois par lecture.
+ *
+ * `store()` est appelée par CHAQUE lecture et chaque écriture — déposer une
+ * proposition en déclenchait trois. Le client Netlify Blobs n'a pourtant aucun état
+ * qui justifie de le refabriquer : c'est de la configuration, identique d'un appel
+ * au suivant. On mémorise la promesse et non le résultat, pour que deux appels
+ * simultanés au démarrage partagent la même construction au lieu d'en lancer deux.
+ */
+let cachedStore: Promise<Store> | null = null
+const store = (): Promise<Store> => (cachedStore ??= buildStore())
+
+async function buildStore(): Promise<Store> {
   if (process.env.NETLIFY || process.env.NETLIFY_BLOBS_CONTEXT) {
     const { getStore } = await import('@netlify/blobs')
     const s = getStore({ name: 'gr-vault', consistency: 'strong' })

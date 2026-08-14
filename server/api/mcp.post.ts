@@ -243,6 +243,40 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     const all = await readProposals()
     return { total: all.length, propositions: all.slice(-20).reverse() }
   }
+  /**
+   * Le programme est dans le code, pas dans le miroir : il se rend sans rien lire.
+   *
+   * Il était traité plus bas, après le `readMirror()` commun — donc payait un
+   * aller-retour vers le stockage pour une réponse qui n'en dépend en rien. C'est
+   * aussi l'outil le plus utile quand le miroir manque encore.
+   *
+   * Les coefficients sont arrondis à deux décimales. `50/45` donnait
+   * « 1.1111111111111112 » : dix-sept chiffres pour une conversion de charge dont le
+   * dernier utile est le premier après la virgule.
+   */
+  if (name === 'programme') {
+    const seance = typeof args.seance === 'string' ? args.seance : ''
+    return {
+      seances: PROGRAM.filter(s => !seance || s.id === seance).map(s => ({
+        id: s.id,
+        nom: s.name,
+        jour: s.tag,
+        sprint: !!s.sprint,
+        exercices: s.exercises.map(e => ({
+          id: e.id,
+          nom: e.name,
+          series: e.sets,
+          reps: e.reps,
+          muscles: e.muscles,
+          machines_de_remplacement: (VARIANTS[e.id] ?? []).map(v => ({
+            id: v.id,
+            nom: v.name,
+            coefficient: Math.round(v.ratio * 100) / 100,
+          })),
+        })),
+      })),
+    }
+  }
 
   /**
    * Les RÉFÉRENCES n'ont pas besoin du miroir, les données personnelles si.
@@ -296,26 +330,6 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         .map(f => ({ id: f.id, nom: f.name, cat: f.cat, pour_100g: { kcal: f.kcal, p: f.p, g: f.g, l: f.l } }))
         .sort((a, b) => a.nom.localeCompare(b.nom))
       return { total: list.length, aliments: list }
-    }
-    case 'programme': {
-      const seance = typeof args.seance === 'string' ? args.seance : ''
-      const sessions = PROGRAM.filter(s => !seance || s.id === seance)
-      return {
-        seances: sessions.map(s => ({
-          id: s.id,
-          nom: s.name,
-          jour: s.tag,
-          sprint: !!s.sprint,
-          exercices: s.exercises.map(e => ({
-            id: e.id,
-            nom: e.name,
-            series: e.sets,
-            reps: e.reps,
-            muscles: e.muscles,
-            machines_de_remplacement: (VARIANTS[e.id] ?? []).map(v => ({ id: v.id, nom: v.name, coefficient: v.ratio })),
-          })),
-        })),
-      }
     }
     case 'menus': {
       const nut = (d.nutrition ?? {}) as Record<string, unknown>
