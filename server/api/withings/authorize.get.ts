@@ -1,4 +1,5 @@
 import { defineEventHandler, getQuery, sendRedirect } from 'h3'
+import { signToken } from '../../utils/vault'
 
 // Étape 1 du flux OAuth2 : on envoie l'utilisateur chez Withings.
 // Le client_id n'est pas secret, mais on construit l'URL côté serveur pour que
@@ -11,14 +12,25 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 501, statusMessage: 'Withings non configuré : NUXT_WITHINGS_CLIENT_ID manquant.' })
   }
 
-  const { origin } = getQuery(event) as { origin?: string }
+  const { origin, nonce } = getQuery(event) as { origin?: string, nonce?: string }
   const base = origin || getRequestURL(event).origin
-  // `state` protège du CSRF : Withings nous le renvoie tel quel, on le vérifie au retour.
-  const state = Math.random().toString(36).slice(2) + Date.now().toString(36)
 
-  setCookie(event, 'withings_state', state, {
-    httpOnly: true, sameSite: 'lax', secure: !import.meta.dev, path: '/', maxAge: 600,
-  })
+  /**
+   * Le `state` est SIGNÉ, il n'est plus rangé dans un cookie.
+   *
+   * Le cookie marchait dans un navigateur ordinaire et ne pouvait pas marcher ici :
+   * il était posé dans le pot de la PWA, et le retour de Withings arrive dans Safari,
+   * qui a le sien. On comparait donc une valeur à rien, et ça donnait « state
+   * invalide » à chaque tentative.
+   *
+   * Une signature HMAC ne dépend d'aucun stockage : elle voyage dans l'URL et se
+   * vérifie partout. Elle porte le nonce tiré par l'application, ce qui rattache le
+   * retour à la connexion qui l'a lancé, et une expiration de dix minutes.
+   */
+  if (!nonce || nonce.length < 16) {
+    throw createError({ statusCode: 400, statusMessage: 'Nonce manquant : relance la connexion depuis l\'application.' })
+  }
+  const state = signToken({ sub: 'withings', scope: 'oauth', nonce }, 600, Date.now())
 
   const url = new URL('https://account.withings.com/oauth2_user/authorize2')
   url.searchParams.set('response_type', 'code')

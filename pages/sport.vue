@@ -699,22 +699,52 @@ function restoreDraft() {
  * jetons en query. On les range, puis on NETTOIE l'URL — laisser un jeton dans la
  * barre d'adresse, c'est le laisser dans l'historique, les captures et le partage.
  */
-function adoptWithings() {
+/**
+ * Reprend une connexion Withings laissée en plan dans un autre navigateur.
+ *
+ * L'autorisation part de la PWA et revient dans Safari — deux stockages, deux
+ * cookies. Les jetons ne peuvent donc pas revenir par l'URL : ils sont déposés côté
+ * serveur, et c'est ici qu'on va les chercher, avec le nonce que l'application avait
+ * gardé. C'est le premier instant du flux dont on soit sûr qu'il se joue DANS l'app.
+ *
+ * Silencieux quand il n'y a rien : on ouvre l'application cent fois pour une
+ * connexion de balance.
+ */
+async function adoptWithings() {
   if (!import.meta.client) return
+  const w = useWithings()
+  w.hydrate()
+
+  // Ancien flux, quand le tour se faisait entièrement dans le même navigateur.
+  // Conservé pour ne pas casser une connexion en cours au moment de la mise à jour.
   const q = new URLSearchParams(window.location.search)
-  if (!q.get('withings')) return
-  if (q.get('withings') === 'ok') {
-    const { hydrate, adoptFromQuery } = useWithings()
-    hydrate()
-    adoptFromQuery(Object.fromEntries(q.entries()))
+  if (q.get('withings')) {
+    if (q.get('withings') === 'ok') w.adoptFromQuery(Object.fromEntries(q.entries()))
+    else withingsError.value = q.get('reason') || 'connexion refusée'
+    view.value = 'profil'
+    window.history.replaceState({}, '', '/sport')
+    return
   }
-  else {
-    withingsError.value = q.get('reason') || 'connexion refusée'
+
+  if (await w.claimPending()) {
+    view.value = 'profil'
+    showFlash('⚖️ Balance connectée')
   }
-  // La balance se branche depuis les réglages : c'est là qu'on revient après avoir
-  // autorisé Withings, à côté du bouton qu'on vient d'utiliser.
-  view.value = 'profil'
-  window.history.replaceState({}, '', '/sport')
+}
+
+/**
+ * Au retour au premier plan aussi, et pas seulement à l'ouverture.
+ *
+ * Le cas normal est exactement celui-là : l'application était déjà ouverte en
+ * arrière-plan, on est parti autoriser dans Safari, on revient dessus. Sans cette
+ * écoute il faudrait la fermer et la rouvrir pour que la connexion se termine —
+ * c'est-à-dire deviner qu'il faut le faire.
+ */
+function watchWithingsReturn() {
+  if (!import.meta.client) return
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') adoptWithings()
+  })
 }
 
 onMounted(() => {
@@ -737,6 +767,7 @@ onMounted(() => {
       navigator.serviceWorker.register('/sport-sw.js', { scope: '/sport' }).catch(() => {})
     }
   }
+  watchWithingsReturn()
   hydrateProfile()
   restoreDraft() // rouvre la séance en cours après un refresh accidentel
   adoptWithings()

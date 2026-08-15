@@ -15,6 +15,8 @@ const TOK_KEY = 'gr-withings-tok-v1'
 const BODY_KEY = 'gr-withings-body-v1'
 // Pas de clé pour l'activité : voir `activity` plus bas.
 const SYNC_KEY = 'gr-withings-sync-v1'
+/** Le nonce de la connexion en cours : le seul fil qui ne quitte jamais la PWA. */
+const NONCE_KEY = 'gr-withings-nonce-v1'
 // Clé de l'ancien suivi de poids du module séances, absorbée une fois pour toutes.
 const LEGACY_BW_KEY = 'gr-bodyweight-v1'
 const MIGRATED_KEY = 'gr-withings-migr-v1'
@@ -134,14 +136,74 @@ export function useWithings() {
     return true
   }
 
+  /**
+   * Lance l'autorisation — en gardant sous le coude de quoi récupérer le résultat.
+   *
+   * Le tour passe forcément par un navigateur externe : une PWA qui navigue vers
+   * `account.withings.com` sort de son contexte, et sur iOS elle n'y revient pas.
+   * Le retour atterrit donc dans Safari, avec son propre stockage.
+   *
+   * Ce nonce est tiré ICI et rangé ICI. Le serveur le signe dans le `state`, le
+   * retour dépose les jetons sous ce nonce, et c'est l'application qui viendra les
+   * chercher à sa prochaine ouverture. Rien à taper, rien à recopier.
+   */
   function connect() {
-    if (import.meta.client) window.location.href = '/api/withings/authorize'
+    if (!import.meta.client) return
+    const nonce = newNonce()
+    try { localStorage.setItem(NONCE_KEY, JSON.stringify({ nonce, at: Date.now() })) }
+    catch { /* stockage indisponible : la connexion échouera proprement au retour */ }
+    window.location.href = `/api/withings/authorize?nonce=${encodeURIComponent(nonce)}`
+  }
+
+  /** 32 caractères tirés du générateur cryptographique : c'est un mot de passe à usage unique. */
+  function newNonce(): string {
+    const b = new Uint8Array(24)
+    crypto.getRandomValues(b)
+    return Array.from(b, x => x.toString(36).padStart(2, '0')).join('').slice(0, 32)
+  }
+
+  /**
+   * Récupère les jetons déposés par le retour d'autorisation, s'il y en a.
+   *
+   * Appelée à l'ouverture de l'application. Le silence est le cas NORMAL — on n'est
+   * pas en train de connecter une balance la plupart du temps — donc elle ne dit
+   * rien et ne montre rien tant qu'il n'y a pas de nonce en attente.
+   *
+   * Le nonce est effacé dès qu'on a tenté le retrait, réussi ou non. Le laisser
+   * ferait retenter à chaque ouverture un dépôt qui n'existera jamais.
+   */
+  async function claimPending(): Promise<boolean> {
+    if (!import.meta.client) return false
+    const raw = safeParse<{ nonce?: string, at?: number } | null>(localStorage.getItem(NONCE_KEY), null)
+    if (!raw?.nonce) return false
+    // Passé dix minutes, le dépôt a expiré côté serveur de toute façon.
+    if (!raw.at || Date.now() - raw.at > 10 * 60 * 1000) {
+      try { localStorage.removeItem(NONCE_KEY) } catch { /* ignore */ }
+      return false
+    }
+    try {
+      const res = await $fetch<{ tokens: Record<string, unknown> }>('/api/withings/claim', {
+        method: 'POST',
+        body: { nonce: raw.nonce },
+      })
+      try { localStorage.removeItem(NONCE_KEY) } catch { /* ignore */ }
+      if (!adoptFromQuery(res.tokens)) return false
+      needsReconnect.value = false
+      return true
+    }
+    catch {
+      // 404 : l'autorisation n'est pas encore terminée dans l'autre navigateur. On
+      // GARDE le nonce, et on retentera à la prochaine ouverture — c'est exactement
+      // le cas « j'ai autorisé, je reviens dans l'app ».
+      return false
+    }
   }
 
   function disconnect() {
     tokens.value = null
     needsReconnect.value = false
     if (import.meta.client) {
+      try { localStorage.removeItem(NONCE_KEY) } catch { /* ignore */ }
       try { localStorage.removeItem(TOK_KEY) }
       catch { /* ignore */ }
     }
@@ -398,7 +460,7 @@ export function useWithings() {
   }
 
   return {
-    hydrate, connected, tokens, connect, disconnect, adoptFromQuery, needsReconnect,
+    hydrate, connected, tokens, connect, disconnect, adoptFromQuery, claimPending, needsReconnect,
     entries, activity, latest, bodyComp, syncing, syncError, lastSync,
     sync, syncAndPush, autoSync, pushToJournal, addManual, removeEntry, confirmEntry,
     suspects, suspectAts, mirror,

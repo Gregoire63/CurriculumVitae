@@ -58,6 +58,7 @@ interface Store {
 const KEY_MIRROR = 'mirror.json'
 const KEY_PROPOSALS = 'proposals.json'
 const KEY_CREDENTIAL = 'credential.json'
+const KEY_HANDOVER = 'withings-handover.json'
 
 /**
  * Netlify Blobs en production, dossier local sinon.
@@ -134,6 +135,58 @@ export async function resolveProposal(id: string, status: 'applied' | 'refused',
   found.resolvedAt = now
   await writeJson(KEY_PROPOSALS, all)
   return true
+}
+
+// ─── Consigne des jetons Withings ────────────────────────────────────────────
+//
+// Le flux OAuth de Withings part de la PWA et revient dans le NAVIGATEUR. Sur iOS,
+// une application posée sur l'écran d'accueil qui navigue vers une autre origine
+// sort de son contexte : l'autorisation se fait dans Safari, et le retour y atterrit
+// aussi. Or Safari et la PWA n'ont ni le même stockage local ni les mêmes cookies.
+//
+// Les jetons repartaient jusqu'ici dans l'URL de retour. Ils étaient donc écrits
+// dans le stockage du navigateur qui recevait la redirection — pas dans celui de
+// l'application, qui gardait son ancien jeton mort et redemandait une reconnexion
+// à chaque fois. La boucle ne pouvait pas se refermer.
+//
+// D'où cette consigne : le retour dépose les jetons ICI, et l'application vient les
+// chercher avec le nonce qu'elle avait tiré AVANT de partir — le seul élément qui
+// ait traversé sans changer de contexte, puisqu'elle ne l'a jamais quitté.
+//
+// Trois précautions, parce qu'un jeton en transit est un jeton exposé :
+//
+//   • le nonce n'est pas stocké tel quel mais haché. Une fuite du coffre ne donne
+//     alors pas de quoi réclamer un dépôt en cours ;
+//   • le retrait est à USAGE UNIQUE — lu, effacé. Un jeton qui traîne dans une
+//     boîte aux lettres finit par être ramassé par quelqu'un d'autre ;
+//   • dix minutes de validité. Au-delà, on refait le tour, ça coûte deux taps.
+
+export interface Handover { tokens: Record<string, unknown>, at: number }
+
+const HANDOVER_TTL_MS = 10 * 60 * 1000
+const hashNonce = (nonce: string) => createHmac('sha256', 'withings-handover').update(nonce).digest('hex').slice(0, 32)
+
+export async function putHandover(nonce: string, tokens: Record<string, unknown>, nowMs: number): Promise<void> {
+  const all = await readJson<Record<string, Handover>>(KEY_HANDOVER, {})
+  // Ménage au passage : sans lui, chaque connexion abandonnée laisserait un jeton
+  // valide dans le coffre pour toujours.
+  const frais: Record<string, Handover> = {}
+  for (const [k, v] of Object.entries(all)) {
+    if (nowMs - v.at < HANDOVER_TTL_MS) frais[k] = v
+  }
+  frais[hashNonce(nonce)] = { tokens, at: nowMs }
+  await writeJson(KEY_HANDOVER, frais)
+}
+
+/** Retire le dépôt et l'efface. Rend `null` s'il n'existe pas ou s'il a expiré. */
+export async function takeHandover(nonce: string, nowMs: number): Promise<Record<string, unknown> | null> {
+  const all = await readJson<Record<string, Handover>>(KEY_HANDOVER, {})
+  const clef = hashNonce(nonce)
+  const trouve = all[clef]
+  delete all[clef]
+  await writeJson(KEY_HANDOVER, all)
+  if (!trouve || nowMs - trouve.at >= HANDOVER_TTL_MS) return null
+  return trouve.tokens
 }
 
 // ─── Passkey enregistré ──────────────────────────────────────────────────────
