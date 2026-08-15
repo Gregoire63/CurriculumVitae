@@ -34,7 +34,9 @@ const macroSheet = ref(false)
 const label = ref('')
 const kcal = ref('')
 const time = ref(hhmm(new Date()))
-const nowHour = new Date().getHours()
+// Horloge partagée : voir composables/useNow.ts. Figer l'heure ici faisait
+// diverger l'accueil de la feuille des repas passé 15 h.
+const { nowHour, nowMin } = useNow()
 
 const kg = computed(() => [...bodyWeight.value].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? null)
 const age = computed(() => (profile.value.birthYear ? new Date(props.todayIso + 'T00:00:00').getFullYear() - profile.value.birthYear : null))
@@ -47,7 +49,7 @@ function energyOf(iso: string) {
   if (bmr.value === null || !kg.value) return null
   const r = dayFor(iso)
   const rec = sessionsOn(sessionLog(), iso)
-  const played = isDayPlayed(iso, props.todayIso, nowHour)
+  const played = isDayPlayed(iso, props.todayIso, nowHour.value)
   const burn = rec.length ? dayBurn(rec, kg.value, bmr.value) : (r.gym && !played ? DEFAULT_BURN : 0)
   return { r, burn, energy: dayEnergy({ bmr: bmr.value, kg: kg.value, tt: r.tt, steps: stepsFor(iso), sessionKcal: burn }) }
 }
@@ -78,7 +80,7 @@ const pending = computed(() => {
   if (!t) return false
   return t.r.gym
     && sessionsOn(sessionLog(), props.todayIso).length === 0
-    && !isDayPlayed(props.todayIso, props.todayIso, nowHour)
+    && !isDayPlayed(props.todayIso, props.todayIso, nowHour.value)
 })
 
 const day = computed(() => {
@@ -119,7 +121,7 @@ const target = computed(() => (today.value
 const intake = computed(() => dayIntake(day.value, eatenSlots(props.todayIso), extrasFor(props.todayIso), target.value ?? 0))
 
 const line = computed(() => timelineOf(day.value, eatenSlots(props.todayIso), extrasFor(props.todayIso)))
-const next = computed(() => nextMeal(line.value))
+const next = computed(() => nextMeal(line.value, nowMin.value))
 
 // ─── Camembert ───────────────────────────────────────────────────────────────
 const R = 52

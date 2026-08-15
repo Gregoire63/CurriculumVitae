@@ -39,7 +39,9 @@ const sheet = ref<DayMeal | null>(null)
 const adding = ref(false)
 const quickLabel = ref('')
 const quickKcal = ref('')
-const nowHour = new Date().getHours()
+// Même horloge que l'accueil, sinon les deux écrans ne construisent pas la
+// même journée. Voir composables/useNow.ts.
+const { nowHour } = useNow()
 
 const resolved = computed(() => dayFor(props.todayIso))
 
@@ -57,7 +59,7 @@ const status = computed<DayStatus>(() => dayStatus({
   planned: resolved.value.gym,
   recorded: todaySessions.value.length,
   skipped: !resolved.value.gym,
-  isPast: isDayPlayed(props.todayIso, props.todayIso, nowHour),
+  isPast: isDayPlayed(props.todayIso, props.todayIso, nowHour.value),
 }))
 /** Dépense d'une séance moyenne, tant que la vraie n'est pas connue. */
 const DEFAULT_BURN = 440

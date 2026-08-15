@@ -1823,8 +1823,33 @@ export function timelineOf(day: DayPlan | null, eatenSlots: string[], extras: Ex
   return [...fromPlan, ...fromExtras].sort((a, b) => minutesOf(a.time) - minutesOf(b.time))
 }
 
-/** Prochain repas non validé — celui à mettre en avant sur l'accueil. */
-export const nextMeal = (line: TimelineEntry[]) => line.find(e => e.kind === 'plan' && !e.done) ?? null
+/**
+ * Combien de temps un repas reste « celui de maintenant » après son horaire.
+ *
+ * Une heure et demie, parce qu'on coche rarement au moment exact : le déjeuner de
+ * 13 h 45 se valide souvent à 14 h 30, et le mettre de côté à 13 h 46 pour annoncer
+ * la collation de 17 h serait absurde.
+ */
+const MEAL_GRACE_MIN = 90
+
+/**
+ * Prochain repas non validé — celui à mettre en avant sur l'accueil.
+ *
+ * Il se contentait du premier non coché de la journée, sans regarder l'heure. Un
+ * petit-déjeuner oublié le lundi matin restait donc affiché comme « prochain repas »
+ * jusqu'au soir, pendant que le dîner passait inaperçu.
+ *
+ * On prend maintenant le premier repas non coché qui n'est pas franchement passé.
+ * Et s'ils le sont tous — soirée où l'on rattrape la journée entière — on retombe
+ * sur le plus ancien non coché : c'est encore par lui qu'il faut commencer, et un
+ * écran vide ne dirait rien à personne.
+ */
+export function nextMeal(line: TimelineEntry[], nowMin?: number): TimelineEntry | null {
+  const restants = line.filter(e => e.kind === 'plan' && !e.done)
+  if (!restants.length) return null
+  if (nowMin === undefined) return restants[0]
+  return restants.find(e => minutesOf(e.time) + MEAL_GRACE_MIN >= nowMin) ?? restants[0]
+}
 
 /** Heure courante au format HH:MM, pour préremplir une saisie. */
 export const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

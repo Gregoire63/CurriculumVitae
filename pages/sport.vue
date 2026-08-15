@@ -38,7 +38,7 @@ useHead({
 })
 
 const {
-  bodyWeight, lastPerf, lastOn, ratioFor, lastEffort, recordSession, updateSession, suggestWeight, sessionLog, seedDemo, fatigue,
+  bodyWeight, bodyWeightAt, lastPerf, lastOn, ratioFor, lastEffort, recordSession, updateSession, suggestWeight, sessionLog, seedDemo, fatigue,
 } = useWorkout()
 const { start: startRest, secondsLeft: restLeft, stop: stopRest, addTime: addRest } = useRestTimer()
 const restFmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -344,19 +344,48 @@ function confirmCancel() {
  * machine), on prend le conseil de charge, qui lui est converti depuis l'historique
  * de la référence : c'est exactement ce dont on a besoin le jour où le rack est pris.
  */
+/**
+ * Reprend une charge d'une séance passée, en la remettant au poids d'aujourd'hui.
+ *
+ * Sur un exercice au poids du corps — dips, tractions — la charge notée est le
+ * TOTAL soulevé : le corps plus le lest. Recopier telle quelle celle de la dernière
+ * séance revenait donc à recopier aussi le poids de corps de ce jour-là, et il ne
+ * bougeait plus jamais. Trois kilos perdus, et l'application continuait de proposer
+ * 94 : la courbe de progression restait plate, les dips passaient pour « bloqués »
+ * chaque semaine, et le rapport affichait trois kilos de lest fantôme sur des séries
+ * faites sans ceinture.
+ *
+ * Ce qu'il faut reprendre, c'est le LEST — la seule part qui soit une décision.
+ * On le retrouve en retirant le poids de corps du jour de la séance, et on le
+ * rajoute au poids d'aujourd'hui.
+ *
+ * Sans pesée à l'une des deux dates on ne convertit rien : mieux vaut proposer
+ * l'ancienne valeur, visiblement à corriger, qu'un chiffre calculé sur un poids
+ * inventé.
+ */
+function rebase(e: Exercise, valeur: number | null | undefined, dateSeance: string): string {
+  if (valeur == null) return ''
+  if (!e.bodyweight) return String(valeur)
+  const alors = bodyWeightAt(dateSeance)
+  const maintenant = latestWeight.value
+  if (alors === null || maintenant === null) return String(valeur)
+  const lest = valeur - alors
+  return String(Math.round((maintenant + lest) * 10) / 10)
+}
+
 function prefillRows(e: Exercise, variant?: string): DraftRow[] {
-  const bw = latestWeight.value ?? 0 // poids de corps (profil) pour les exos au poids du corps
+  const bw = latestWeight.value ?? 0 // poids de corps mesuré, pour les exos au poids du corps
   const last = lastOn(e.id, variant)
   let rows: DraftRow[]
   if (last && last.sets.length) {
     // Poids ET reps des séries de travail préremplis. Rien n'est coché → il n'y a
     // plus qu'à ajuster et valider.
     rows = last.sets.map(st => ({
-      w: st.w != null ? String(st.w) : '',
+      w: rebase(e, st.w, last.date),
       r: st.r != null ? String(st.r) : '',
       done: false,
       warm: !!st.warm,
-      w2: st.w2 != null ? String(st.w2) : '',
+      w2: rebase(e, st.w2, last.date),
       r2: st.r2 != null ? String(st.r2) : '',
     }))
   } else {
@@ -619,8 +648,21 @@ function isDumbbell(ex: Exercise): boolean {
   return !ex.superset && /haltère/i.test(ex.name)
 }
 
-// latestWeight : encore utilisé par l'accueil (préremplissage poids de corps) et la séance
-const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
+/**
+ * La dernière pesée connue — celle de la balance, puisque Withings les y déverse.
+ *
+ * On cherche la date la plus RÉCENTE au lieu de prendre le dernier élément. La liste
+ * est tenue triée par `setBodyWeightAt`, mais une sauvegarde restaurée est reprise
+ * telle quelle : un fichier dans le désordre aurait alors fait passer une vieille
+ * pesée pour la dernière, et le préremplissage des dips avec.
+ */
+const latestWeight = computed(() => {
+  let best: { date: string, kg: number } | null = null
+  for (const e of bodyWeight.value) {
+    if (!best || e.date > best.date) best = e
+  }
+  return best?.kg ?? null
+})
 const p2 = (n: number) => String(n).padStart(2, '0')
 
 // ─────────── Sauvegarde automatique du brouillon ───────────
