@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
 import { FAT_STEPS, expandItems, keepsOf, macrosOf, rebalanceDairy, roundMacros, splitIngredients } from '~/lib/nutritionStats'
+import { cookedWeight } from '~/lib/cooked'
 
 // LA fiche d'un plat : photo, ingrédients, recette. Une seule, ouverte depuis
 // n'importe quelle carte de l'application.
@@ -13,7 +14,7 @@ import { FAT_STEPS, expandItems, keepsOf, macrosOf, rebalanceDairy, roundMacros,
 const props = defineProps<{ id: string }>()
 const emit = defineEmits<{ close: [] }>()
 
-const { library, setFatPct, fatPct, dairyFoods } = useNutrition()
+const { cookedRatios, library, setFatPct, fatPct, dairyFoods } = useNutrition()
 
 const KIND_LABELS: Record<string, string> = {
   pdj: 'Petit-déjeuner',
@@ -54,6 +55,16 @@ const split = computed(() => {
   const balanced = { ...r, items: rebalanceDairy(r.items, library.value.foods) }
   return splitIngredients(balanced, library.value)
 })
+
+/**
+ * Le poids une fois cuit, quand il est connu. `null` partout ailleurs.
+ *
+ * On passe le total SAUCE COMPRISE, parce que c'est bien tout ce qui finit dans la
+ * casserole qu'on va peser. Aucun féculent n'entre dans une sauce aujourd'hui, mais
+ * s'y fier reviendrait à laisser le chiffre devenir faux le jour où ça change.
+ */
+const cuit = (foodId: string, totalG: number) =>
+  cookedWeight(foodId, totalG, { mesures: cookedRatios.value })
 
 /**
  * Les laitiers de ce plat dont le taux se règle, avec le taux déclaré.
@@ -109,7 +120,12 @@ const openFat = ref<string | null>(null)
         <div class="section-label">{{ sauce ? 'Pour le plat' : 'Ingrédients' }}</div>
         <ul class="rs-items">
           <li v-for="l in split.dish" :key="l.food" class="rs-item">
-            <span class="rs-q mono">{{ l.g }} g</span>
+            <span class="rs-q mono">
+              {{ l.g }} g
+              <!-- Le poids une fois cuit, pour les féculents seulement : ce sont les
+                   seuls qu'on ne peut pas répartir en les comptant. -->
+              <small v-if="cuit(l.food, l.total)" class="rs-cuit">≈ {{ cuit(l.food, l.total) }} g cuit</small>
+            </span>
             <span class="rs-n">
               {{ dairy(l.food) ? dairyName(l.food) : foodName(l.food) }}
               <span v-if="l.total > l.g" class="muted">{{ l.total }} g en tout avec la sauce</span>
@@ -132,7 +148,10 @@ const openFat = ref<string | null>(null)
             </span>
           </li>
         </ul>
-        <p class="muted italic rs-raw">Viandes, poissons et féculents : toujours pesés crus.</p>
+        <p class="muted italic rs-raw">
+          Viandes, poissons et féculents : toujours pesés crus — c'est la seule référence
+          qui ne dépende pas de la cuisson, et c'est elle qui donne les macros justes.
+        </p>
 
         <!-- La sauce a sa propre liste ET sa préparation : c'est un pot à part, on ne
              la mélange pas au plat. -->

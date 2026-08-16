@@ -1106,3 +1106,18 @@
 .fm-num { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-muted); }
 .fm-num input { width: 100%; box-sizing: border-box; }
 .fm-save { width: 100%; margin-top: 12px; }
+
+/* ─── Cru → cuit ──────────────────────────────────────────────────────────── */
+/* Préfixe `nu-cuit-` : la répartition d'après cuisson, dans l'écran Préparation. */
+.rs-cuit { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-muted); margin-top: 2px; white-space: nowrap; }
+.nu-cuit { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--bg-accent); }
+.nu-cuit-l { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 4px 0; font-size: 13px; }
+.nu-cuit-n { flex: 0 0 auto; color: var(--text-primary); }
+.nu-cuit-v { flex: 1 1 auto; font-size: 12px; color: var(--text-muted); }
+.nu-cuit-v b { color: var(--text-primary); font-size: 13px; }
+.nu-cuit-v small { display: block; font-size: 10.5px; }
+.nu-cuit-btn { flex: 0 0 auto; background: none; border: 1px solid var(--bg-accent); border-radius: 999px; padding: 2px 9px; font-family: var(--font-body); font-size: 10.5px; color: var(--text-muted); cursor: pointer; }
+.nu-cuit-btn.set { border-color: #4a6fa5; color: #4a6fa5; }
+.nu-cuit-note { font-size: 11px; margin: 0 0 4px; font-style: italic; }
+.nu-cuit-form { background: var(--bg-secondary); border-radius: 10px; padding: 10px; margin: 6px 0 10px; }
+.nu-cuit-form p { font-size: 11.5px; line-height: 1.45; margin: 0 0 8px; }

@@ -42,6 +42,23 @@ export type Plan =
   | { kind: 'correction-pesee', date: string, vers: number | null }
   | { kind: 'correction-champ', chemin: string, vers: Scalar }
   | { kind: 'repas-libre', date: string, slot: string, repas: FreeMeal | null }
+  | { kind: 'aliment', id: string | null, aliment: FoodSpec }
+
+/** Un ingrédient, tel qu'une proposition a le droit de le décrire. Valeurs pour 100 g. */
+export interface FoodSpec {
+  name: string
+  cat: string
+  kcal: number
+  p: number
+  g: number
+  l: number
+  /** Ce qu'on en fait à la cuisson — c'est ce qui transforme une liste de courses
+   *  en marche à suivre. Absent = rien à cuire. */
+  cook?: string
+  /** Repère d'achat ou de pesée : « 1 c. à café = 5 g ». */
+  buy?: string
+  keeps?: number
+}
 
 export interface RecipeSpec {
   name: string
@@ -49,6 +66,12 @@ export interface RecipeSpec {
   batch: boolean
   steps: string
   items: { food: string, g: number }[]
+  /** Pot servi avec le plat. Ses ingrédients comptent dans les macros et les courses. */
+  sauce?: string
+  /** Jours de conservation au frigo. C'est ce qui décide dans QUELLE session de
+   *  cuisine le plat tombe : un plat qui tient trois jours ne se cuisine pas le
+   *  dimanche pour le vendredi. */
+  keeps?: number
 }
 
 /**
@@ -149,6 +172,7 @@ export function planFor(p: RawProposal, ctx: PlanCtx = {}): Plan | null {
   const d = p.patch ?? {}
   if (p.action === 'semaine') return weekFor(p, ctx.recipeKnown ?? (() => true))
   if (p.action === 'recette') return recipeFor(p, ctx)
+  if (p.action === 'aliment') return foodFor(p, ctx)
   if (p.action === 'semaine-type') return weekTemplateFor(p)
   if (p.action === 'correction') return fixFor(p, ctx)
   if (p.action === 'plat') {
@@ -218,6 +242,65 @@ const KINDS = ['pdj', 'boite', 'diner', 'collation', 'sauce'] as const
  * plat dont les macros sont fausses de moitié, ce qui est bien pire : c'est une
  * erreur silencieuse qui se propage dans les calories, les courses et le déficit.
  */
+/** Les catégories du catalogue. En inventer une ferait disparaître l'aliment de
+ *  la liste de courses, qui est groupée par catégorie. */
+const CATS = ['viandes', 'poissons', 'oeufs', 'laitiers', 'feculents', 'legumes', 'fruits', 'grasses', 'aromates', 'complements', 'boissons'] as const
+
+/**
+ * Créer ou corriger un ingrédient.
+ *
+ * C'est la brique qui manquait sous les recettes : proposer un plat exige des
+ * identifiants d'aliments qui EXISTENT, donc sans cette forme il était impossible
+ * d'ajouter une recette contenant quoi que ce soit de nouveau.
+ *
+ * Le contrôle de cohérence est ici et pas seulement dans l'écran d'édition. Des
+ * macros qui n'expliquent pas les calories, c'est une étiquette mal recopiée — et
+ * l'erreur ne se voit jamais, elle se propage dans les calories, les courses et le
+ * déficit. On tolère 25 % d'écart, parce que fibres, polyols et arrondis du
+ * fabricant en produisent légitimement quelques-uns.
+ */
+export function foodFor(p: RawProposal, ctx: PlanCtx): Extract<Plan, { kind: 'aliment' }> | null {
+  if (p.action !== 'aliment') return null
+  const d = p.patch ?? {}
+  const name = typeof (pick(d, ['nom', 'name'])) === 'string' ? String(pick(d, ['nom', 'name'])).trim() : ''
+  if (!name || name.length > 60) return null
+
+  const cat = String(pick(d, ['cat', 'categorie']) ?? '')
+  if (!(CATS as readonly string[]).includes(cat)) return null
+
+  const kcal = num(pick(d, ['kcal', 'calories']), 0, 950) // 900 = huile pure, la borne haute physique
+  const prot = num(pick(d, ['p', 'proteines', 'prot']), 0, 100)
+  const gluc = num(pick(d, ['g', 'glucides']), 0, 100)
+  const lip = num(pick(d, ['l', 'lipides']), 0, 100)
+  if (kcal === null || prot === null || gluc === null || lip === null) return null
+  if (prot + gluc + lip > 100) return null // pour 100 g, la somme ne peut pas déborder
+
+  const calcule = prot * 4 + gluc * 4 + lip * 9
+  if (kcal > 0 && Math.abs(calcule - kcal) > kcal * 0.25 + 20) return null
+
+  const id = typeof d.id === 'string' && isId(d.id) ? d.id : null
+  if (id && ctx.foodKnown && !ctx.foodKnown(id)) return null
+
+  const texte = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined)
+  const keeps = num(pick(d, ['keeps', 'conservation', 'conservation_jours']), 1, 365)
+
+  return {
+    kind: 'aliment',
+    id,
+    aliment: {
+      name,
+      cat,
+      kcal: Math.round(kcal),
+      p: Math.round(prot * 10) / 10,
+      g: Math.round(gluc * 10) / 10,
+      l: Math.round(lip * 10) / 10,
+      ...(texte(pick(d, ['cook', 'cuisson']), 300) ? { cook: texte(pick(d, ['cook', 'cuisson']), 300) } : {}),
+      ...(texte(pick(d, ['buy', 'achat', 'repere']), 120) ? { buy: texte(pick(d, ['buy', 'achat', 'repere']), 120) } : {}),
+      ...(keeps !== null ? { keeps: Math.round(keeps) } : {}),
+    },
+  }
+}
+
 export function recipeFor(p: RawProposal, ctx: PlanCtx): Extract<Plan, { kind: 'recette' }> | null {
   if (p.action !== 'recette') return null
   const d = p.patch ?? {}
@@ -243,6 +326,28 @@ export function recipeFor(p: RawProposal, ctx: PlanCtx): Extract<Plan, { kind: '
   // Modifier une recette existante suppose qu'elle existe : sinon on croit patcher
   // et on crée un doublon silencieux sous un identifiant imposé.
   if (id && ctx.recipeKnown && !ctx.recipeKnown(id)) return null
+
+  /**
+   * La sauce et la conservation, qui se perdaient silencieusement.
+   *
+   * `patchRecipe` fusionne le patch dans la recette, donc une clé absente était
+   * conservée — mais l'écran d'édition, lui, envoie toujours les cinq champs, et
+   * une modification proposée d'ici repartait sans `sauce` ni `keeps`. Le plat
+   * gardait son nom et ses ingrédients, et perdait son pot de sauce blanche ainsi
+   * que sa durée de conservation. Cette dernière décide dans QUELLE session de
+   * cuisine il tombe : sans elle, un plat qui ne tient pas trois jours se retrouve
+   * planifié le dimanche pour le vendredi.
+   *
+   * On ne les transmet donc que si elles sont explicitement fournies — absentes,
+   * la fusion garde celles d'origine.
+   */
+  const sauce = pick(d, ['sauce', 'pot'])
+  const keeps = num(pick(d, ['keeps', 'conservation', 'conservation_jours']), 1, 30)
+  if (sauce !== undefined && sauce !== null) {
+    if (typeof sauce !== 'string' || !isId(sauce)) return null
+    if (ctx.recipeKnown && !ctx.recipeKnown(sauce)) return null
+  }
+
   return {
     kind: 'recette',
     id,
@@ -252,6 +357,8 @@ export function recipeFor(p: RawProposal, ctx: PlanCtx): Extract<Plan, { kind: '
       batch: d.batch !== false,
       steps: typeof d.steps === 'string' ? d.steps.slice(0, 2000) : '',
       items: out,
+      ...(typeof sauce === 'string' ? { sauce } : {}),
+      ...(keeps !== null ? { keeps: Math.round(keeps) } : {}),
     },
   }
 }

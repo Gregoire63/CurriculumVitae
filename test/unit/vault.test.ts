@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { planFor, detailLines, checkFieldFix, twinPath } from '../../lib/proposals'
+import { planFor, detailLines, checkFieldFix, twinPath, foodFor, recipeFor } from '../../lib/proposals'
 import type { RawProposal } from '../../lib/proposals'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -455,5 +455,76 @@ describe('proposition de repas du dehors', () => {
     // Sans ça, une valeur estimée pourrait se relire plus tard comme une étiquette lue.
     expect(planFor(libre({ date: '2026-08-14', slot: 'lunch', vers: { label: 'Kebab', kcal: 1050, from: 'catalogue' } }), CTX))
       .toMatchObject({ repas: { from: 'claude' } })
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Créer un ingrédient
+//
+// C'est la brique sous les recettes : sans elle, impossible de proposer un plat
+// contenant quoi que ce soit de nouveau. Et c'est celle où une erreur se voit le
+// moins — des macros mal recopiées ne font rien planter, elles faussent les
+// calories, les courses et le déficit, pour toujours.
+const alim = (patch: Record<string, unknown>) => prop('aliment', patch)
+const CTX_FOOD = { foodKnown: (id: string) => id === 'riz-basmati', recipeKnown: (id: string) => id === 'sauce-blanche' }
+
+describe('proposition d\'aliment', () => {
+  it('accepte un aliment cohérent', () => {
+    expect(foodFor(alim({ nom: 'Skyr nature', cat: 'laitiers', kcal: 60, p: 11, g: 4, l: 0.2 }), CTX_FOOD))
+      .toEqual({ kind: 'aliment', id: null, aliment: { name: 'Skyr nature', cat: 'laitiers', kcal: 60, p: 11, g: 4, l: 0.2 } })
+  })
+
+  it('garde la cuisson, le repère d\'achat et la conservation', () => {
+    const out = foodFor(alim({
+      nom: 'Chou-fleur', cat: 'legumes', kcal: 25, p: 2, g: 3, l: 0.3,
+      cuisson: '7 min vapeur', achat: '1 tête ≈ 800 g', conservation: 5,
+    }), CTX_FOOD)
+    expect(out?.aliment).toMatchObject({ cook: '7 min vapeur', buy: '1 tête ≈ 800 g', keeps: 5 })
+  })
+
+  it('REFUSE des macros qui n\'expliquent pas les calories', () => {
+    // 11×4 + 4×4 + 0,2×9 = 62 kcal, pas 300. Une étiquette mal recopiée.
+    expect(foodFor(alim({ nom: 'Skyr', cat: 'laitiers', kcal: 300, p: 11, g: 4, l: 0.2 }), CTX_FOOD)).toBeNull()
+  })
+
+  it('tolère l\'écart normal d\'une étiquette', () => {
+    // Fibres, polyols et arrondis du fabricant en produisent légitimement.
+    expect(foodFor(alim({ nom: 'Pain complet', cat: 'feculents', kcal: 250, p: 10, g: 43, l: 3 }), CTX_FOOD)).not.toBeNull()
+  })
+
+  it('refuse une catégorie inventée : la liste de courses est groupée par catégorie', () => {
+    expect(foodFor(alim({ nom: 'X', cat: 'superaliments', kcal: 60, p: 11, g: 4, l: 0.2 }), CTX_FOOD)).toBeNull()
+  })
+
+  it('refuse ce qui ne tient pas dans 100 g, et les valeurs absurdes', () => {
+    expect(foodFor(alim({ nom: 'X', cat: 'legumes', kcal: 800, p: 60, g: 60, l: 60 }), CTX_FOOD)).toBeNull()
+    expect(foodFor(alim({ nom: 'X', cat: 'legumes', kcal: -5, p: 1, g: 1, l: 1 }), CTX_FOOD)).toBeNull()
+    expect(foodFor(alim({ nom: '', cat: 'legumes', kcal: 20, p: 1, g: 3, l: 0 }), CTX_FOOD)).toBeNull()
+  })
+
+  it('ne prétend pas corriger un aliment qui n\'existe pas', () => {
+    expect(foodFor(alim({ id: 'nawak', nom: 'X', cat: 'legumes', kcal: 20, p: 1, g: 3, l: 0 }), CTX_FOOD)).toBeNull()
+    expect(foodFor(alim({ id: 'riz-basmati', nom: 'Riz basmati', cat: 'feculents', kcal: 350, p: 8, g: 78, l: 1 }), CTX_FOOD))
+      .toMatchObject({ id: 'riz-basmati' })
+  })
+})
+
+describe('recette : la sauce et la conservation ne se perdent plus', () => {
+  const rec = (patch: Record<string, unknown>) => prop('recette', patch)
+  const base = { nom: 'Riz sauce', kind: 'diner', items: [{ food: 'riz-basmati', g: 80 }] }
+
+  it('transmet la sauce et la conservation quand elles sont données', () => {
+    const out = recipeFor(rec({ ...base, sauce: 'sauce-blanche', conservation: 4 }), CTX_FOOD)
+    expect(out?.recette).toMatchObject({ sauce: 'sauce-blanche', keeps: 4 })
+  })
+
+  it('ne les invente pas quand elles sont absentes : la fusion garde l\'existant', () => {
+    const out = recipeFor(rec(base), CTX_FOOD)
+    expect(out?.recette).not.toHaveProperty('sauce')
+    expect(out?.recette).not.toHaveProperty('keeps')
+  })
+
+  it('refuse une sauce qui n\'existe pas, plutôt que de casser le lien', () => {
+    expect(recipeFor(rec({ ...base, sauce: 'sauce-inventee' }), CTX_FOOD)).toBeNull()
   })
 })

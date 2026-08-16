@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { CAT_LABELS } from '~/data/nutritionProgram'
 import { useNutrition } from '~/composables/useNutrition'
 import { costPerDay, expandItems, fmtEuro, lineCost, listDays, macrosOf, roundMacros, slotsOf } from '~/lib/nutritionStats'
+import { portioningFor } from '~/lib/cooked'
 import { shiftIso } from '~/utils/sportStats'
 
 // Onglet « Préparer » : trois étapes, dans l'ordre où on les fait.
@@ -23,7 +24,45 @@ const {
   setMenuSlot, toggleMenuDayOff, duplicateMenu, renameMenu, removeMenu, blankMenu,
   selectionSummary, selectionShopping, cookSessions, daysCovered, stock, freezer, setFreezer,
   cost, isChecked, toggleChecked, clearChecked, setPrice, prices, baskets, addBasket, removeBasket,
+  cookedRatios, setCookedRatio, clearCookedRatio,
 } = useNutrition()
+
+/**
+ * Combien mettre dans chaque boîte, une fois la casserole vide.
+ *
+ * C'est le chiffre qui manquait. Les fiches donnent le cru — la seule référence qui
+ * donne des macros justes — mais on ne répartit pas du riz cru : on répartit deux
+ * kilos de riz cuit entre cinq boîtes, et à l'œil on se trompe de 20 %.
+ *
+ * Seuls les féculents apparaissent ici, parce qu'ils sont les seuls à poser le
+ * problème : cinq filets de poulet pour cinq boîtes se comptent.
+ */
+function repartition(recipeId: string, n: number) {
+  const r = library.value.recipes[recipeId]
+  if (!r) return []
+  return portioningFor(expandItems(r, library.value), n, { mesures: cookedRatios.value })
+}
+
+const foodName = (id: string) => library.value.foods[id]?.name ?? id
+
+/** La pesée en cours : l'aliment visé, et les deux poids saisis. */
+const peser = ref<string | null>(null)
+const pCru = ref('')
+const pCuit = ref('')
+const pErr = ref('')
+function ouvrePesee(foodId: string) {
+  peser.value = peser.value === foodId ? null : foodId
+  pCru.value = ''
+  pCuit.value = ''
+  pErr.value = ''
+}
+function validePesee(foodId: string) {
+  if (setCookedRatio(foodId, Number(pCru.value), Number(pCuit.value))) {
+    peser.value = null
+    return
+  }
+  pErr.value = 'Ces deux poids ne peuvent pas être une cuisson — pèse la casserole vide d’abord.'
+}
 
 const step = ref<'semaine' | 'courses' | 'cuisine'>('semaine')
 // La fiche d'un plat, ouverte au clic depuis la session de cuisine.
@@ -421,6 +460,43 @@ function useMakeAhead() {
               </span>
             </button>
             <span class="mono nu-cook-n">× {{ d.n }}</span>
+          </div>
+          <!-- Ce qu'on fait UNE FOIS la cuisson finie : répartir. Placé sous le plat
+               parce que c'est là qu'on revient, casserole à la main. -->
+          <div v-for="d in s.dishes" :key="`p-${d.recipeId}`" class="nu-cuit">
+            <template v-for="l in repartition(d.recipeId, d.n)" :key="l.foodId">
+              <div class="nu-cuit-l">
+                <span class="nu-cuit-n">{{ foodName(l.foodId) }}</span>
+                <!-- Les deux échelles sont dites explicitement. « 180 g crus →
+                     180 g par boîte » mélangeait un total et une part, et se lisait
+                     comme une conversion qui ne change rien. -->
+                <span class="mono nu-cuit-v">
+                  {{ l.cruParBoite }} g crus → <b>{{ l.parBoite }} g par boîte</b>
+                  <small class="muted">
+                    en tout : {{ l.cruTotal }} g crus → {{ l.totalCuit }} g cuits
+                  </small>
+                </span>
+                <button class="nu-cuit-btn" :class="{ set: l.mesure }" @click="ouvrePesee(l.foodId)">
+                  {{ l.mesure ? '✓ ta pesée' : 'estimé' }}
+                </button>
+              </div>
+              <p v-if="l.note && !l.mesure" class="muted nu-cuit-note">{{ l.note }}</p>
+              <div v-if="peser === l.foodId" class="nu-cuit-form">
+                <p class="muted">
+                  Pèse la casserole une fois, l’app retiendra <b>ton</b> ratio pour cet aliment —
+                  ta cuisson n’est pas celle d’un tableau.
+                </p>
+                <div class="nu-quick">
+                  <input v-model="pCru" type="number" inputmode="numeric" min="0" placeholder="g crus">
+                  <input v-model="pCuit" type="number" inputmode="numeric" min="0" placeholder="g cuits">
+                  <button class="btn" @click="validePesee(l.foodId)">✓</button>
+                </div>
+                <p v-if="pErr" class="nu-errors">{{ pErr }}</p>
+                <button v-if="l.mesure" class="nu-cuit-btn" @click="clearCookedRatio(l.foodId); peser = null">
+                  ↺ Revenir à l’estimation
+                </button>
+              </div>
+            </template>
           </div>
         </div>
 

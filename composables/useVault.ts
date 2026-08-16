@@ -179,6 +179,13 @@ export function useVault() {
       }
     }
     else if (plan.kind === 'seance') { training.assign(plan.date, plan.sessionId) }
+    else if (plan.kind === 'aliment') {
+      // Même porte que l'écran d'édition : `addFood` crée, `patchFood` fusionne. Un
+      // aliment livré n'est jamais réécrit, il reçoit un patch — c'est ce qui permet
+      // de revenir à la fiche d'origine si la correction se révèle mauvaise.
+      if (plan.id) nutrition.patchFood(plan.id, plan.aliment as never)
+      else nutrition.addFood({ ...plan.aliment, custom: true } as never)
+    }
     else if (plan.kind === 'recette') {
       if (plan.id) nutrition.patchRecipe(plan.id, plan.recette)
       else nutrition.addRecipe({ ...plan.recette, custom: true })

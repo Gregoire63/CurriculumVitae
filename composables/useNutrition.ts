@@ -8,6 +8,7 @@ import {
   shoppingFromWeek, slugify, stockOf, weekDaysOn,
 } from '~/lib/nutritionStats'
 import { freeMealFrom, withFreeMeals } from '~/lib/freeMeal'
+import { ratioFromWeighing } from '~/lib/cooked'
 import type { FreeMeal } from '~/lib/freeMeal'
 import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { isoOf } from '~/utils/sportStats'
@@ -38,6 +39,7 @@ const ADJUST_KEY = 'gr-nutri-adjust-v1' // ajustement du soir confirmé, par dat
 const FATPCT_KEY = 'gr-nutri-fatpct-v1' // taux de MG réellement acheté, par laitier
 const FREE_KEY = 'gr-nutri-libre-v1' // repas du dehors, par date et créneau
 const FREEPRESET_KEY = 'gr-nutri-libre-mes-v1' // repas du dehors gardés pour resservir
+const COOKED_KEY = 'gr-nutri-cuit-v1' // ratios cru → cuit relevés à la balance
 // Clé de l'ancienne sélection « plat → portions », remplacée par la semaine type.
 // Les portions ne se saisissent plus à la main : elles se comptent dans la semaine.
 const LEGACY_SEL_KEY = 'gr-nutri-selection-v1'
@@ -112,6 +114,15 @@ const fatPct = ref<Record<string, number>>({})
 const freeMeals = ref<Record<string, Record<string, FreeMeal>>>({})
 /** Ceux qu'on a demandé à garder : le kebab du coin revient plus d'une fois. */
 const freePresets = ref<FreeMeal[]>([])
+/**
+ * Ratios cru → cuit relevés à la balance, par aliment.
+ *
+ * Stockés à part des `foodPatches`, pour la même raison que le taux de matière
+ * grasse : un patch fige des macros, ceci est une MESURE de cuisson. Les macros du
+ * riz ne changent pas parce qu'on l'a fait cuire deux minutes de plus — seule sa
+ * masse change, et c'est exactement ce qu'on garde ici.
+ */
+const cookedRatios = ref<Record<string, number>>({})
 let hydrated = false
 let seq = 0
 function safeParse<T>(raw: string | null, fb: T): T {
@@ -153,6 +164,7 @@ export function useNutrition() {
     disabledRecipes.value = safeParse(localStorage.getItem(OFF_KEY), [])
     freeMeals.value = safeParse(localStorage.getItem(FREE_KEY), {})
     freePresets.value = safeParse(localStorage.getItem(FREEPRESET_KEY), [])
+    cookedRatios.value = safeParse(localStorage.getItem(COOKED_KEY), {})
     const w = safeParse<unknown>(localStorage.getItem(WEEK_KEY), null)
     if (isWeek(w)) week.value = w
     const pm = localStorage.getItem(PREP_KEY)
@@ -612,6 +624,28 @@ export function useNutrition() {
     write(FREEPRESET_KEY, freePresets.value)
   }
 
+  // ─── Cuisson : ce que pèse un féculent une fois cuit ───────────────────────
+  /**
+   * Enregistre une pesée, ou l'efface pour revenir à la valeur de référence.
+   *
+   * On stocke le RATIO et non les deux poids : c'est lui qui resservira sur une
+   * casserole d'une autre taille, et garder « 750 g → 1 950 g » obligerait à
+   * refaire la division à chaque affichage.
+   */
+  function setCookedRatio(foodId: string, cruG: number, cuitG: number): boolean {
+    const r = ratioFromWeighing(cruG, cuitG)
+    if (!r) return false
+    cookedRatios.value = { ...cookedRatios.value, [foodId]: r }
+    write(COOKED_KEY, cookedRatios.value)
+    return true
+  }
+  function clearCookedRatio(foodId: string) {
+    const next = { ...cookedRatios.value }
+    delete next[foodId]
+    cookedRatios.value = next
+    write(COOKED_KEY, cookedRatios.value)
+  }
+
   // ─── Repas mangés ─────────────────────────────────────────────────────────
   const isEaten = (iso: string, slot: string) => (eaten.value[iso] ?? []).includes(slot)
   function toggleEaten(iso: string, slot: string) {
@@ -706,7 +740,7 @@ export function useNutrition() {
       extras: extras.value, userFoods: userFoods.value, foodPatches: foodPatches.value, fatPct: fatPct.value,
       userRecipes: userRecipes.value, recipePatches: recipePatches.value,
       disabledRecipes: disabledRecipes.value,
-      freeMeals: freeMeals.value, freePresets: freePresets.value,
+      freeMeals: freeMeals.value, freePresets: freePresets.value, cookedRatios: cookedRatios.value,
     }
   }
   /** Restauration depuis une sauvegarde. Tout est optionnel : un ancien fichier passe sans erreur. */
@@ -740,6 +774,7 @@ export function useNutrition() {
     if (Array.isArray(n.disabledRecipes)) { disabledRecipes.value = n.disabledRecipes; write(OFF_KEY, disabledRecipes.value) }
     if (n.freeMeals) { freeMeals.value = n.freeMeals; write(FREE_KEY, freeMeals.value) }
     if (Array.isArray(n.freePresets)) { freePresets.value = n.freePresets; write(FREEPRESET_KEY, freePresets.value) }
+    if (n.cookedRatios) { cookedRatios.value = n.cookedRatios as Record<string, number>; write(COOKED_KEY, cookedRatios.value) }
     // Sauvegardes de la version précédente : les séances annulées étaient une liste à part.
     if (Array.isArray(n.skipped)) {
       for (const iso of n.skipped) setOverride(iso, { gym: false })
@@ -749,6 +784,7 @@ export function useNutrition() {
     prices, checked, eaten, baskets, pricedCount, prepMode, picked,
     week, overrides, extras, userFoods, userRecipes, disabledRecipes, library,
     freeMeals, freePresets, freeMealFor, setFreeMeal, addFreePreset, removeFreePreset,
+    cookedRatios, setCookedRatio, clearCookedRatio,
     hydrate, dayPlanFor,
     setWeekDay, resetWeek, dayFor, setOverride, clearOverride, hasOverride, ttConfirmed, stepsFor, setSteps,
     menus, activeMenu, activeWeek, menuFor, appliedFrom, gymDays,

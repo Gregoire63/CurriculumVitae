@@ -1,9 +1,10 @@
 import { addProposal, readMirror, readProposals, verifyToken } from '../utils/vault'
 import { noteCall } from '../utils/trace'
-import { DAY_NAMES, KIND_GROUP_LABELS, builtinWeeks, dowIndex, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, recipeForSlot } from '~/lib/nutritionStats'
+import { DAY_NAMES, KIND_GROUP_LABELS, builtinWeeks, dowIndex, expandItems, keepsOf, macrosOf, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, recipeForSlot, roundMacros } from '~/lib/nutritionStats'
+import { cookedWeight } from '~/lib/cooked'
 import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { getAt } from '~/lib/pointer'
-import { checkFieldFix, twinPath } from '~/lib/proposals'
+import { checkFieldFix, foodFor, recipeFor, twinPath } from '~/lib/proposals'
 import { weightTrend } from '~/lib/bilan'
 import { PROGRAM } from '~/data/sportProgram'
 import { VARIANTS } from '~/data/exerciseVariants'
@@ -173,6 +174,14 @@ const TOOLS = [
     },
   },
   {
+    name: 'recette',
+    description: 'Le contenu RÉEL d\'un plat : ses ingrédients avec leurs grammages (crus), sa préparation, ses macros, sa conservation, sa sauce. Indispensable avant de modifier une recette — « plats » ne donne que les noms. Sans argument, rend la liste des identifiants.',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string', description: 'Identifiant du plat, ex. « boite-a »' } },
+    },
+  },
+  {
     name: 'aliments',
     description: 'Catalogue des aliments : identifiant, nom, macros pour 100 g, conservation. Ce sont les seuls identifiants valides dans les ingrédients d\'une recette — ne jamais en inventer un.',
     inputSchema: {
@@ -215,7 +224,7 @@ const TOOLS = [
         resume: { type: 'string', description: 'Une phrase lisible, ex. « Vendredi midi : Boîte B → Saumon patate douce »' },
         cible: {
           type: 'string',
-          enum: ['semaine', 'semaine-type', 'plat', 'planning-seance', 'recette', 'repas-libre', 'correction', 'autre'],
+          enum: ['semaine', 'semaine-type', 'plat', 'planning-seance', 'recette', 'aliment', 'repas-libre', 'correction', 'autre'],
           description: 'Ce qui est touché',
         },
         detail: {
@@ -227,7 +236,8 @@ const TOOLS = [
             '• repas-libre : { date: "AAAA-MM-JJ", slot: "lunch", vers: { label: "Kebab galette + frites", kcal: 1050, p: 45, g: 95, l: 50 } } — un repas qu\'il n\'a pas cuisiné, qui REMPLACE le plat prévu de ce créneau et porte ses propres macros. « vers: null » le retire et rend le créneau au plat prévu. C\'est la seule forme où tu fournis des chiffres estimés : donne les quatre, les protéines surtout, et dis dans le résumé sur quoi tu t\'es basé.',
             '• semaine : { lundi: "AAAA-MM-JJ", nom: "…", jours: [ { lunch: "<id>", dinner: "<id>", off?: true }, … 7 entrées, lundi en premier ] }',
             '• semaine-type : { seances?: ["s1","s2",null,"s3","s4",null,null], salle?: [7 booléens], teletravail?: [7 booléens] } — lundi en premier, les trois axes sont indépendants',
-            '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", items: [ { food: "<id d\'aliment>", g: 120 } ] }',
+            '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", sauce?: "<id de sauce>", keeps?: 4, items: [ { food: "<id d\'aliment>", g: 120 } ] } — « items » REMPLACE la liste, envoie-la complète. Lis d\'abord la recette avec l\'outil « recette » : sans ça tu effaces des ingrédients sans le savoir. « steps » est la marche à suivre du batch cooking, « keeps » la conservation en jours — c\'est elle qui décide dans quelle session de cuisine le plat tombe.',
+            '• aliment : { id?: "<id existant pour corriger>", nom, cat: "viandes"|"poissons"|"oeufs"|"laitiers"|"feculents"|"legumes"|"fruits"|"grasses"|"aromates"|"complements"|"boissons", kcal, p, g, l, cook?: "6 min vapeur", buy?: "1 c. à café = 5 g", keeps?: 5 } — valeurs POUR 100 g, viandes et féculents crus. Les macros doivent expliquer les calories à 25 % près, sinon c\'est refusé : une étiquette mal recopiée ne fait rien planter, elle fausse les calories pour toujours.',
             '• correction, série : { quoi: "serie", exercice: "<id>", date: "AAAA-MM-JJ", serie: 0, de: { w, r }, vers: { w, r } }',
             '• correction, pesée : { quoi: "pesee", date: "AAAA-MM-JJ", de: 77.4, vers: 76.9 } — « vers: null » supprime la pesée',
             '• correction, champ quelconque : { quoi: "champ", chemin: "/sessions/12/durationMin", de: 50, vers: 65 } — n\'importe quelle valeur SIMPLE de la sauvegarde (nombre, texte, booléen). Le chemin doit exister, on ne crée rien, et on ne remplace jamais un objet ou un tableau entier. Lis-le d\'abord avec l\'outil « champ ».',
@@ -240,11 +250,71 @@ const TOOLS = [
   },
 ]
 
+/**
+ * Pourquoi une proposition a été refusée, en pointant la cause la plus probable.
+ *
+ * « Proposition invalide » ferait retenter au hasard. Les trois causes qui reviennent
+ * — un identifiant d'aliment qui n'existe pas, des macros qui ne collent pas aux
+ * calories, une catégorie inventée — se distinguent en quelques lignes, et chacune
+ * dit quoi corriger.
+ */
+function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnown: (id: string) => boolean, recipeKnown: (id: string) => boolean }): string {
+  if (cible === 'recette') {
+    const items = Array.isArray(d.items) ? d.items : (Array.isArray(d.ingredients) ? d.ingredients : [])
+    const inconnus = items
+      .map(it => (it && typeof it === 'object' ? (it as Record<string, unknown>).food ?? (it as Record<string, unknown>).aliment : null))
+      .filter((f): f is string => typeof f === 'string' && !ctx.foodKnown(f))
+    if (inconnus.length) {
+      return `Ces aliments n'existent pas : ${inconnus.join(', ')}. Appelle « aliments » pour les identifiants valides, ou propose-les d'abord avec « cible: aliment ».`
+    }
+    if (!items.length) return 'Une recette a besoin d\'au moins un ingrédient, avec son identifiant et ses grammes.'
+    if (typeof d.id === 'string' && d.id && !ctx.recipeKnown(d.id)) return `Le plat « ${d.id} » n'existe pas. Sans « id » tu en crées un nouveau ; avec, il doit exister.`
+    const sauce = d.sauce ?? d.pot
+    if (typeof sauce === 'string' && !ctx.recipeKnown(sauce)) return `La sauce « ${sauce} » n'existe pas. Appelle « plats » avec kind: "sauce".`
+    return 'Recette refusée : vérifie le nom, le type (pdj, boite, diner, collation, sauce) et les grammages.'
+  }
+  const n = (v: unknown) => (typeof v === 'number' ? v : Number(v))
+  const kcal = n(d.kcal ?? d.calories)
+  const somme = n(d.p ?? d.proteines) * 4 + n(d.g ?? d.glucides) * 4 + n(d.l ?? d.lipides) * 9
+  if (Number.isFinite(kcal) && Number.isFinite(somme) && kcal > 0 && Math.abs(somme - kcal) > kcal * 0.25 + 20) {
+    return `Les macros donnent ${Math.round(somme)} kcal, pas ${kcal}. Une étiquette mal recopiée ne fait rien planter, elle fausse les calories pour toujours — relis-la.`
+  }
+  return 'Aliment refusé : il faut un nom, une catégorie valide (viandes, poissons, oeufs, laitiers, feculents, legumes, fruits, grasses, aromates, complements, boissons) et les quatre valeurs POUR 100 g.'
+}
+
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   if (name === 'proposer_modification') {
     const resume = String(args.resume ?? '').trim()
     if (!resume) throw new Error('« resume » est obligatoire : c\'est la phrase que Grégoire lira avant de valider.')
     const detail = (args.detail ?? {}) as Record<string, unknown>
+    /**
+     * Un aliment ou une recette vérifiés AVANT le dépôt.
+     *
+     * Même raisonnement que pour les corrections de champ : l'application refusera
+     * de toute façon une proposition qu'elle ne sait pas lire, mais elle le fera
+     * dans la boîte de réception, et c'est Grégoire qui paiera l'aller-retour. Le
+     * serveur a le miroir sous la main, donc la bibliothèque : il peut trancher ici.
+     *
+     * Le contrôle est le MÊME code que celui de l'application — `foodFor` et
+     * `recipeFor` — nourri des mêmes identifiants. Deux validateurs auraient
+     * divergé, et c'est toujours celui qui n'est pas testé qui laisse passer.
+     */
+    const cible = String(args.cible ?? '')
+    if (cible === 'aliment' || cible === 'recette') {
+      const m = await readMirror()
+      const nut = ((m?.data as Record<string, unknown>)?.nutrition ?? {}) as Record<string, unknown>
+      const recettes = mergeRecipes(
+        asArray(nut.userRecipes) as never,
+        (nut.recipePatches ?? {}) as never,
+        asArray(nut.disabledRecipes) as never,
+      )
+      const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
+      const ctx = { foodKnown: (id: string) => !!foods[id], recipeKnown: (id: string) => !!recettes[id] }
+      const brut = { id: '', at: '', action: cible, summary: resume, patch: detail, status: 'pending' as const }
+      const plan = cible === 'aliment' ? foodFor(brut, ctx) : recipeFor(brut, ctx)
+      if (!plan) throw new Error(refusMessage(cible, detail, ctx))
+    }
+
     // Sur « quoi », pas sur « cible » : l'intention est déjà sans ambiguïté, et une
     // cible mal choisie ne doit pas faire sauter la vérification.
     if (detail.quoi === 'champ') {
@@ -352,6 +422,65 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         .map(f => ({ id: f.id, nom: f.name, cat: f.cat, pour_100g: { kcal: f.kcal, p: f.p, g: f.g, l: f.l } }))
         .sort((a, b) => a.nom.localeCompare(b.nom))
       return { total: list.length, aliments: list }
+    }
+    case 'recette': {
+      const nut = (d.nutrition ?? {}) as Record<string, unknown>
+      const recettes = mergeRecipes(
+        asArray(nut.userRecipes) as never,
+        (nut.recipePatches ?? {}) as never,
+        asArray(nut.disabledRecipes) as never,
+      )
+      const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
+      const id = String(args.id ?? '')
+      if (!id) {
+        return {
+          rappel: 'Appelle « recette » avec un id pour voir les ingrédients et les grammages.',
+          plats: Object.values(recettes).filter(r => !r.disabled).map(r => ({ id: r.id, nom: r.name, type: r.kind })),
+        }
+      }
+      const r = recettes[id]
+      if (!r) throw new Error(`Plat inconnu : ${id}. Appelle « recette » sans argument pour la liste.`)
+
+      /**
+       * Les grammages sont CRUS, et le poids cuit est donné à côté quand il existe.
+       *
+       * Les tables de composition mesurent le cru : c'est la seule référence qui ne
+       * dépende pas de la casserole, et c'est elle qui donne les macros justes. Mais
+       * on ne répartit pas du riz cru entre cinq boîtes, d'où la conversion — pour
+       * les féculents seulement, les seuls qu'on ne peut pas compter à l'unité.
+       */
+      const ligne = (it: { food: string, g: number }) => {
+        const f = foods[it.food]
+        const cuit = cookedWeight(it.food, it.g, { mesures: (nut.cookedRatios ?? {}) as Record<string, number> })
+        return {
+          aliment: it.food,
+          nom: f?.name ?? it.food,
+          grammes_crus: it.g,
+          ...(cuit ? { grammes_cuits: cuit } : {}),
+          ...(f?.cook ? { cuisson: f.cook } : {}),
+        }
+      }
+      const sauce = r.sauce ? recettes[r.sauce] : null
+      return {
+        id: r.id,
+        nom: r.name,
+        type: r.kind,
+        perso: !!r.custom,
+        batch_cooking: r.batch,
+        // La conservation EFFECTIVE, pas seulement le champ posé sur la recette :
+        // faute de valeur explicite, elle est déduite du plus fragile des
+        // ingrédients. C'est elle qui décide dans quelle session de cuisine le plat
+        // tombe, donc c'est elle qu'il faut lire avant de proposer un changement.
+        conservation_jours: keepsOf(r, { foods, recipes: recettes }),
+        conservation_posee: typeof r.keeps === 'number' ? r.keeps : null,
+        preparation: r.steps || null,
+        // `expandItems` ajoute les ingrédients de la sauce : ce sont eux qui comptent
+        // dans les macros, donc les cacher rendrait le total incompréhensible.
+        ingredients: r.items.map(ligne),
+        sauce: sauce ? { id: sauce.id, nom: sauce.name, preparation: sauce.steps || null, ingredients: sauce.items.map(ligne) } : null,
+        macros_portion: roundMacros(macrosOf(expandItems(r, { foods, recipes: recettes }), foods)),
+        rappel: 'Grammages CRUS — c\'est la référence des macros. Pour modifier, renvoie la liste COMPLÈTE des ingrédients : elle remplace l\'ancienne.',
+      }
     }
     case 'menus': {
       const nut = (d.nutrition ?? {}) as Record<string, unknown>
