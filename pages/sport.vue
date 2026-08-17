@@ -344,14 +344,19 @@ const cancelPromptOpen = ref(false)
 function askCancel() { cancelPromptOpen.value = true }
 
 /**
- * Le geste « retour » ne doit pas fermer l'application en pleine séance.
+ * Le geste « retour » referme la feuille au lieu de quitter l'application.
  *
  * /sport est la première page de l'historique de la PWA : un balayage arrière n'a
- * rien où revenir, il sort. La séance est sauvegardée en continu, donc rien n'est
- * perdu — mais on l'ignore au moment où l'écran devient noir, un pied sous la barre.
- * Voir composables/useBackGuard.ts pour le mécanisme.
+ * rien où revenir, il sort. On lui donne donc quelque chose à consommer, et il fait
+ * exactement ce que fait la poignée — `collapseSession`, c'est-à-dire replier la
+ * feuille sans rien arrêter, ou, en pleine modification d'une séance enregistrée,
+ * ouvrir la confirmation d'abandon qui existe déjà pour ce cas.
+ *
+ * Armé sur la feuille OUVERTE et non sur la séance : une fois la feuille repliée, la
+ * séance continue mais le retour redevient le retour. C'est ce qu'on attend d'un
+ * deuxième geste de suite, et ça évite d'enfermer l'utilisateur dans l'application.
  */
-const backGuard = useBackGuard(computed(() => !!activeSession.value))
+useBackGuard(computed(() => !!activeSession.value && sheetOpen.value), () => collapseSession())
 
 /**
  * L'exercice dont on valide la « reprise en main ».
@@ -366,12 +371,6 @@ const swapEx = computed(() => activeSession.value?.exercises.find(e => e.id === 
 function confirmSwap() {
   if (swapAsk.value) toggleSwap(swapAsk.value)
   swapAsk.value = null
-}
-function quitAnyway() {
-  // On ne jette PAS la séance : on la réduit. Le brouillon reste en place, la
-  // mini-feuille la garde sous la main, et rien de ce qui a été saisi ne disparaît
-  // à cause d'un geste involontaire.
-  backGuard.leave(() => animateSheetDown())
 }
 function confirmCancel() {
   cancelPromptOpen.value = false
@@ -1376,25 +1375,9 @@ onUnmounted(() => {
       </div>
     </transition>
 
-    <!-- Retour involontaire pendant une séance. Même popup que l'annulation :
-         c'est le même geste de confirmation, il n'a pas à s'apprendre deux fois. -->
-    <transition name="pop">
-      <div v-if="backGuard.asking.value" class="confirm-overlay" @click.self="backGuard.stay()">
-        <div class="confirm-box">
-          <div class="confirm-emoji" aria-hidden="true">⏸️</div>
-          <div class="confirm-title">Ta séance est en cours</div>
-          <div class="confirm-text">
-            Le retour allait fermer l'application. Tes séries sont enregistrées au fur et à
-            mesure — tu les retrouveras — mais tu peux aussi simplement réduire la séance
-            et la garder sous la main.
-          </div>
-          <div class="confirm-actions">
-            <button class="btn confirm-keep" @click="backGuard.stay()">Continuer la séance</button>
-            <button class="confirm-yes" @click="quitAnyway">Réduire la séance</button>
-          </div>
-        </div>
-      </div>
-    </transition>
+    <!-- Le geste « retour » n'ouvre plus de carte : il replie la feuille, comme la
+         poignée. La seule question qu'il pose encore est celle de l'abandon des
+         modifications — et c'est la carte ci-dessus, celle qui existait déjà. -->
 
     <!-- Le commentaire d'un exercice, en fenêtre.
          `persistent` : on est en train d'écrire. Une pression à côté du champ, sur
