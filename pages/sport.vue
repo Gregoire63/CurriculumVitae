@@ -236,6 +236,44 @@ const TABS: { id: View; icon: string; label: string }[] = [
 function showFlash(msg: string) { flash.value = msg; setTimeout(() => { flash.value = '' }, 3000) }
 const go = (v: View) => { view.value = v }
 
+/**
+ * L'onglet ouvert survit au rechargement.
+ *
+ * On repartait de l'accueil à chaque fois. Ce n'est pas grave une fois ; ça l'est
+ * quand on rafraîchit en plein Journal pour vérifier une donnée, ou que le
+ * téléphone recharge l'onglet tout seul après l'avoir gelé — ce qu'Android fait
+ * volontiers. On revenait alors sur un écran qu'on n'avait pas demandé, et il
+ * fallait refaire le chemin.
+ *
+ * La feuille de séance, elle, est restaurée par le brouillon (`restoreDraft`) : elle
+ * se rouvre avec les séries déjà saisies. Les deux ensemble rendent le rechargement
+ * invisible.
+ */
+const VIEW_KEY = 'gr-view-v1'
+const IS_VIEW = (v: unknown): v is View => TABS.some(t => t.id === v)
+if (import.meta.client) {
+  watch(view, (v) => { try { localStorage.setItem(VIEW_KEY, v) } catch { /* stockage indisponible */ } })
+}
+function restoreView() {
+  if (!import.meta.client) return
+  try {
+    const v = localStorage.getItem(VIEW_KEY)
+    // Validé plutôt que casté : un onglet supprimé d'une version à l'autre laisserait
+    // sinon l'application sur un écran qui n'existe plus, c'est-à-dire sur du vide.
+    if (IS_VIEW(v)) view.value = v
+  } catch { /* stockage indisponible */ }
+}
+
+/**
+ * Le geste « retour » depuis un onglet ramène à l'accueil.
+ *
+ * C'est la dernière marche avant la sortie : accueil, rien d'ouvert, retour → on
+ * quitte. Partout ailleurs, le retour ferme quelque chose. Enregistré ici, donc SOUS
+ * les feuilles et les fenêtres, qui s'inscrivent plus tard et se ferment donc
+ * d'abord — voir composables/useBackStack.ts.
+ */
+useBackGuard(computed(() => view.value !== 'home'), () => go('home'))
+
 // ─────────── Chrono séance ───────────
 // La durée tourne tant qu'une séance est active (même réduite en mini-feuille),
 // pour l'afficher en direct dans la barre « séance en cours ».
@@ -358,6 +396,14 @@ function askCancel() { cancelPromptOpen.value = true }
  */
 useBackGuard(computed(() => !!activeSession.value && sheetOpen.value), () => collapseSession())
 
+// Les trois cartes de confirmation et l'aperçu en lecture seule ne sont pas des
+// composants `Sheet` : ce sont des `v-if` sur des variables de cette page, écrits à
+// la main. Elles n'héritent donc de rien et doivent le dire elles-mêmes. Inscrites
+// APRÈS la feuille de séance : une confirmation qui s'ouvre par-dessus elle
+// s'inscrit plus tard, donc se ferme d'abord.
+useBackGuard(cancelPromptOpen, () => { cancelPromptOpen.value = false })
+useBackGuard(computed(() => !!previewSession.value), () => { previewSession.value = null })
+
 /**
  * L'exercice dont on valide la « reprise en main ».
  *
@@ -368,6 +414,7 @@ useBackGuard(computed(() => !!activeSession.value && sheetOpen.value), () => col
  */
 const swapAsk = ref<string | null>(null)
 const swapEx = computed(() => activeSession.value?.exercises.find(e => e.id === swapAsk.value) ?? null)
+useBackGuard(computed(() => !!swapEx.value), () => { swapAsk.value = null })
 function confirmSwap() {
   if (swapAsk.value) toggleSwap(swapAsk.value)
   swapAsk.value = null
@@ -753,7 +800,8 @@ function restoreDraft() {
     openEx.value = s.openEx ?? sess.exercises[0].id
     editReturn.value = s.editReturn || 'home'
     editingRecord.value = s.editingAt ? (sessionLog().find(r => r.at === s.editingAt) || null) : null
-    view.value = 'home'
+    // L'onglet SOUS la feuille n'est plus forcé à l'accueil : `restoreView` a déjà
+    // remis celui qu'on avait quitté, et c'est celui-là qu'on retrouve en repliant.
     sheetOpen.value = true // on rouvre directement la séance en cours (feuille ouverte)
   } catch { try { localStorage.removeItem(DRAFT_KEY) } catch { /* ignore */ } }
 }
@@ -833,6 +881,9 @@ onMounted(() => {
   }
   watchWithingsReturn()
   hydrateProfile()
+  // L'onglet D'ABORD, la séance ensuite : `restoreDraft` rouvre la feuille par-dessus,
+  // et c'est bien l'onglet restauré qu'on doit retrouver en la repliant.
+  restoreView()
   restoreDraft() // rouvre la séance en cours après un refresh accidentel
   adoptWithings()
   // Les pas de la balance à l'OUVERTURE de l'app, plus seulement en visitant le

@@ -27,6 +27,11 @@ const camera = ref<HTMLInputElement | null>(null)
 const thumb = ref<string | null>(null)
 const fullUrl = ref<string | null>(null)
 const open = ref(false)
+// L'aperçu plein écran n'est pas une `Sheet` : il n'hérite donc pas du geste
+// « retour » que `useOverlay` donne à toutes les feuilles. Sans ça, refermer une
+// photo au retour quitterait l'application — le pire endroit pour ça, puisqu'on
+// l'ouvre d'un doigt en pleine liste de plats.
+useBackGuard(open, () => { open.value = false })
 
 const meta = computed(() => metaOf(props.id))
 const loading = computed(() => busy.value === props.id)
