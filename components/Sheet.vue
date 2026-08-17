@@ -1,23 +1,5 @@
-<script lang="ts">
-/**
- * Pile des feuilles ouvertes.
- *
- * Elle est dans un bloc `<script>` CLASSIQUE et non dans `<script setup>`, et c'est
- * tout l'intérêt : le corps d'un `<script setup>` est compilé en fonction `setup()`,
- * donc réexécuté à chaque instance. Une pile déclarée là-bas donnerait un tableau
- * vide par feuille — ce qui était exactement le bug : Échap fermait les DEUX feuilles
- * empilées d'un coup, chacune se croyant seule et donc au sommet.
- *
- * Ici, le module n'est évalué qu'une fois : toutes les instances partagent la pile,
- * et seule celle du dessus répond à Échap.
- */
-const stack: symbol[] = []
-export default {}
-</script>
-
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
-import { useScrollLock } from '~/composables/useScrollLock'
+import { useOverlay } from '~/composables/useOverlay'
 import { useSheetDrag } from '~/composables/useSheetDrag'
 
 // LA feuille de l'application. Une seule.
@@ -30,15 +12,17 @@ import { useSheetDrag } from '~/composables/useSheetDrag'
 //
 // Ce composant porte tout ce qui doit être vrai partout :
 //   · le voile, et la fermeture au clic à côté ;
-//   · le verrou de défilement de la page derrière (compteur, pour les feuilles
-//     empilées — une fiche de plat par-dessus la feuille des repas) ;
-//   · la touche Échap ;
+//   · le verrou de défilement de la page derrière, et la touche Échap — partagés
+//     avec les cartes via `useOverlay`, pour que la pile des calques soit UNE seule
+//     pile et qu'Échap ferme réellement celui du dessus ;
 //   · la poignée, et le glissement vers le bas pour fermer ;
 //   · l'en-tête collant avec titre, sous-titre et croix.
 //
 // Ce qu'il ne porte PAS : le contenu, évidemment, mais aussi tout en-tête qui sort de
-// « titre + sous-titre ». Le slot `head` est là pour ça.
-const props = withDefaults(defineProps<{
+// « titre + sous-titre ». Le slot `head` est là pour ça. Et plus la carte centrée :
+// une fenêtre POSÉE SUR l'application est un objet différent d'une feuille qui monte
+// du bas — elle vit dans components/Popup.vue, téléportée dans <body>.
+withDefaults(defineProps<{
   title?: string
   subtitle?: string
   /** Classe ajoutée à la feuille, pour les styles propres à un écran (`rs`, `day-sheet`…). */
@@ -53,8 +37,8 @@ const emit = defineEmits<{ close: [] }>()
 
 const close = () => emit('close')
 
-// La page derrière ne doit pas bouger pendant qu'on lit la feuille.
-const { lock, unlock } = useScrollLock()
+// Verrou de défilement, place dans la pile des calques, sortie au clavier.
+useOverlay(close)
 
 /**
  * Glisser vers le bas pour fermer. La zone de préhension est la poignée — ou le slot
@@ -64,30 +48,6 @@ const { lock, unlock } = useScrollLock()
  * surface, c'est la garantie qu'aucun des deux ne marche.
  */
 const drag = useSheetDrag(close)
-
-const id = Symbol('sheet')
-
-function onKey(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-  // Seule la feuille du dessus se ferme.
-  if (stack.at(-1) !== id) return
-  e.stopPropagation()
-  close()
-}
-
-onMounted(() => {
-  lock()
-  stack.push(id)
-  // Sur `window` et non sur la feuille : le focus peut être n'importe où dedans, et
-  // une feuille qu'on ne peut pas fermer au clavier est une feuille qui piège.
-  window.addEventListener('keydown', onKey)
-})
-onUnmounted(() => {
-  unlock()
-  const i = stack.lastIndexOf(id)
-  if (i >= 0) stack.splice(i, 1)
-  window.removeEventListener('keydown', onKey)
-})
 </script>
 
 <template>

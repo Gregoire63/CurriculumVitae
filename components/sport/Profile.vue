@@ -6,8 +6,7 @@ import { useWithings } from '~/composables/useWithings'
 import { useProfile } from '~/composables/useProfile'
 import { useSnapshot } from '~/composables/useSnapshot'
 import { useRestTimer } from '~/composables/useRestTimer'
-import { useMealReminders } from '~/composables/useMealReminders'
-import { DAY_NAMES, minutesOf, slotsOf } from '~/lib/nutritionStats'
+import { DAY_NAMES } from '~/lib/nutritionStats'
 
 // Vue « Profil » extraite de /sport (chargée à la demande). État partagé via composables.
 const props = defineProps<{ todayIso: string | null, withingsError?: string | null }>()
@@ -40,35 +39,6 @@ const {
 } = useWithings()
 hydrateWithings()
 const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS, watchNotify, watchStatus, setWatchNotify, testWatch } = useRestTimer()
-
-// ─── Rappels de repas ────────────────────────────────────────────────────────
-const meal = useMealReminders()
-onMounted(() => meal.hydrate())
-/**
- * Les deux journées types n'ont pas les mêmes créneaux (la banane d'avant-séance
- * n'existe pas un jour sans salle). On liste l'UNION des deux, sinon un repas
- * resterait invisible dans les réglages selon le jour où on les ouvre.
- */
-const mealSlots = computed(() => {
-  const seen = new Map<string, { id: string, label: string, time: string, gymOnly: boolean }>()
-  for (const s of slotsOf(true)) seen.set(s.id, { id: s.id, label: s.label, time: s.time, gymOnly: true })
-  for (const s of slotsOf(false)) {
-    const prev = seen.get(s.id)
-    if (prev) prev.gymOnly = false
-    else seen.set(s.id, { id: s.id, label: s.label, time: s.time, gymOnly: false })
-  }
-  return [...seen.values()].sort((a, b) => minutesOf(a.time) - minutesOf(b.time))
-})
-const mealStatusLabel = computed(() => ({
-  unsupported: 'Non disponible sur cet appareil',
-  denied: 'Refusées dans les réglages du téléphone',
-  default: 'Permission pas encore demandée',
-  granted: 'Autorisées',
-}[meal.status.value]))
-async function toggleMeals() {
-  if (meal.settings.value.on) await meal.disable()
-  else await meal.enable()
-}
 
 // Relais montre : la fin de repos part en notification téléphone même app ouverte,
 // pour que la montre (FIT 100 S…) la répercute et vibre au poignet.
@@ -225,59 +195,15 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
     <!-- Le coffre : miroir des données et boîte de réception des propositions -->
     <SportVault :snapshot="buildSnapshot" @flash="emit('flash', $event)" />
 
-    <!-- Rappels de repas -->
-    <div class="card">
-      <div class="row-between mb-8">
-        <div class="section-label">Rappels de repas</div>
-        <span class="muted" :class="{ 'export-warn': meal.status.value !== 'granted' }">{{ mealStatusLabel }}</span>
-      </div>
-      <div class="row-between">
-        <span class="muted">Une notification à chaque heure de prise</span>
-        <button class="btn" :class="{ sel: meal.settings.value.on }" @click="toggleMeals">
-          {{ meal.settings.value.on ? 'Activé' : 'Désactivé' }}
-        </button>
-      </div>
-
-      <template v-if="meal.settings.value.on">
-        <div class="nu-rem-list mt-6">
-          <button
-            v-for="s in mealSlots" :key="s.id" type="button"
-            class="nu-rem" :class="{ off: !meal.isSlotOn(s.id) }"
-            @click="meal.toggleSlot(s.id)"
-          >
-            <span class="nu-rem-box" aria-hidden="true" />
-            <span class="nu-rem-time mono">{{ s.time }}</span>
-            <span class="nu-rem-label">{{ s.label }}</span>
-            <span v-if="s.gymOnly" class="nu-rem-tag">jours de salle</span>
-          </button>
-        </div>
-
-        <div class="row-between mt-6">
-          <span class="muted">Prévenir en avance</span>
-          <div class="nav-row">
-            <button
-              v-for="n in [0, 5, 15]" :key="n" class="btn"
-              :class="{ sel: meal.settings.value.lead === n }" @click="meal.setLead(n)"
-            >{{ n === 0 ? 'à l\'heure' : `${n} min` }}</button>
-          </div>
-        </div>
-
-        <div class="nav-row mt-6">
-          <button class="btn flex-1" @click="meal.test()">🔔 Essayer</button>
-        </div>
-      </template>
-
-      <!-- Dire la vérité sur la portée : un rappel auquel on se fie et qui ne vient
-           pas est pire que pas de rappel du tout. -->
-      <div class="muted mt-6">
-        ⚠️ Sans serveur, aucun navigateur ne sait aujourd'hui faire sonner une notification
-        <b>application fermée</b> : l'API qui le permettait a été abandonnée par Chrome.
-        Les rappels partent donc tant que l'application tourne — en arrière-plan suffit.
-        Si le téléphone a mis l'onglet en veille entre-temps, le rappel manqué part
-        <b>dès que tu reprends ton téléphone</b>, en annonçant son retard, jusqu'à 1 h 30
-        après l'heure prévue. Au-delà, il est abandonné plutôt que de sonner à contretemps.
-      </div>
-    </div>
+    <!-- Les rappels de repas ont été retirés.
+         Un minuteur posé dans la page suppose que la page vive jusqu'à l'heure du
+         repas. Elle ne vit pas : Android gèle un onglet en arrière-plan au bout de
+         quelques minutes. Le rappel de 11 h 45 arrivait donc à 12 h 20, au moment
+         de rouvrir l'application — c'est-à-dire quand on n'en avait plus besoin.
+         Faire sonner à l'heure exigeait un serveur (Web Push, clés VAPID, tâche
+         planifiée) : beaucoup d'installation pour un rappel qu'on peut poser en
+         deux gestes dans l'horloge du téléphone. Le module a donc été supprimé
+         plutôt que laissé en place à moitié fiable. -->
 
     <!-- Relais vers la montre connectée (via les notifications du téléphone) -->
     <div class="card">

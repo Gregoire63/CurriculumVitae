@@ -8,10 +8,10 @@ import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
-import { useMealReminders } from '~/composables/useMealReminders'
 import { usePhotos } from '~/composables/usePhotos'
 import { useVault } from '~/composables/useVault'
 import { useSnapshot } from '~/composables/useSnapshot'
+import { WARMUP_REST, fmtRest, restFor } from '~/lib/rest'
 import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf, shiftIso } from '~/utils/sportStats'
 import type { Effort, PrKind } from '~/utils/sportStats'
 import '~/assets/css/sport.css'
@@ -148,18 +148,29 @@ const draftVariant = reactive<Record<string, string>>({})
 // L'exercice dont la feuille « choisir une machine » est ouverte.
 const picking = ref<string | null>(null)
 const pickingEx = computed(() => activeSession.value?.exercises.find(e => e.id === picking.value) ?? null)
-// Le champ n'est pas ouvert en permanence : la carte d'exercice est déjà longue.
-// L'icône le déplie, et un exercice qui porte déjà une note s'ouvre déplié.
-const noteOpen = reactive<Record<string, boolean>>({})
-function toggleNote(id: string) {
-  if (openEx.value !== id) { openEx.value = id; noteOpen[id] = true; return }
-  noteOpen[id] = !noteOpen[id]
+/**
+ * L'exercice dont le commentaire est en cours d'écriture.
+ *
+ * Le champ était déplié DANS la carte, tout en bas, sous les séries et les
+ * sensations. Écrire trois mots demandait donc d'ouvrir la carte, de la faire
+ * défiler jusqu'au bout, puis d'écrire dans un écran qui bougeait sous le clavier
+ * — pour une phrase qu'on tape entre deux séries, une main sur la barre.
+ *
+ * En fenêtre, le geste tient en deux touches : 💬, on écrit, terminé. La carte
+ * n'a plus besoin d'être ouverte, et le champ est au milieu de l'écran, seul.
+ */
+const noting = ref<string | null>(null)
+const notingEx = computed(() => activeSession.value?.exercises.find(e => e.id === noting.value) ?? null)
+/** La fenêtre s'anime en se fermant : on passe par elle plutôt que de couper le `v-if`. */
+const notePopup = ref<{ dismiss: () => void } | null>(null)
+const closeNote = () => (notePopup.value ? notePopup.value.dismiss() : (noting.value = null))
+function clearNote(id: string) {
+  delete draftNote[id]
+  closeNote()
 }
 /** Ce qui avait été noté la dernière fois sur cet exercice. */
 const previousNote = (id: string) => lastPerf(id)?.note ?? null
 const sessionStart = ref(0)
-const plateOpen = ref(false)
-const ormOpen = ref(false)
 // Édition d'une séance déjà enregistrée (au lieu d'en démarrer une neuve)
 const editingRecord = ref<SessionRecord | null>(null)
 const editReturn = ref<View>('home')
@@ -331,6 +342,37 @@ function requestCollapse() { if (!dragMoved) collapseSession() } // tap sur la p
 // ─────────── Popup « annuler la séance » (remplace le confirm() natif) ────────
 const cancelPromptOpen = ref(false)
 function askCancel() { cancelPromptOpen.value = true }
+
+/**
+ * Le geste « retour » ne doit pas fermer l'application en pleine séance.
+ *
+ * /sport est la première page de l'historique de la PWA : un balayage arrière n'a
+ * rien où revenir, il sort. La séance est sauvegardée en continu, donc rien n'est
+ * perdu — mais on l'ignore au moment où l'écran devient noir, un pied sous la barre.
+ * Voir composables/useBackGuard.ts pour le mécanisme.
+ */
+const backGuard = useBackGuard(computed(() => !!activeSession.value))
+
+/**
+ * L'exercice dont on valide la « reprise en main ».
+ *
+ * Le bouton ne bascule plus directement. Ce réglage remet les records et la
+ * progression à zéro à partir de cette séance : c'est irréversible dans les
+ * courbes, et une icône seule ne peut pas porter ça. On explique dans la carte,
+ * au moment où la question se pose.
+ */
+const swapAsk = ref<string | null>(null)
+const swapEx = computed(() => activeSession.value?.exercises.find(e => e.id === swapAsk.value) ?? null)
+function confirmSwap() {
+  if (swapAsk.value) toggleSwap(swapAsk.value)
+  swapAsk.value = null
+}
+function quitAnyway() {
+  // On ne jette PAS la séance : on la réduit. Le brouillon reste en place, la
+  // mini-feuille la garde sous la main, et rien de ce qui a été saisi ne disparaît
+  // à cause d'un geste involontaire.
+  backGuard.leave(() => animateSheetDown())
+}
 function confirmCancel() {
   cancelPromptOpen.value = false
   animateSheetDown(() => clearActive()) // la feuille glisse vers le bas puis se ferme
@@ -429,7 +471,6 @@ function startSession(s: Session) {
   for (const k of Object.keys(draftEffort)) delete draftEffort[k]
   for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   for (const k of Object.keys(draftNote)) delete draftNote[k]
-  for (const k of Object.keys(noteOpen)) delete noteOpen[k]
   for (const k of Object.keys(draftVariant)) delete draftVariant[k]
   sessionNote.value = ''
   for (const e of s.exercises) draft[e.id] = prefillRows(e)
@@ -452,7 +493,6 @@ function editSession(rec: SessionRecord) {
   for (const k of Object.keys(draftEffort)) delete draftEffort[k]
   for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   for (const k of Object.keys(draftNote)) delete draftNote[k]
-  for (const k of Object.keys(noteOpen)) delete noteOpen[k]
   for (const k of Object.keys(draftVariant)) delete draftVariant[k]
   sessionNote.value = rec.note ?? ''
   const bw = latestWeight.value ?? 0
@@ -460,7 +500,7 @@ function editSession(rec: SessionRecord) {
     const entry = rec.entries.find(en => en.exId === e.id)
     if (entry && isEffort(entry.effort)) draftEffort[e.id] = entry.effort
     if (entry?.swap) draftSwap[e.id] = true
-    if (entry?.note) { draftNote[e.id] = entry.note; noteOpen[e.id] = true }
+    if (entry?.note) draftNote[e.id] = entry.note
     if (entry?.variant) draftVariant[e.id] = entry.variant
     if (entry && entry.sets.length) {
       draft[e.id] = entry.sets.map(st => ({
@@ -518,24 +558,9 @@ function setLabel(rows: { warm: boolean }[], i: number) {
   for (let k = 0; k <= i; k++) if (!rows[k].warm) n++
   return 'S' + n
 }
-/**
- * Repos après une série d'ÉCHAUFFEMENT. Court, mais pas nul : il faut bien le temps
- * de changer les disques, et sans décompte on traîne ou on enchaîne trop vite. Un
- * échauffement ne se récupère pas comme une série lourde — d'où les 45 secondes
- * plutôt que les deux à trois minutes d'une série de travail.
- */
-const WARMUP_REST = 45
-
-function restForReps(reps: string): number {
-  const nums = reps.match(/\d+/g)
-  const top = nums ? parseInt(nums[nums.length - 1], 10) : 12
-  if (top <= 8) return 180
-  if (top <= 12) return 120
-  return 75
-}
-function toggleSet(s: { done: boolean; warm: boolean }, reps: string) {
+function toggleSet(s: { done: boolean; warm: boolean }, e: Exercise) {
   s.done = !s.done
-  if (s.done) startRest(s.warm ? WARMUP_REST : restForReps(reps))
+  if (s.done) startRest(s.warm ? WARMUP_REST : restFor(e))
 }
 type DraftRow = { w: string; r: string; done: boolean; warm: boolean; w2: string; r2: string }
 // Charge d'échauffement d'un exercice, d'après la série de travail la plus lourde
@@ -568,7 +593,6 @@ function clearActive() {
   for (const k of Object.keys(draftEffort)) delete draftEffort[k]
   for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   for (const k of Object.keys(draftNote)) delete draftNote[k]
-  for (const k of Object.keys(noteOpen)) delete noteOpen[k]
   for (const k of Object.keys(draftVariant)) delete draftVariant[k]
   sessionNote.value = ''
   sprintDraft.value = []
@@ -712,7 +736,6 @@ function restoreDraft() {
     }
     for (const k of Object.keys(draftSwap)) delete draftSwap[k]
   for (const k of Object.keys(draftNote)) delete draftNote[k]
-  for (const k of Object.keys(noteOpen)) delete noteOpen[k]
   for (const k of Object.keys(draftVariant)) delete draftVariant[k]
     if (s.draftSwap && typeof s.draftSwap === 'object') {
       for (const k of Object.keys(s.draftSwap)) draftSwap[k] = true
@@ -722,7 +745,7 @@ function restoreDraft() {
     }
     if (s.draftNote && typeof s.draftNote === 'object') {
       for (const [k, v] of Object.entries(s.draftNote)) {
-        if (typeof v === 'string' && v) { draftNote[k] = v; noteOpen[k] = true }
+        if (typeof v === 'string' && v) draftNote[k] = v
       }
     }
     sessionNote.value = typeof s.note === 'string' ? s.note : ''
@@ -820,8 +843,6 @@ onMounted(() => {
   // Volontairement non attendu : rien de ce qui s'affiche n'en dépend, et une balance
   // injoignable ne doit pas retarder le premier écran d'une milliseconde.
   useWithings().autoSync(isoOf(new Date())).catch(() => { /* hors ligne : ce sera pour la prochaine ouverture */ })
-  // Rappels de repas : on les repose à chaque ouverture. Sans ça, ceux d'hier
-  // resteraient en attente et ceux d'aujourd'hui n'existeraient pas.
   // Les métadonnées des photos de plats, dès l'ouverture.
   //
   // Elles n'étaient chargées que par le panneau Nutrition : tant qu'on n'était pas
@@ -841,14 +862,7 @@ onMounted(() => {
   vault.hydrate()
     .then(() => vault.push(buildSnapshot))
     .catch(() => { /* hors ligne : le coffre est un confort, pas une dépendance */ })
-  const rem = useMealReminders()
-  rem.hydrate()
-  const nut = useNutrition()
-  nut.hydrate()
-  // Une FONCTION, pas la valeur du moment : la page reste ouverte des heures, et la
-  // séance du jour peut être annulée ou déplacée entre-temps. Les heures de repas
-  // suivent alors, sans avoir à repasser par ici.
-  rem.reschedule(() => nut.dayFor(isoOf(new Date())).gym).catch(() => { /* notifications indisponibles */ })
+  useNutrition().hydrate()
   // Données de démo UNIQUEMENT en environnement local/test (jamais en prod) :
   // actif en `nuxt dev`, ou si NUXT_PUBLIC_SEED_TEST_DATA=true. En prod → rien.
   try {
@@ -861,9 +875,6 @@ onMounted(() => {
   const now = new Date()
   todayDow.value = now.getDay()
   todayISO.value = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}`
-  const desktop = window.matchMedia('(min-width: 1080px)').matches
-  plateOpen.value = desktop
-  ormOpen.value = desktop
 
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', onViewport)
@@ -1014,16 +1025,17 @@ onUnmounted(() => {
       </div>
       <div class="session-layout">
         <aside class="session-tools">
+        <!-- Le minuteur de repos, et rien d'autre.
+             « Calcul de barre » et « 1RM & charges » vivaient ici. Le premier ne sert
+             que sur une barre libre — sur une machine ou une poulie, le chiffre est
+             écrit sur la pile. Le second refaisait à la main ce que l'app calcule déjà
+             seule à chaque série enregistrée, et qui alimente la progression et les
+             coefficients entre machines. Deux boutons permanents en haut de chaque
+             séance pour un besoin qui ne s'est jamais présenté.
+             Les composants sont toujours dans components/sport/ : les remettre est une
+             ligne de gabarit. -->
         <div class="tools-sticky">
           <div ref="timerBox" class="timer-box"><LazySportRestTimer /></div>
-          <div class="tool">
-            <button class="btn tool-toggle" @click="plateOpen = !plateOpen">🏋️ Calcul de barre {{ plateOpen ? '▲' : '▼' }}</button>
-            <LazySportPlateCalc v-show="plateOpen" />
-          </div>
-          <div class="tool">
-            <button class="btn tool-toggle" @click="ormOpen = !ormOpen">🎯 1RM & charges {{ ormOpen ? '▲' : '▼' }}</button>
-            <LazySportOneRepMax v-show="ormOpen" />
-          </div>
         </div>
       </aside>
 
@@ -1031,7 +1043,9 @@ onUnmounted(() => {
         <div v-for="(e, idx) in activeSession.exercises" :key="e.id" class="card no-pad exercise">
           <!-- L'icône vit dans l'en-tête, pas dans le corps : c'est là qu'on voit
                d'un coup d'œil quels exercices portent déjà un commentaire, sans
-               déplier les six cartes une par une. -->
+               déplier les six cartes une par une. Et elle ouvre une fenêtre au lieu
+               de déplier un champ tout en bas de la carte : commenter ne demande
+               plus d'ouvrir l'exercice ni de défiler jusqu'au bout. -->
           <div class="exhead-row">
             <button class="exhead" @click="openEx = openEx === e.id ? null : e.id">
               <div>
@@ -1042,8 +1056,8 @@ onUnmounted(() => {
             </button>
             <button
               class="ex-note-btn" :class="{ has: !!draftNote[e.id]?.trim() }"
-              :aria-label="`Commentaire sur ${e.name}`" :aria-pressed="!!noteOpen[e.id]"
-              @click="toggleNote(e.id)"
+              :aria-label="`Commentaire sur ${e.name}`"
+              @click="noting = e.id"
             >💬</button>
           </div>
           <div v-if="openEx === e.id" class="ex-body">
@@ -1052,38 +1066,72 @@ onUnmounted(() => {
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
             <div v-if="previousNote(e.id)" class="hint-pill note">💬 La dernière fois : {{ previousNote(e.id) }}</div>
             <div v-if="isDumbbell(e)" class="hint-pill db">🏋️ Note le poids <strong>total des 2 haltères</strong> (ex. 2 × 20 kg → 40 kg), pas un seul.</div>
-            <!-- Sur quoi je travaille aujourd'hui. Placé AVANT les séries parce
-                 qu'il change les kilos préremplis : on choisit la machine, puis on
-                 remplit. -->
-            <button
-              v-if="variantsOf(e.id).length"
-              class="var-chip" :class="{ sel: !!draftVariant[e.id] }"
-              @click="picking = e.id"
-            >
-              <SportGearThumb
-                :id="draftVariant[e.id] || e.id"
-                :gear="gearFor(e.id, draftVariant[e.id])"
-                :label="variantName(e.id, draftVariant[e.id], e.name)"
-                class="var-thumb"
-              />
-              <span class="var-txt">
-                <b>{{ variantName(e.id, draftVariant[e.id], e.name) }}</b>
-                <small>{{ draftVariant[e.id]
-                  ? `Équivalent ${e.name} · ×${ratioFor(e.id, draftVariant[e.id]).ratio.toLocaleString('fr-FR')}`
-                  : 'Machine prise ? Touche pour voir les équivalents et la charge à mettre.' }}</small>
-              </span>
-            </button>
+            <!-- Les deux gestes « ça ne s'est pas passé comme prévu », côte à côte
+                 et sans texte. Ils occupaient dix lignes d'explication chacun, à deux
+                 endroits opposés de la carte, pour deux boutons qu'on touche une fois
+                 par mois. L'explication n'a pas disparu : elle est dans la carte qui
+                 s'ouvre, c'est-à-dire au moment où on en a besoin.
+                 Placés AVANT les séries parce que la machine change les kilos
+                 préremplis : on choisit, puis on remplit. -->
+            <div class="ex-acts">
+              <button
+                v-if="variantsOf(e.id).length"
+                class="ex-act" :class="{ sel: !!draftVariant[e.id] }"
+                :aria-label="`Changer de machine pour ${e.name}`"
+                :aria-pressed="!!draftVariant[e.id]"
+                @click="picking = e.id"
+              >
+                <span class="ex-act-i" aria-hidden="true">🔁</span>
+                <span class="ex-act-t">Autre machine</span>
+                <span v-if="draftVariant[e.id]" class="ex-act-ok" aria-hidden="true">✓</span>
+              </button>
+              <button
+                class="ex-act" :class="{ sel: draftSwap[e.id] }"
+                :aria-label="`J'ai repris le mouvement en main sur ${e.name}`"
+                :aria-pressed="!!draftSwap[e.id]"
+                @click="swapAsk = e.id"
+              >
+                <span class="ex-act-i" aria-hidden="true">🔀</span>
+                <span class="ex-act-t">Repris en main</span>
+                <span v-if="draftSwap[e.id]" class="ex-act-ok" aria-hidden="true">✓</span>
+              </button>
+            </div>
+            <!-- Le nom de la machine et son coefficient : un bouton allumé dit qu'on
+                 a changé, pas POUR QUOI ni de combien. Le second est celui qui
+                 explique les kilos préremplis. -->
+            <p v-if="draftVariant[e.id]" class="ex-acts-say muted">
+              {{ variantName(e.id, draftVariant[e.id], e.name) }} ·
+              équivalent {{ e.name }} ×{{ ratioFor(e.id, draftVariant[e.id]).ratio.toLocaleString('fr-FR') }}
+            </p>
             <div class="cues">
               <div v-for="(c, i) in e.cues" :key="i" class="cue"><span class="cue-arrow">›</span>{{ c }}</div>
               <div v-if="e.machine" class="muted italic mt-6">{{ e.machine }}</div>
             </div>
             <div class="sets">
+              <!-- Le repos prévu, annoncé AVANT de valider.
+                   Le minuteur partait tout seul avec une durée qu'on découvrait au
+                   moment où elle s'affichait : impossible de savoir, en attaquant
+                   l'exercice, si on partait sur une minute ou sur trois. Le dire ici
+                   n'ajoute pas un réglage, ça montre celui qui existe déjà. -->
+              <div class="sets-rest mono muted">⏱ Repos {{ fmtRest(restFor(e)) }}<template v-if="e.superset"> · après les deux mouvements</template></div>
               <!-- Superset : une charge par mouvement -->
               <template v-if="e.superset">
+                <!-- Les colonnes se nomment UNE fois, en tête du bloc.
+                     Le superset n'avait pas d'en-tête du tout : deux champs nus par
+                     mouvement, six par série, et rien pour dire lequel est les kilos.
+                     Les répéter dans chaque carte ferait six fois le même mot ; ici ils
+                     sont dits une fois, alignés sur les champs par la même gouttière et
+                     le même retrait que `.ss-move`. -->
+                <div class="ss-head" aria-hidden="true">
+                  <span class="ss-move-label"></span>
+                  <span class="col-head mono">kg</span>
+                  <span class="times">×</span>
+                  <span class="col-head mono">reps</span>
+                </div>
                 <div v-for="(s, i) in draft[e.id]" :key="i" class="ss-set" :class="{ done: s.done }">
                   <div class="ss-set-top">
                     <span class="mono ss-set-label">Série {{ i + 1 }}</span>
-                    <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e.reps)">{{ s.done ? '✓' : '○' }}</button>
+                    <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e)">{{ s.done ? '✓' : '○' }}</button>
                     <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
                   </div>
                   <div class="ss-move">
@@ -1113,7 +1161,7 @@ onUnmounted(() => {
                   <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
                   <span class="times">×</span>
                   <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
-                  <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e.reps)">{{ s.done ? '✓' : '○' }}</button>
+                  <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e)">{{ s.done ? '✓' : '○' }}</button>
                   <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
                 </div>
               </template>
@@ -1134,24 +1182,12 @@ onUnmounted(() => {
                 >{{ o.icon }} {{ o.label }}</button>
               </div>
             </div>
-            <!-- Matériel différent : la charge du jour n'est pas comparable à la précédente -->
-            <button
-              class="swap-chip" :class="{ sel: draftSwap[e.id] }"
-              :aria-pressed="!!draftSwap[e.id]"
-              @click="toggleSwap(e.id)"
-            >
-              <span class="swap-ico">🔀</span>
-              <span class="swap-txt">
-                <b>J'ai repris le mouvement en main</b>
-                <small>{{ draftSwap[e.id]
-                  ? 'Records et progression repartent de cette séance.'
-                  : 'Charge volontairement baissée pour mieux exécuter. Pour un changement de machine, utilise 🔁 en haut.' }}</small>
-              </span>
-            </button>
-            <!-- Déplié par l'icône de l'en-tête, ou d'office si une note existe déjà. -->
-            <div v-if="noteOpen[e.id]" class="ex-note">
-              <label class="ex-note-label" :for="`exnote-${e.id}`">💬 Commentaire sur cet exercice</label>
-              <textarea :id="`exnote-${e.id}`" v-model="draftNote[e.id]" class="note-input" rows="2" placeholder="Machine occupée, épaule qui tire, prise changée…"></textarea>
+            <!-- Le commentaire ne s'écrit plus ici : 💬 dans l'en-tête ouvre une
+                 fenêtre. Ce qui reste dans la carte, c'est ce qu'on LIT en
+                 soulevant — la note de la dernière fois, plus haut. -->
+            <div v-if="draftNote[e.id]?.trim()" class="ex-note-said">
+              💬 {{ draftNote[e.id] }}
+              <button class="ex-note-edit" @click="noting = e.id">modifier</button>
             </div>
           </div>
         </div>
@@ -1304,6 +1340,92 @@ onUnmounted(() => {
         </div>
       </div>
     </transition>
+
+    <!-- Ce que « reprise en main » veut dire, au moment où on l'active. -->
+    <transition name="pop">
+      <div v-if="swapEx" class="confirm-overlay" @click.self="swapAsk = null">
+        <div class="confirm-box">
+          <div class="confirm-emoji" aria-hidden="true">🔀</div>
+          <div class="confirm-title">
+            {{ draftSwap[swapEx.id] ? 'Annuler la reprise en main ?' : 'J’ai repris le mouvement en main' }}
+          </div>
+          <div class="confirm-text">
+            <template v-if="draftSwap[swapEx.id]">
+              <b>{{ swapEx.name }}</b> redeviendra comparable aux séances précédentes :
+              records et progression reprennent leur fil.
+            </template>
+            <template v-else>
+              À cocher quand tu as <b>volontairement baissé la charge</b> pour mieux exécuter
+              — après une pause, une douleur, ou pour corriger une technique.
+              <br><br>
+              Sur <b>{{ swapEx.name }}</b>, records et progression <b>repartent de cette séance</b> :
+              la charge du jour n’est pas comparable aux précédentes, et la courbe ne
+              lira pas cette baisse comme une régression.
+              <br><br>
+              Si c’est simplement la machine qui était prise, utilise plutôt 🔁 — ta
+              progression reste alors continue, convertie par le coefficient.
+            </template>
+          </div>
+          <div class="confirm-actions">
+            <button class="btn confirm-keep" @click="swapAsk = null">Annuler</button>
+            <button class="confirm-yes" @click="confirmSwap">
+              {{ draftSwap[swapEx.id] ? 'Retirer' : 'Oui, j’ai repris en main' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Retour involontaire pendant une séance. Même popup que l'annulation :
+         c'est le même geste de confirmation, il n'a pas à s'apprendre deux fois. -->
+    <transition name="pop">
+      <div v-if="backGuard.asking.value" class="confirm-overlay" @click.self="backGuard.stay()">
+        <div class="confirm-box">
+          <div class="confirm-emoji" aria-hidden="true">⏸️</div>
+          <div class="confirm-title">Ta séance est en cours</div>
+          <div class="confirm-text">
+            Le retour allait fermer l'application. Tes séries sont enregistrées au fur et à
+            mesure — tu les retrouveras — mais tu peux aussi simplement réduire la séance
+            et la garder sous la main.
+          </div>
+          <div class="confirm-actions">
+            <button class="btn confirm-keep" @click="backGuard.stay()">Continuer la séance</button>
+            <button class="confirm-yes" @click="quitAnyway">Réduire la séance</button>
+          </div>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Le commentaire d'un exercice, en fenêtre.
+         `persistent` : on est en train d'écrire. Une pression à côté du champ, sur
+         un téléphone où le clavier occupe la moitié de l'écran, ne doit pas fermer
+         la fenêtre. La croix et Échap restent, eux — ce sont des gestes voulus. -->
+    <Popup
+      v-if="notingEx"
+      ref="notePopup"
+      persistent
+      popup-class="note-popup"
+      :title="`💬 ${notingEx.name}`"
+      subtitle="Pourquoi ce mouvement-là a bougé"
+      @close="noting = null"
+    >
+      <p v-if="previousNote(notingEx.id)" class="hint-pill note">
+        La dernière fois : {{ previousNote(notingEx.id) }}
+      </p>
+      <textarea
+        v-model="draftNote[notingEx.id]"
+        class="note-input note-popup-input" rows="4"
+        placeholder="Machine occupée, épaule qui tire, prise changée…"
+      ></textarea>
+      <p class="muted">
+        C'est ce que tu reliras <b>la prochaine fois</b>, en haut de cet exercice, au
+        moment de recharger la barre — pas trois semaines plus tard en bas d'une séance.
+      </p>
+      <div class="nav-row">
+        <button v-if="draftNote[notingEx.id]?.trim()" class="btn flex-1" @click="clearNote(notingEx.id)">Effacer</button>
+        <button class="btn-primary flex-1" @click="closeNote()">Terminé</button>
+      </div>
+    </Popup>
 
     <!-- Mini-feuille « séance en cours » : docké au-dessus de la barre d'onglets,
          affiche la durée en direct ; on tape dessus pour rouvrir la séance -->

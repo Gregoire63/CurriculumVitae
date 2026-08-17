@@ -25,6 +25,8 @@ const v = useVault()
 const bootstrap = ref('')
 const showDetail = ref<string | null>(null)
 const showReset = ref(false)
+/** La boîte de réception s'ouvre en carte : voir le commentaire du bouton. */
+const inbox = ref(false)
 
 /**
  * Le diagnostic du serveur, affiché tant que tout n'est pas en place.
@@ -240,11 +242,38 @@ async function doRefuse(p: RawProposal) {
         <button class="btn mt-6 vt-go" :disabled="!bootstrap.trim()" @click="doReset">🗝 Effacer le passkey</button>
       </template>
 
-      <!-- Boîte de réception -->
-      <div class="section-label mt-6">
-        Propositions
-        <span v-if="v.pendingCount.value" class="mono vt-count">{{ v.pendingCount.value }} en attente</span>
-      </div>
+      <!-- Boîte de réception : un BOUTON, pas une liste dépliée.
+           Ce qu'on veut savoir en passant sur cet écran, c'est « y a-t-il quelque
+           chose à valider ». La liste elle-même se lit à un moment choisi : elle
+           tient plusieurs écrans dès qu'une semaine de menus s'y trouve, et elle
+           poussait tout le reste du coffre — dont le bouton d'envoi du miroir —
+           hors de vue. -->
+      <button class="vt-inbox" :class="{ some: v.pendingCount.value }" @click="inbox = true">
+        <span class="vt-inbox-txt">
+          <b>Propositions de Claude</b>
+          <small>{{ v.pendingCount.value
+            ? `${v.pendingCount.value} en attente de ta validation`
+            : (v.recent.value.length ? 'Rien en attente · voir les dernières décisions' : 'Rien en attente') }}</small>
+        </span>
+        <span v-if="v.pendingCount.value" class="mono vt-inbox-n">{{ v.pendingCount.value }}</span>
+        <span class="vt-inbox-go" aria-hidden="true">→</span>
+      </button>
+    </template>
+
+    <p v-if="v.error.value" class="vt-warn mt-6">{{ v.error.value }}</p>
+  </div>
+
+  <!-- La boîte de réception, en fenêtre posée par-dessus. On y entre quand on décide
+       de s'en occuper, et on en ressort sans avoir perdu sa place dans le coffre.
+       Popup porte sa propre transition : pas de `<transition>` à l'appel. -->
+  <Popup
+    v-if="inbox"
+    popup-class="vt-inbox-popup"
+    title="Propositions de Claude"
+    :subtitle="v.pendingCount.value ? `${v.pendingCount.value} en attente · rien n'est écrit avant ta validation` : 'Rien en attente'"
+    @close="inbox = false"
+  >
+    <template #default>
       <p v-if="!v.pending.value.length" class="muted vt-txt">
         Rien en attente. Ce que Claude propose depuis une conversation atterrit ici, et
         <b>rien n’est écrit</b> avant que tu valides.
@@ -287,7 +316,5 @@ async function doRefuse(p: RawProposal) {
         </span>
       </div>
     </template>
-
-    <p v-if="v.error.value" class="vt-warn mt-6">{{ v.error.value }}</p>
-  </div>
+  </Popup>
 </template>

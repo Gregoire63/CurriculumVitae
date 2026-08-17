@@ -98,8 +98,12 @@ function ratioLabel(r: Row): string {
 </script>
 
 <template>
-  <Sheet
-    sheet-class="variant-sheet"
+  <!-- Une FENÊTRE, pas une feuille : elle s'ouvre par-dessus la feuille de séance,
+       et deux feuilles du bas empilées se confondent. Et téléportée dans <body> par
+       Popup — écrite ici, au milieu de la séance, elle était découpée aux bords de
+       la feuille qui défile. Voir components/Popup.vue. -->
+  <Popup
+    popup-class="variant-popup"
     title="Je ne peux pas le faire ici"
     :subtitle="`${ex.name} · ${rows.length} façons de travailler les mêmes muscles`"
     @close="emit('close')"
@@ -160,5 +164,5 @@ function ratioLabel(r: Row): string {
         <b>ton</b> rapport réel, calculé sur tes 1RM estimés.
       </p>
     </template>
-  </Sheet>
+  </Popup>
 </template>

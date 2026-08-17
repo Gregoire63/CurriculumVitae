@@ -12,6 +12,14 @@ export interface Exercise {
   machine: string
   bodyweight?: boolean // charge = poids de corps (+ lest) — préremplie avec le poids du profil
   superset?: [string, string] // 2 mouvements enchaînés — saisie d'une charge par mouvement
+  /**
+   * Repos entre deux séries de travail, en SECONDES.
+   *
+   * Réglé sur le mouvement et non sur les reps : le nombre de reps dit la charge,
+   * le repos dépend de ce que la série a coûté. Non renseigné → déduit des reps
+   * par `restFor` dans lib/rest.ts.
+   */
+  rest?: number
 }
 
 // Plan de sprint détaillé, avec variante extérieur (piste) et tapis
@@ -82,12 +90,12 @@ export const PROGRAM: Session[] = [
     color: '#8b6f5c',
     sprint: null,
     exercises: [
-      { id: 'dc-barre', name: 'Développé couché barre', sets: 4, reps: '6-8', muscles: ['pecs', 'epaules-av', 'triceps'], cues: ['Omoplates serrées, pieds ancrés au sol', 'Barre au niveau des mamelons, coudes ~45°', 'Pousse en explosif, descends en 2 sec'], machine: 'Alternative On Air : machine convergente si les barres sont prises' },
-      { id: 'di-halteres', name: 'Développé incliné haltères', sets: 3, reps: '8-10', muscles: ['pecs', 'epaules-av'], cues: ['Banc à 30° max, pas plus', "Descends jusqu'à l'étirement du pec", 'Ne claque pas les haltères en haut'], machine: '' },
-      { id: 'dev-mil', name: 'Développé militaire haltères', sets: 2, reps: '8-10', muscles: ['epaules-av', 'epaules-lat', 'triceps'], cues: ['Assis dossier à 85°', 'Descends les haltères au niveau des oreilles', "Gainage serré, pas d'arche lombaire"], machine: 'Alternative : machine développé épaules' },
-      { id: 'elev-lat', name: 'Élévations latérales', sets: 3, reps: '15', muscles: ['epaules-lat'], cues: ["Monte jusqu'à l'horizontale, pas plus", 'Petit doigt légèrement vers le haut', 'Léger et strict > lourd et moche'], machine: 'Ou poulie basse unilatéral' },
-      { id: 'dips', name: 'Dips lestés', sets: 3, reps: '8-12', muscles: ['pecs', 'triceps'], cues: ['Buste penché en avant = pec, droit = triceps', "Descends jusqu'à 90° aux coudes", 'Charge préremplie avec ton poids de corps — ajoute ton lest par-dessus dès que tu passes 12 reps'], machine: 'Alternative : machine à dips assis', bodyweight: true },
-      { id: 'crunch-cable', name: 'Crunch à la poulie', sets: 3, reps: '12-15', muscles: ['abdos'], cues: ['À genoux face à la poulie haute', 'Enroule la colonne, ne tire pas avec les bras', 'Charge progressive'], machine: '' },
+      { id: 'dc-barre', name: 'Développé couché barre', sets: 4, reps: '6-8', rest: 180, muscles: ['pecs', 'epaules-av', 'triceps'], cues: ['Omoplates serrées, pieds ancrés au sol', 'Barre au niveau des mamelons, coudes ~45°', 'Pousse en explosif, descends en 2 sec'], machine: 'Alternative On Air : machine convergente si les barres sont prises' },
+      { id: 'di-halteres', name: 'Développé incliné haltères', sets: 3, reps: '8-10', rest: 120, muscles: ['pecs', 'epaules-av'], cues: ['Banc à 30° max, pas plus', "Descends jusqu'à l'étirement du pec", 'Ne claque pas les haltères en haut'], machine: '' },
+      { id: 'dev-mil', name: 'Développé militaire haltères', sets: 2, reps: '8-10', rest: 120, muscles: ['epaules-av', 'epaules-lat', 'triceps'], cues: ['Assis dossier à 85°', 'Descends les haltères au niveau des oreilles', "Gainage serré, pas d'arche lombaire"], machine: 'Alternative : machine développé épaules' },
+      { id: 'elev-lat', name: 'Élévations latérales', sets: 3, reps: '15', rest: 75, muscles: ['epaules-lat'], cues: ["Monte jusqu'à l'horizontale, pas plus", 'Petit doigt légèrement vers le haut', 'Léger et strict > lourd et moche'], machine: 'Ou poulie basse unilatéral' },
+      { id: 'dips', name: 'Dips lestés', sets: 3, reps: '8-12', rest: 150, muscles: ['pecs', 'triceps'], cues: ['Buste penché en avant = pec, droit = triceps', "Descends jusqu'à 90° aux coudes", 'Charge préremplie avec ton poids de corps — ajoute ton lest par-dessus dès que tu passes 12 reps'], machine: 'Alternative : machine à dips assis', bodyweight: true },
+      { id: 'crunch-cable', name: 'Crunch à la poulie', sets: 3, reps: '12-15', rest: 60, muscles: ['abdos'], cues: ['À genoux face à la poulie haute', 'Enroule la colonne, ne tire pas avec les bras', 'Charge progressive'], machine: '' },
     ],
   },
   {
@@ -97,12 +105,12 @@ export const PROGRAM: Session[] = [
     color: '#5f7a6b',
     sprint: SPRINT,
     exercises: [
-      { id: 'tirage-v', name: 'Tirage vertical', sets: 3, reps: '8-10', muscles: ['dos', 'biceps'], cues: ['Prise légèrement plus large que les épaules', 'Tire vers le haut des pecs, coudes vers le bas', 'Ne te balance pas en arrière'], machine: 'Ou tractions lestées si maîtrisées' },
-      { id: 'rowing-m', name: 'Rowing machine', sets: 4, reps: '8-10', muscles: ['dos', 'biceps'], cues: ['Poitrine collée au support', 'Tire les coudes en arrière, serre les omoplates', 'Pause 1 sec en contraction'], machine: 'Machine rowing assis prise neutre' },
-      { id: 'lombaires', name: 'Extensions lombaires (banc)', sets: 3, reps: '12-15', muscles: ['lombaires', 'fessiers'], cues: ['Buste qui descend lentement, dos neutre', "Remonte jusqu'à l'alignement, sans cambrer à l'excès", 'Serre les fessiers en haut', '1-2 tenues de 5 s en haut sur la dernière série', 'Disque contre la poitrine quand 15 reps deviennent faciles (note le lest, 0 = poids de corps)'], machine: 'Banc à lombaires 45° ou banc romain' },
-      { id: 'face-pull', name: 'Face pull', sets: 3, reps: '15', muscles: ['epaules-ar', 'dos'], cues: ['Poulie à hauteur du visage, corde', 'Tire vers le front en écartant', 'Rotation externe en fin de mouvement'], machine: '' },
-      { id: 'oiseau', name: 'Oiseau (reverse fly)', sets: 3, reps: '15', muscles: ['epaules-ar'], cues: ['Buste penché à ~90°, dos plat', 'Écarte les bras en serrant les omoplates', "Léger et strict, aucun élan — monte jusqu'à l'horizontale"], machine: 'Haltères, poulies croisées ou pec deck inversé' },
-      { id: 'curl-marteau', name: 'Curl marteau (hammer)', sets: 3, reps: '10-12', muscles: ['biceps', 'avant-bras'], cues: ['Prise NEUTRE (paumes qui se font face), poignets verrouillés', "Travaille le brachial (sous le biceps) + le long chef → l'épaisseur du bras", 'Contrôle la descente 2-3 s, aucun élan'], machine: 'Haltères, ou corde à la poulie basse' },
+      { id: 'tirage-v', name: 'Tirage vertical', sets: 3, reps: '8-10', rest: 120, muscles: ['dos', 'biceps'], cues: ['Prise légèrement plus large que les épaules', 'Tire vers le haut des pecs, coudes vers le bas', 'Ne te balance pas en arrière'], machine: 'Ou tractions lestées si maîtrisées' },
+      { id: 'rowing-m', name: 'Rowing machine', sets: 4, reps: '8-10', rest: 120, muscles: ['dos', 'biceps'], cues: ['Poitrine collée au support', 'Tire les coudes en arrière, serre les omoplates', 'Pause 1 sec en contraction'], machine: 'Machine rowing assis prise neutre' },
+      { id: 'lombaires', name: 'Extensions lombaires (banc)', sets: 3, reps: '12-15', rest: 75, muscles: ['lombaires', 'fessiers'], cues: ['Buste qui descend lentement, dos neutre', "Remonte jusqu'à l'alignement, sans cambrer à l'excès", 'Serre les fessiers en haut', '1-2 tenues de 5 s en haut sur la dernière série', 'Disque contre la poitrine quand 15 reps deviennent faciles (note le lest, 0 = poids de corps)'], machine: 'Banc à lombaires 45° ou banc romain' },
+      { id: 'face-pull', name: 'Face pull', sets: 3, reps: '15', rest: 75, muscles: ['epaules-ar', 'dos'], cues: ['Poulie à hauteur du visage, corde', 'Tire vers le front en écartant', 'Rotation externe en fin de mouvement'], machine: '' },
+      { id: 'oiseau', name: 'Oiseau (reverse fly)', sets: 3, reps: '15', rest: 75, muscles: ['epaules-ar'], cues: ['Buste penché à ~90°, dos plat', 'Écarte les bras en serrant les omoplates', "Léger et strict, aucun élan — monte jusqu'à l'horizontale"], machine: 'Haltères, poulies croisées ou pec deck inversé' },
+      { id: 'curl-marteau', name: 'Curl marteau (hammer)', sets: 3, reps: '10-12', rest: 90, muscles: ['biceps', 'avant-bras'], cues: ['Prise NEUTRE (paumes qui se font face), poignets verrouillés', "Travaille le brachial (sous le biceps) + le long chef → l'épaisseur du bras", 'Contrôle la descente 2-3 s, aucun élan'], machine: 'Haltères, ou corde à la poulie basse' },
     ],
   },
   {
@@ -112,12 +120,12 @@ export const PROGRAM: Session[] = [
     color: '#b07d2e',
     sprint: null,
     exercises: [
-      { id: 'squat', name: 'Squat', sets: 3, reps: '6-8', muscles: ['quadris', 'fessiers'], cues: ['Descends sous la parallèle si mobilité OK', "Genoux dans l'axe des pieds", 'Gainage avant de descendre'], machine: '' },
-      { id: 'sdt-r', name: 'Soulevé de terre roumain', sets: 3, reps: '8-10', muscles: ['ischios', 'fessiers', 'dos'], cues: ['Hanches en arrière, genoux quasi fixes', 'Barre collée aux jambes', 'Étirement ischio puis remonte avec les hanches'], machine: '' },
-      { id: 'fentes', name: 'Fentes marchées', sets: 2, reps: '10/j', muscles: ['quadris', 'fessiers'], cues: ['Grand pas, genou arrière frôle le sol', 'Buste droit', 'Haltères le long du corps'], machine: 'Ou presse unilatérale' },
-      { id: 'leg-curl', name: 'Leg curl (ischios)', sets: 3, reps: '10-12', muscles: ['ischios'], cues: ['Contrôle la descente (2-3 s)', 'Amplitude complète, sans à-coup', 'Bassin plaqué au banc, pas de coup de rein'], machine: 'Machine leg curl allongé ou assis' },
-      { id: 'mollets', name: 'Mollets debout', sets: 3, reps: '12-15', muscles: ['mollets'], cues: ['Amplitude complète, pause en bas', 'Monte sur la pointe max', 'Pas de rebond'], machine: 'Machine debout ou à la presse' },
-      { id: 'releves', name: 'Relevés de jambes suspendu', sets: 3, reps: '12', muscles: ['abdos'], cues: ['Enroule le bassin, pas juste les jambes', 'Contrôle la descente', "Lest chevilles quand c'est facile"], machine: '' },
+      { id: 'squat', name: 'Squat', sets: 3, reps: '6-8', rest: 180, muscles: ['quadris', 'fessiers'], cues: ['Descends sous la parallèle si mobilité OK', "Genoux dans l'axe des pieds", 'Gainage avant de descendre'], machine: '' },
+      { id: 'sdt-r', name: 'Soulevé de terre roumain', sets: 3, reps: '8-10', rest: 180, muscles: ['ischios', 'fessiers', 'dos'], cues: ['Hanches en arrière, genoux quasi fixes', 'Barre collée aux jambes', 'Étirement ischio puis remonte avec les hanches'], machine: '' },
+      { id: 'fentes', name: 'Fentes marchées', sets: 2, reps: '10/j', rest: 150, muscles: ['quadris', 'fessiers'], cues: ['Grand pas, genou arrière frôle le sol', 'Buste droit', 'Haltères le long du corps'], machine: 'Ou presse unilatérale' },
+      { id: 'leg-curl', name: 'Leg curl (ischios)', sets: 3, reps: '10-12', rest: 90, muscles: ['ischios'], cues: ['Contrôle la descente (2-3 s)', 'Amplitude complète, sans à-coup', 'Bassin plaqué au banc, pas de coup de rein'], machine: 'Machine leg curl allongé ou assis' },
+      { id: 'mollets', name: 'Mollets debout', sets: 3, reps: '12-15', rest: 75, muscles: ['mollets'], cues: ['Amplitude complète, pause en bas', 'Monte sur la pointe max', 'Pas de rebond'], machine: 'Machine debout ou à la presse' },
+      { id: 'releves', name: 'Relevés de jambes suspendu', sets: 3, reps: '12', rest: 60, muscles: ['abdos'], cues: ['Enroule le bassin, pas juste les jambes', 'Contrôle la descente', "Lest chevilles quand c'est facile"], machine: '' },
     ],
   },
   {
@@ -127,11 +135,11 @@ export const PROGRAM: Session[] = [
     color: '#9a6a4f',
     sprint: SPRINT,
     exercises: [
-      { id: 'dev-halteres', name: 'Développé couché haltères', sets: 4, reps: '8-10', muscles: ['pecs', 'epaules-av', 'triceps'], cues: ["Amplitude plus grande qu'à la barre", "Descends jusqu'à l'étirement", 'Trajectoire en léger arc de cercle'], machine: '' },
-      { id: 'ecartes', name: 'Écartés à la poulie', sets: 3, reps: '12-15', muscles: ['pecs'], cues: ['Léger arrondi des coudes, fixe', 'Croise légèrement les mains devant', 'Tension continue, pas de repos en haut'], machine: 'Ou au pec deck' },
-      { id: 'tractions', name: 'Tractions (+ tenues)', sets: 4, reps: 'max', muscles: ['dos', 'biceps'], cues: ['Note le nombre de reps à chaque série — objectif : battre ton total', 'Charge préremplie avec ton poids de corps ; ajoute du lest par-dessus dès que tu passes 10-12 reps propres', 'Finis chaque série par 1-2 tractions TENUES : menton au-dessus de la barre, tiens 5-10 s', 'Descente lente et contrôlée (2-3 s) — le négatif fait grossir le dos'], machine: 'Barre de traction — assistance élastique/machine si besoin', bodyweight: true },
-      { id: 'ss-bras', name: 'Superset triceps : pushdown + extension', sets: 3, reps: '12+12', muscles: ['triceps'], cues: ['12 pushdowns à la corde (poulie haute)', 'Puis SANS repos, 12 extensions au-dessus de la tête (corde, poulie basse)', 'Repos seulement après les deux exos, puis on recommence', 'Deux angles : chef latéral (pushdown) + longue portion (overhead) = triceps complet'], machine: "Poulie corde — haute pour le pushdown, basse pour l'overhead", superset: ['Pushdown', 'Overhead'] },
-      { id: 'curl-21', name: 'Curl 21 (méthode 7-7-7)', sets: 3, reps: '7+7+7 (21)', muscles: ['biceps'], cues: ['7 reps sur la moitié basse (bas → milieu)', '7 reps sur la moitié haute (milieu → haut)', '7 reps en amplitude complète', "Charge légère, aucun élan — c'est la brûlure qui fait le boulot"], machine: 'Barre EZ, haltères ou poulie basse' },
+      { id: 'dev-halteres', name: 'Développé couché haltères', sets: 4, reps: '8-10', rest: 120, muscles: ['pecs', 'epaules-av', 'triceps'], cues: ["Amplitude plus grande qu'à la barre", "Descends jusqu'à l'étirement", 'Trajectoire en léger arc de cercle'], machine: '' },
+      { id: 'ecartes', name: 'Écartés à la poulie', sets: 3, reps: '12-15', rest: 75, muscles: ['pecs'], cues: ['Léger arrondi des coudes, fixe', 'Croise légèrement les mains devant', 'Tension continue, pas de repos en haut'], machine: 'Ou au pec deck' },
+      { id: 'tractions', name: 'Tractions (+ tenues)', sets: 4, reps: 'max', rest: 150, muscles: ['dos', 'biceps'], cues: ['Note le nombre de reps à chaque série — objectif : battre ton total', 'Charge préremplie avec ton poids de corps ; ajoute du lest par-dessus dès que tu passes 10-12 reps propres', 'Finis chaque série par 1-2 tractions TENUES : menton au-dessus de la barre, tiens 5-10 s', 'Descente lente et contrôlée (2-3 s) — le négatif fait grossir le dos'], machine: 'Barre de traction — assistance élastique/machine si besoin', bodyweight: true },
+      { id: 'ss-bras', name: 'Superset triceps : pushdown + extension', sets: 3, reps: '12+12', rest: 120, muscles: ['triceps'], cues: ['12 pushdowns à la corde (poulie haute)', 'Puis SANS repos, 12 extensions au-dessus de la tête (corde, poulie basse)', 'Repos seulement après les deux exos, puis on recommence', 'Deux angles : chef latéral (pushdown) + longue portion (overhead) = triceps complet'], machine: "Poulie corde — haute pour le pushdown, basse pour l'overhead", superset: ['Pushdown', 'Overhead'] },
+      { id: 'curl-21', name: 'Curl 21 (méthode 7-7-7)', sets: 3, reps: '7+7+7 (21)', rest: 90, muscles: ['biceps'], cues: ['7 reps sur la moitié basse (bas → milieu)', '7 reps sur la moitié haute (milieu → haut)', '7 reps en amplitude complète', "Charge légère, aucun élan — c'est la brûlure qui fait le boulot"], machine: 'Barre EZ, haltères ou poulie basse' },
     ],
   },
 ]
