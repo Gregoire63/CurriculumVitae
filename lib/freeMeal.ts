@@ -1,6 +1,8 @@
 // Import relatif : testé dans le projet « unit », qui tourne en Node pur sans la
 // résolution de chemins de Nuxt.
+import { macrosOf } from './nutritionStats'
 import type { DayMeal, DayPlan, Macros } from './nutritionStats'
+import type { Food, RecipeItem } from '../data/nutritionProgram'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le repas du dehors : remplacer un plat prévu par ce qu'on a vraiment mangé.
@@ -39,6 +41,34 @@ export interface FreeMeal {
   l: number
   /** Repère de saisie, pour distinguer « tapé » de « proposé par Claude ». */
   from?: 'saisie' | 'catalogue' | 'claude'
+  /**
+   * Le plat du catalogue dont CE repas dérive. Purement indicatif : il sert à écrire
+   * « variante de : Saumon, patate douce, épinards » et à ouvrir la recette d'origine
+   * en regard. Il n'est JAMAIS lu comme une source de macros ni de grammages — sinon
+   * une variante afficherait les quantités du catalogue, c'est-à-dire précisément
+   * celles qu'on n'a pas mangées.
+   */
+  base?: string
+  /**
+   * Ce qu'il y avait vraiment dans l'assiette, pour ce repas et ce jour-là.
+   *
+   * C'est la réponse au cas qui manquait : je mange une variante d'un plat que je
+   * connais — 211 g de saumon au lieu de 150, du steak haché à la place de la dinde,
+   * sans la vinaigrette. Sans ces items, l'écran affichait « repas du dehors » et je
+   * perdais l'accès aux quantités au moment précis où j'en avais besoin, devant la
+   * balance.
+   *
+   * Le catalogue n'est PAS touché : le plat d'origine reste bon pour les autres
+   * jours. C'est bien la raison d'être de ce champ plutôt que d'un patch de recette.
+   *
+   * La liste peut être PARTIELLE. Un gigot d'agneau ou un burger n'ont pas
+   * d'identifiant dans le catalogue ; pouvoir décrire les trois ingrédients qu'on
+   * connaît vaut mieux que de ne rien décrire. Ce sont alors les macros saisies qui
+   * font foi — voir `checkFreeMeal`.
+   */
+  items?: RecipeItem[]
+  /** Préparation adaptée, quand elle diffère de celle du catalogue. */
+  steps?: string
 }
 
 const num = (v: unknown, max: number): number | null => {
@@ -61,12 +91,65 @@ const num = (v: unknown, max: number): number | null => {
  * s'en écartent légitimement, et refuser une étiquette parce qu'elle ne tombe pas
  * juste serait refuser la réalité au nom du modèle.
  */
-export function freeMealFrom(raw: Partial<Record<keyof FreeMeal, unknown>>): FreeMeal | null {
+export interface FreeMealOpts {
+  /**
+   * Les aliments du catalogue, quand l'appelant les a sous la main.
+   *
+   * FOURNI, un ingrédient inconnu fait échouer la mise en forme : c'est ce qui
+   * permet au connecteur de refuser un dépôt et de dire lesquels, plutôt que de
+   * laisser une composition à moitié muette arriver dans la boîte de réception.
+   *
+   * ABSENT, les items passent tels quels. Ce n'est pas un relâchement : la saisie à
+   * la main dans l'application ne produit pas d'items, et un repas déjà enregistré
+   * qu'on relit ne doit pas devenir invalide parce qu'un aliment a été renommé
+   * depuis. On ne réécrit pas le passé pour lui faire respecter les règles d'après.
+   */
+  foodKnown?: (id: string) => boolean
+}
+
+/** Un identifiant d'aliment : même forme que partout ailleurs dans la sauvegarde. */
+const isFoodId = (v: unknown): v is string => typeof v === 'string' && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v)
+
+/**
+ * La composition d'un repas, ou `undefined` si elle n'en a pas.
+ *
+ * Rend `false` — et non une liste vide — quand un ingrédient est refusé : l'appelant
+ * doit pouvoir distinguer « pas de composition » de « composition invalide ». Sans
+ * cette distinction, un dépôt fautif serait silencieusement transformé en repas sans
+ * items, c'est-à-dire accepté à moitié.
+ */
+function itemsFrom(raw: unknown, known?: (id: string) => boolean): RecipeItem[] | undefined | false {
+  if (raw === undefined || raw === null) return undefined
+  if (!Array.isArray(raw) || raw.length > 30) return false
+  const out: RecipeItem[] = []
+  for (const it of raw) {
+    if (!it || typeof it !== 'object') return false
+    const r = it as Record<string, unknown>
+    const food = r.food ?? r.aliment ?? r.id
+    const g = num(r.g ?? r.grammes ?? r.quantite, 2000)
+    if (!isFoodId(food) || g === null || g <= 0) return false
+    if (known && !known(food)) return false
+    out.push({ food, g })
+  }
+  return out.length ? out : undefined
+}
+
+export function freeMealFrom(
+  raw: Partial<Record<keyof FreeMeal, unknown>>,
+  opts: FreeMealOpts = {},
+): FreeMeal | null {
   const label = typeof raw.label === 'string' ? raw.label.trim().slice(0, 60) : ''
   if (!label) return null
   const kcal = num(raw.kcal, 5000)
   if (kcal === null || kcal < 1) return null
   const from = raw.from === 'catalogue' || raw.from === 'claude' ? raw.from : 'saisie'
+
+  const items = itemsFrom(raw.items, opts.foodKnown)
+  if (items === false) return null
+
+  const base = isFoodId(raw.base) ? raw.base : undefined
+  const steps = typeof raw.steps === 'string' && raw.steps.trim() ? raw.steps.trim().slice(0, 2000) : undefined
+
   return {
     label,
     kcal: Math.round(kcal),
@@ -74,6 +157,57 @@ export function freeMealFrom(raw: Partial<Record<keyof FreeMeal, unknown>>): Fre
     g: num(raw.g, 800) ?? 0,
     l: num(raw.l, 400) ?? 0,
     from,
+    // Les champs facultatifs ne sont posés QUE s'ils existent. Écrire « items:
+    // undefined » suffirait à faire grossir chaque repas déjà enregistré d'une clé
+    // vide au premier réenregistrement, et à faire diverger la sauvegarde de son
+    // miroir sans qu'aucune donnée n'ait changé.
+    ...(base ? { base } : {}),
+    ...(items ? { items } : {}),
+    ...(steps ? { steps } : {}),
+  }
+}
+
+/**
+ * Ce que les ingrédients listés expliquent, comparé à ce qui a été saisi.
+ *
+ * Le calcul ne REMPLACE pas la saisie, et c'est délibéré. Les macros saisies restent
+ * la source de vérité : elles couvrent le cas où l'on recopie une étiquette de
+ * restaurant, et le cas — fréquent — où la composition est partielle parce qu'un
+ * ingrédient n'a pas d'identifiant dans le catalogue. Un calcul qui prendrait la
+ * main effacerait alors le gigot d'agneau du total.
+ *
+ * Ce que le calcul apporte, c'est un CONTRÔLE : quand les deux divergent nettement,
+ * ou bien un grammage est faux, ou bien il manque un ingrédient. Les deux méritent
+ * d'être vus avant validation, aucun ne mérite un refus.
+ *
+ * Rend `null` sans composition : il n'y a alors rien à confronter.
+ */
+export interface FreeMealCheck {
+  /** Ce que les ingrédients listés donnent, d'après le catalogue. */
+  calcule: Macros
+  /** Ce qui a été saisi, et qui fait foi. */
+  saisi: Macros
+  /** Écart sur les calories, en pourcentage du saisi. Négatif = le calcul est en dessous. */
+  ecartPct: number
+  /** Au-delà de dix pour cent : à montrer, jamais à refuser. */
+  notable: boolean
+}
+
+export const FREE_MEAL_TOLERANCE = 10
+
+export function checkFreeMeal(meal: FreeMeal, foods: Record<string, Food>): FreeMealCheck | null {
+  if (!meal.items?.length) return null
+  const calcule = macrosOf(meal.items, foods)
+  const saisi = { kcal: meal.kcal, p: meal.p, g: meal.g, l: meal.l }
+  // Le repas ne peut pas avoir zéro calorie — `freeMealFrom` l'interdit — donc la
+  // division est sûre. La garde reste, parce qu'une donnée relue d'un vieux miroir
+  // n'a pas traversé `freeMealFrom`.
+  const ecartPct = saisi.kcal > 0 ? ((calcule.kcal - saisi.kcal) / saisi.kcal) * 100 : 0
+  return {
+    calcule,
+    saisi,
+    ecartPct: Math.round(ecartPct),
+    notable: Math.abs(ecartPct) > FREE_MEAL_TOLERANCE,
   }
 }
 

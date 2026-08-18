@@ -205,14 +205,32 @@ export function planFor(p: RawProposal, ctx: PlanCtx = {}): Plan | null {
     const vers = pick(d, ['vers', 'repas'])
     if (vers === null) return { kind: 'repas-libre', date, slot, repas: null }
     const source = (vers && typeof vers === 'object' ? vers : d) as Record<string, unknown>
+    const base = pick(source, ['base', 'derive', 'plat_origine'])
+    /**
+     * `base` doit désigner un plat qui EXISTE.
+     *
+     * Il ne sert qu'à l'affichage — « variante de : Poulet, lentilles » — mais un
+     * identifiant fantôme produirait une ligne qui promet une recette et un lien qui
+     * n'ouvre rien. Mieux vaut ne rien annoncer que d'annoncer dans le vide.
+     */
+    if (base !== undefined && base !== null) {
+      if (typeof base !== 'string' || !isId(base)) return null
+      if (ctx.recipeKnown && !ctx.recipeKnown(base)) return null
+    }
     const repas = freeMealFrom({
       label: pick(source, ['label', 'nom', 'plat']),
       kcal: pick(source, ['kcal', 'calories']),
       p: pick(source, ['p', 'proteines', 'prot']),
       g: pick(source, ['g', 'glucides']),
       l: pick(source, ['l', 'lipides']),
+      base: base ?? undefined,
+      items: pick(source, ['items', 'ingredients', 'composition']),
+      steps: pick(source, ['steps', 'preparation', 'recette']),
       from: 'claude',
-    })
+    // `foodKnown` transmis : un ingrédient inventé fait échouer la proposition ici,
+    // exactement comme pour une recette. C'est le même garde-fou, sur le même
+    // catalogue, et il vaut mieux qu'il tombe au dépôt qu'au moment de valider.
+    }, { foodKnown: ctx.foodKnown })
     return repas ? { kind: 'repas-libre', date, slot, repas } : null
   }
   if (p.action === 'planning-seance') {
@@ -244,7 +262,19 @@ const KINDS = ['pdj', 'boite', 'diner', 'collation', 'sauce'] as const
  */
 /** Les catégories du catalogue. En inventer une ferait disparaître l'aliment de
  *  la liste de courses, qui est groupée par catégorie. */
-const CATS = ['viandes', 'poissons', 'oeufs', 'laitiers', 'feculents', 'legumes', 'fruits', 'grasses', 'aromates', 'complements', 'boissons'] as const
+/**
+ * Les catégories RÉELLES, celles de `FoodCat`.
+ *
+ * Cette liste en contenait deux de plus — « poissons » et « boissons » — qui
+ * n'existent nulle part ailleurs. Un aliment déposé avec l'une d'elles passait la
+ * validation, puis se rangeait dans une catégorie que `CAT_LABELS` ne sait pas
+ * nommer et que `CAT_ORDER` ne parcourt pas : il disparaissait de la liste de
+ * courses. Accepté, enregistré, invisible — le pire des trois états.
+ *
+ * Les poissons vivent dans « viandes », dont l'intitulé affiché est d'ailleurs
+ * « Viandes / poissons ».
+ */
+const CATS = ['viandes', 'oeufs', 'laitiers', 'feculents', 'legumes', 'fruits', 'grasses', 'aromates', 'complements'] as const
 
 /**
  * Créer ou corriger un ingrédient.

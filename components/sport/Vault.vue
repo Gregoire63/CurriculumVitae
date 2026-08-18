@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useVault } from '~/composables/useVault'
-import { detailLines, weekFor } from '~/lib/proposals'
+import { detailLines, planFor, weekFor } from '~/lib/proposals'
+import { checkFreeMeal } from '~/lib/freeMeal'
 import type { RawProposal } from '~/lib/proposals'
 import { useNutrition } from '~/composables/useNutrition'
 
@@ -106,6 +107,36 @@ function semaine(p: RawProposal) {
       midi: j.slots.lunch ? nomPlat(j.slots.lunch) : '—',
       soir: j.slots.dinner ? nomPlat(j.slots.dinner) : '—',
     })),
+  }
+}
+
+/**
+ * La composition d'un repas hors plan, confrontée aux macros annoncées.
+ *
+ * C'est le seul endroit de l'application où l'on peut encore refuser sans rien
+ * perdre — après validation, le repas est écrit et compte dans la journée. Alors on
+ * montre l'écart ICI, avant, plutôt qu'après.
+ *
+ * On MONTRE, on ne bloque pas. Un écart a deux causes également plausibles : un
+ * grammage estimé de travers, ou un ingrédient qui n'a pas d'identifiant dans le
+ * catalogue — un gigot, un burger — et que Claude n'a donc pas pu lister. Refuser la
+ * seconde au nom de la première reviendrait à interdire de décrire ce qu'on a mangé
+ * dès qu'un seul ingrédient sort du plan. Le bouton « Appliquer » reste donc actif :
+ * c'est une phrase de plus à lire, pas une porte fermée.
+ */
+function compositionLibre(p: RawProposal) {
+  const plan = planFor(p, v.ctx)
+  if (plan?.kind !== 'repas-libre' || !plan.repas) return null
+  const ctrl = checkFreeMeal(plan.repas, library.value.foods)
+  if (!ctrl) return null
+  return {
+    repas: plan.repas,
+    lignes: (plan.repas.items ?? []).map(it => ({
+      nom: library.value.foods[it.food]?.name ?? it.food,
+      g: it.g,
+    })),
+    base: plan.repas.base ? library.value.recipes[plan.repas.base]?.name ?? plan.repas.base : null,
+    ctrl,
   }
 }
 
@@ -282,6 +313,26 @@ async function doRefuse(p: RawProposal) {
         <div class="vt-p-sum">{{ p.summary }}</div>
         <div class="vt-p-meta mono muted">
           {{ p.action }} · {{ new Date(p.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) }}
+        </div>
+        <!-- Une composition s'affiche d'office, comme une semaine : c'est ce qu'on
+             valide. La lire en JSON dans « voir le détail » ne permet pas de repérer
+             qu'un grammage a un zéro de trop. -->
+        <div v-if="compositionLibre(p)" class="vt-libre">
+          <div v-if="compositionLibre(p)!.base" class="vt-libre-base">
+            variante de <b>{{ compositionLibre(p)!.base }}</b> · le plat du catalogue ne bouge pas
+          </div>
+          <table class="vt-libre-t">
+            <tr v-for="(l, i) in compositionLibre(p)!.lignes" :key="i">
+              <th>{{ l.nom }}</th><td class="mono">{{ l.g }} g</td>
+            </tr>
+          </table>
+          <p v-if="compositionLibre(p)!.ctrl.notable" class="vt-libre-ecart">
+            ⚠️ Ces ingrédients donnent <b>{{ Math.round(compositionLibre(p)!.ctrl.calcule.kcal) }} kcal</b>,
+            la proposition en annonce <b>{{ Math.round(compositionLibre(p)!.ctrl.saisi.kcal) }}</b>
+            ({{ compositionLibre(p)!.ctrl.ecartPct > 0 ? '+' : '' }}{{ compositionLibre(p)!.ctrl.ecartPct }} %).
+            Normal si un ingrédient n'est pas dans le catalogue ; à vérifier sinon.
+            Ce sont les chiffres annoncés qui seront enregistrés.
+          </p>
         </div>
         <!-- Une semaine s'affiche d'office : c'est le contenu qu'on valide, pas un détail. -->
         <table v-if="semaine(p)" class="vt-week">

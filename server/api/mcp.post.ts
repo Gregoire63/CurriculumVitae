@@ -1,10 +1,12 @@
 import { addProposal, readMirror, readProposals, verifyToken } from '../utils/vault'
 import { noteCall } from '../utils/trace'
-import { DAY_NAMES, KIND_GROUP_LABELS, builtinWeeks, dowIndex, expandItems, keepsOf, macrosOf, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, recipeForSlot, roundMacros } from '~/lib/nutritionStats'
+import { DAY_NAMES, KIND_GROUP_LABELS, PAL_SEDENTARY, bmrMifflin, builtinWeeks, dayBurn, dayEnergy, dowIndex, expandItems, keepsOf, macrosOf, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, proteinPlan, recipeForSlot, resolveDay, roundMacros } from '~/lib/nutritionStats'
 import { cookedWeight } from '~/lib/cooked'
+import { dayBudget, fitInto } from '~/lib/dayBudget'
+import type { SlotState } from '~/lib/dayBudget'
 import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { getAt } from '~/lib/pointer'
-import { checkFieldFix, foodFor, recipeFor, twinPath } from '~/lib/proposals'
+import { checkFieldFix, foodFor, planFor, recipeFor, twinPath } from '~/lib/proposals'
 import { weightTrend } from '~/lib/bilan'
 import { PROGRAM } from '~/data/sportProgram'
 import { VARIANTS } from '~/data/exerciseVariants'
@@ -166,6 +168,37 @@ const TOOLS = [
     },
   },
   {
+    name: 'journee',
+    description: 'CE QUI RESTE À MANGER AUJOURD\'HUI. Cible calorique et protéique du jour, ce qui est déjà avalé, ce que les créneaux non cochés apportent s\'ils sont pris tels quels, et donc l\'écart à combler. À appeler AVANT de composer quoi que ce soit : sans lui on compose à l\'estime, et l\'estime se trompe toujours dans le même sens.',
+    inputSchema: {
+      type: 'object',
+      properties: { date: { type: 'string', description: 'AAAA-MM-JJ — par défaut aujourd\'hui' } },
+    },
+  },
+  {
+    name: 'composer',
+    description: 'Calcule les macros EXACTES d\'une liste d\'ingrédients et les confronte à ce qui reste sur la journée. Sert à vérifier une composition avant de la déposer, plutôt qu\'à s\'excuser après : les grammages passent par le catalogue, il n\'y a plus de calcul de tête. Un « food » inconnu est signalé nommément.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          description: '[{ food: "saumon", g: 211 }, …] — identifiants du catalogue (outil « aliments »)',
+          items: {
+            type: 'object',
+            properties: {
+              food: { type: 'string', description: 'Identifiant de l\'aliment' },
+              g: { type: 'number', description: 'Grammes, CRUS pour viandes, poissons et féculents' },
+            },
+            required: ['food', 'g'],
+          },
+        },
+        date: { type: 'string', description: 'AAAA-MM-JJ — la journée sur laquelle imputer le repas. Par défaut aujourd\'hui.' },
+      },
+      required: ['items'],
+    },
+  },
+  {
     name: 'plats',
     description: 'Catalogue des plats : identifiant, nom, type de créneau, conservation. C\'est la liste des identifiants VALIDES pour proposer un menu ou un changement de plat — ne jamais en inventer un.',
     inputSchema: {
@@ -175,10 +208,14 @@ const TOOLS = [
   },
   {
     name: 'recette',
-    description: 'Le contenu RÉEL d\'un plat : ses ingrédients avec leurs grammages (crus), sa préparation, ses macros, sa conservation, sa sauce. Indispensable avant de modifier une recette — « plats » ne donne que les noms. Sans argument, rend la liste des identifiants.',
+    description: 'Le contenu RÉEL d\'un plat : ses ingrédients avec leurs grammages (crus), sa préparation, ses macros, sa conservation, sa sauce. Indispensable avant de modifier une recette — « plats » ne donne que les noms. Sans argument, rend la liste des identifiants. Avec { date, slot } au lieu d\'un id, rend la composition du REPAS LIBRE de ce créneau — c\'est ainsi qu\'on relit une variante qu\'on a soi-même déposée, plutôt que de la recalculer de mémoire.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string', description: 'Identifiant du plat, ex. « boite-a »' } },
+      properties: {
+        id: { type: 'string', description: 'Identifiant du plat, ex. « boite-a »' },
+        date: { type: 'string', description: 'AAAA-MM-JJ — avec « slot », lit le repas libre de ce jour au lieu du catalogue' },
+        slot: { type: 'string', description: 'Créneau : pdj, creatine, pre, lunch, snack, dinner, night' },
+      },
     },
   },
   {
@@ -234,6 +271,12 @@ const TOOLS = [
             '• plat : { date: "AAAA-MM-JJ", slot: "lunch"|"dinner"|"pdj"|"snack"|"night"|"pre"|"creatine", vers: "<id de plat>" ou null pour revenir au plat prévu }',
             '• planning-seance : { date: "AAAA-MM-JJ", vers: "s1".."s4" ou "repos" }',
             '• repas-libre : { date: "AAAA-MM-JJ", slot: "lunch", vers: { label: "Kebab galette + frites", kcal: 1050, p: 45, g: 95, l: 50 } } — un repas qu\'il n\'a pas cuisiné, qui REMPLACE le plat prévu de ce créneau et porte ses propres macros. « vers: null » le retire et rend le créneau au plat prévu. C\'est la seule forme où tu fournis des chiffres estimés : donne les quatre, les protéines surtout, et dis dans le résumé sur quoi tu t\'es basé.',
+            '  Trois champs FACULTATIFS de « vers » servent quand le repas est une VARIANTE d\'un plat du catalogue — mêmes ingrédients, portions changées, ingrédient remplacé, sauce retirée :',
+            '    · base : l\'identifiant du plat dont ça dérive, ex. "din-saumon". Affiche « variante de : … » et donne accès à la recette standard en regard.',
+            '    · items : [{ food: "saumon", g: 211 }, …] — la composition RÉELLE de ce repas-là. Appelle « recette » sur le plat d\'origine et repars de ses ingrédients en corrigeant ce qui a changé. Chaque « food » doit exister (outil « aliments ») ou le dépôt est refusé. La liste peut être PARTIELLE : si un ingrédient n\'a pas d\'identifiant — un gigot, un burger — liste les autres, ce sont tes macros qui font foi.',
+            '    · steps : la préparation adaptée, seulement si elle diffère de celle du catalogue.',
+            '  Ça ne modifie JAMAIS le plat du catalogue : la variante ne vaut que pour ce repas et ce jour. Donne toujours kcal/p/g/l même avec « items » — l\'application calcule les macros des ingrédients listés et te les compare, elle ne les remplace pas. Un écart de plus de 10 % s\'affiche comme un avertissement à la validation, pas comme un refus.',
+            '  Pour relire une composition déjà déposée, appelle « recette » avec { date, slot } au lieu d\'un id — plus fiable que de la recalculer de mémoire.',
             '• semaine : { lundi: "AAAA-MM-JJ", nom: "…", jours: [ { lunch: "<id>", dinner: "<id>", off?: true }, … 7 entrées, lundi en premier ] }',
             '• semaine-type : { seances?: ["s1","s2",null,"s3","s4",null,null], salle?: [7 booléens], teletravail?: [7 booléens] } — lundi en premier, les trois axes sont indépendants',
             '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", sauce?: "<id de sauce>", keeps?: 4, items: [ { food: "<id d\'aliment>", g: 120 } ] } — « items » REMPLACE la liste, envoie-la complète. Lis d\'abord la recette avec l\'outil « recette » : sans ça tu effaces des ingrédients sans le savoir. « steps » est la marche à suivre du batch cooking, « keeps » la conservation en jours — c\'est elle qui décide dans quelle session de cuisine le plat tombe.',
@@ -259,6 +302,21 @@ const TOOLS = [
  * dit quoi corriger.
  */
 function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnown: (id: string) => boolean, recipeKnown: (id: string) => boolean }): string {
+  if (cible === 'repas-libre') {
+    const vers = ((d.vers ?? d.repas) ?? {}) as Record<string, unknown>
+    const items = asArray(vers.items ?? vers.ingredients ?? vers.composition)
+    const inconnus = items
+      .map(it => (it && typeof it === 'object' ? (it as Record<string, unknown>).food ?? (it as Record<string, unknown>).aliment : null))
+      .filter((f): f is string => typeof f === 'string' && !ctx.foodKnown(f))
+    if (inconnus.length) {
+      return `Ces aliments n'existent pas : ${inconnus.join(', ')}. Appelle « aliments » pour les identifiants valides. Tu peux aussi n'en lister qu'une partie : les macros que tu donnes font foi, « items » ne sert qu'à afficher les grammages.`
+    }
+    const base = vers.base
+    if (typeof base === 'string' && base && !ctx.recipeKnown(base)) {
+      return `Le plat « ${base} » n'existe pas. « base » doit désigner un plat du catalogue — appelle « plats » — ou être omis.`
+    }
+    return 'Repas libre refusé : il faut un « label », des « kcal » entre 1 et 5000, et si tu donnes « items », chaque ligne doit avoir un « food » du catalogue et des « g » entre 0 et 2000.'
+  }
   if (cible === 'recette') {
     const items = Array.isArray(d.items) ? d.items : (Array.isArray(d.ingredients) ? d.ingredients : [])
     const inconnus = items
@@ -279,7 +337,7 @@ function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnow
   if (Number.isFinite(kcal) && Number.isFinite(somme) && kcal > 0 && Math.abs(somme - kcal) > kcal * 0.25 + 20) {
     return `Les macros donnent ${Math.round(somme)} kcal, pas ${kcal}. Une étiquette mal recopiée ne fait rien planter, elle fausse les calories pour toujours — relis-la.`
   }
-  return 'Aliment refusé : il faut un nom, une catégorie valide (viandes, poissons, oeufs, laitiers, feculents, legumes, fruits, grasses, aromates, complements, boissons) et les quatre valeurs POUR 100 g.'
+  return 'Aliment refusé : il faut un nom, une catégorie valide (viandes — poissons compris —, oeufs, laitiers, complements, feculents, legumes, fruits, grasses, aromates) et les quatre valeurs POUR 100 g, glucides DISPONIBLES hors fibres.'
 }
 
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
@@ -300,7 +358,21 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
      * divergé, et c'est toujours celui qui n'est pas testé qui laisse passer.
      */
     const cible = String(args.cible ?? '')
-    if (cible === 'aliment' || cible === 'recette') {
+    /**
+     * `repas-libre` n'est vérifié ici QUE s'il porte une composition.
+     *
+     * Sans `items`, c'est une étiquette de restaurant recopiée à la main : il n'y a
+     * aucun identifiant à confronter au catalogue, et le faire passer par `planFor`
+     * ne changerait rien. Avec `items`, en revanche, chaque aliment doit exister —
+     * même exigence que pour une recette, et pour la même raison : une composition
+     * qui référence un aliment inventé s'affiche en identifiants bruts dans la fiche.
+     */
+    const versLibre = ((detail.vers ?? detail.repas) ?? null) as Record<string, unknown> | null
+    const libreAvecItems = cible === 'repas-libre'
+      && !!versLibre && typeof versLibre === 'object'
+      && !!(versLibre.items ?? versLibre.ingredients ?? versLibre.composition ?? versLibre.base)
+
+    if (cible === 'aliment' || cible === 'recette' || libreAvecItems) {
       const m = await readMirror()
       const nut = ((m?.data as Record<string, unknown>)?.nutrition ?? {}) as Record<string, unknown>
       const recettes = mergeRecipes(
@@ -311,7 +383,9 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
       const ctx = { foodKnown: (id: string) => !!foods[id], recipeKnown: (id: string) => !!recettes[id] }
       const brut = { id: '', at: '', action: cible, summary: resume, patch: detail, status: 'pending' as const }
-      const plan = cible === 'aliment' ? foodFor(brut, ctx) : recipeFor(brut, ctx)
+      const plan = cible === 'aliment'
+        ? foodFor(brut, ctx)
+        : (cible === 'recette' ? recipeFor(brut, ctx) : planFor(brut, ctx))
       if (!plan) throw new Error(refusMessage(cible, detail, ctx))
     }
 
@@ -432,14 +506,6 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       )
       const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
       const id = String(args.id ?? '')
-      if (!id) {
-        return {
-          rappel: 'Appelle « recette » avec un id pour voir les ingrédients et les grammages.',
-          plats: Object.values(recettes).filter(r => !r.disabled).map(r => ({ id: r.id, nom: r.name, type: r.kind })),
-        }
-      }
-      const r = recettes[id]
-      if (!r) throw new Error(`Plat inconnu : ${id}. Appelle « recette » sans argument pour la liste.`)
 
       /**
        * Les grammages sont CRUS, et le poids cuit est donné à côté quand il existe.
@@ -460,6 +526,70 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
           ...(f?.cook ? { cuisson: f.cook } : {}),
         }
       }
+
+      /**
+       * Un REPAS LIBRE relu par (date, créneau).
+       *
+       * C'est la contrepartie du dépôt : ce qui a été proposé peut être relu tel
+       * qu'il est enregistré, au lieu d'être reconstitué de mémoire d'une
+       * conversation à l'autre — ce qui produisait des macros fausses.
+       *
+       * Rien ici ne vient du catalogue, sauf les noms d'aliments et le rappel du plat
+       * d'origine : la composition affichée est celle DE CE REPAS. C'est tout
+       * l'intérêt d'une variante, et ce serait un contresens d'aller rechercher les
+       * grammages standards.
+       */
+      const date = String(args.date ?? '')
+      const slot = String(args.slot ?? '')
+      if (date && slot) {
+        const libres = (nut.freeMeals ?? {}) as Record<string, Record<string, Record<string, unknown>>>
+        const jour = libres[date] ?? {}
+        const repas = jour[slot]
+        if (!repas) {
+          const dispos = Object.keys(jour)
+          throw new Error(dispos.length
+            ? `Aucun repas libre sur ${date} au créneau « ${slot} ». Ce jour-là il y en a sur : ${dispos.join(', ')}.`
+            : `Aucun repas libre le ${date}. Appelle « journee » pour voir ce qui est prévu ce jour-là.`)
+        }
+        const items = asArray(repas.items) as { food: string, g: number }[]
+        const saisi = {
+          kcal: Number(repas.kcal) || 0,
+          p: Number(repas.p) || 0,
+          g: Number(repas.g) || 0,
+          l: Number(repas.l) || 0,
+        }
+        const baseId = typeof repas.base === 'string' ? repas.base : null
+        const base = baseId ? recettes[baseId] : null
+        return {
+          repas_libre: true,
+          date,
+          creneau: slot,
+          nom: repas.label ?? '',
+          saisi_par: repas.from ?? 'saisie',
+          derive_de: base ? { id: base.id, nom: base.name } : null,
+          preparation: (typeof repas.steps === 'string' && repas.steps) || (base?.steps ?? null),
+          preparation_adaptee: typeof repas.steps === 'string' && !!repas.steps,
+          ingredients: items.map(ligne),
+          // Les DEUX chiffres, jamais un seul. Les macros saisies font foi ; le
+          // calcul depuis les ingrédients n'est là que pour se contredire soi-même
+          // quand un grammage est faux ou qu'un ingrédient manque à l'appel.
+          macros_saisies: saisi,
+          macros_des_ingredients: items.length ? roundMacros(macrosOf(items, foods)) : null,
+          rappel: items.length
+            ? 'Les macros SAISIES font foi. Si le calcul des ingrédients s\'en écarte, c\'est soit un grammage faux, soit un ingrédient hors catalogue non listé — pas une erreur à corriger d\'office.'
+            : 'Ce repas n\'a pas de composition : seules les macros ont été saisies.',
+        }
+      }
+
+      if (!id) {
+        return {
+          rappel: 'Appelle « recette » avec un id pour voir les ingrédients et les grammages, ou avec { date, slot } pour relire un repas libre.',
+          plats: Object.values(recettes).filter(r => !r.disabled).map(r => ({ id: r.id, nom: r.name, type: r.kind })),
+        }
+      }
+      const r = recettes[id]
+      if (!r) throw new Error(`Plat inconnu : ${id}. Appelle « recette » sans argument pour la liste.`)
+
       const sauce = r.sauce ? recettes[r.sauce] : null
       return {
         id: r.id,
@@ -560,6 +690,180 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       return {
         pesees: asArray(d.bodyWeight).slice(-limite),
         composition: asArray(d.withingsBody).slice(-limite),
+      }
+    }
+    /**
+     * Le budget du jour, assemblé depuis le miroir.
+     *
+     * Toute la difficulté est ici, et elle est d'ASSEMBLAGE, pas de calcul : il faut
+     * rejouer ce que l'écran fait — le poids le plus récent, la dépense décomposée,
+     * la semaine de menus qui s'applique à cette date, le plat réellement choisi
+     * plutôt que celui prévu, les repas hors plan qui remplacent un créneau, les
+     * cases cochées, les extras notés. Le moindre écart et le conseil contredit
+     * l'application, ce qui est pire que pas de conseil du tout.
+     *
+     * La soustraction, elle, est dans lib/dayBudget.ts, avec ses tests.
+     */
+    case 'journee':
+    case 'composer': {
+      const nut = (d.nutrition ?? {}) as Record<string, unknown>
+      const jour = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date)
+        ? args.date
+        : new Date().toISOString().slice(0, 10)
+      const dow = dowIndex(jour)
+
+      const recettes = mergeRecipes(
+        asArray(nut.userRecipes) as never,
+        (nut.recipePatches ?? {}) as never,
+        asArray(nut.disabledRecipes) as never,
+      )
+      const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
+
+      // ─── Le poids, l'âge, le métabolisme ──────────────────────────────────
+      const pesees = (asArray(d.bodyWeight) as { date?: string, kg?: number }[])
+        .filter(w => typeof w.kg === 'number')
+        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      const kg = pesees[0]?.kg ?? null
+      const profil = (d.profile ?? {}) as { heightCm?: number, sex?: 'h' | 'f', birthYear?: number }
+      const age = profil.birthYear ? Number(jour.slice(0, 4)) - profil.birthYear : null
+      const bmr = bmrMifflin(kg ?? null, profil.heightCm ?? null, age, profil.sex ?? null)
+
+      // ─── Salle ou repos, télétravail, pas ────────────────────────────────
+      const semaineType = (nut.week ?? { gym: [], tt: [] }) as never
+      const resolu = resolveDay(jour, semaineType, ((nut.overrides ?? {}) as Record<string, never>)[jour])
+      const seancesDuJour = (asArray(d.sessions) as { at?: string }[])
+        .filter(x => String(x.at ?? '').slice(0, 10) === jour)
+      // Séance enregistrée → dépense estimée sur ce qui a vraiment été fait ; séance
+      // prévue mais pas encore faite → le forfait de l'écran, pour ne pas annoncer
+      // une cible qui bondira le soir venu.
+      const DEFAULT_BURN = 440
+      const brule = !kg || bmr === null
+        ? 0
+        : (seancesDuJour.length ? dayBurn(seancesDuJour as never, kg, bmr) : (resolu.gym ? DEFAULT_BURN : 0))
+      const energie = (bmr !== null && kg)
+        ? dayEnergy({ bmr, kg, tt: resolu.tt, steps: resolu.steps, sessionKcal: brule })
+        : null
+
+      // ─── Les créneaux du jour ─────────────────────────────────────────────
+      const assign = (nut.menuAssign ?? {}) as Record<string, string>
+      const mesSemaines = asArray(nut.menus).map(normalizeWeek).filter(Boolean)
+      const passees = Object.keys(assign).filter(m => m <= mondayOf(jour)).sort()
+      const voulue = passees.length ? assign[passees.at(-1)!] : (nut.activeMenu as string | null)
+      const toutes = [...builtinWeeks(), ...mesSemaines] as ReturnType<typeof builtinWeeks>
+      const menu = toutes.find(w => w.id === voulue) ?? toutes[0]
+
+      const pris = ((nut.picked ?? {}) as Record<string, Record<string, string>>)[jour] ?? {}
+      const libres = ((nut.freeMeals ?? {}) as Record<string, Record<string, Record<string, unknown>>>)[jour] ?? {}
+      const coches = new Set(((nut.eaten ?? {}) as Record<string, string[]>)[jour] ?? [])
+
+      const slots: SlotState[] = (resolu.gym ? SLOTS_GYM : SLOTS_REST).map((sl) => {
+        const libre = libres[sl.id]
+        if (libre) {
+          return {
+            slot: sl.id, time: sl.time, label: sl.label,
+            plat: String(libre.label ?? 'Repas hors plan'),
+            macros: {
+              kcal: Number(libre.kcal) || 0, p: Number(libre.p) || 0,
+              g: Number(libre.g) || 0, l: Number(libre.l) || 0,
+            },
+            mange: coches.has(sl.id), libre: true,
+          }
+        }
+        const rid = pris[sl.id] ?? recipeForSlot(menu, dow, sl)
+        const r = rid ? recettes[rid] : null
+        return {
+          slot: sl.id, time: sl.time, label: sl.label,
+          plat: r?.name ?? null,
+          macros: r
+            ? roundMacros(macrosOf(expandItems(r, { foods, recipes: recettes }), foods))
+            : { kcal: 0, p: 0, g: 0, l: 0 },
+          mange: coches.has(sl.id), libre: false,
+        }
+      })
+
+      const extras = (((nut.extras ?? {}) as Record<string, Record<string, number>[]>)[jour] ?? [])
+        .map(e => ({ kcal: Number(e.kcal) || 0, p: Number(e.p) || 0, g: Number(e.g) || 0, l: Number(e.l) || 0 }))
+
+      const budget = dayBudget({
+        cible: energie?.target ?? 0,
+        cibleProteines: kg ? proteinPlan(kg).g : null,
+        slots,
+        extras,
+      })
+
+      // ─── « composer » : le même budget, plus une composition confrontée ───
+      if (name === 'composer') {
+        const items = asArray(args.items) as { food?: unknown, g?: unknown }[]
+        if (!items.length) throw new Error('« items » est obligatoire : [{ food: "saumon", g: 211 }, …]. Appelle « aliments » pour les identifiants.')
+        const propres: { food: string, g: number }[] = []
+        const inconnus: string[] = []
+        for (const it of items) {
+          const f = typeof it?.food === 'string' ? it.food : ''
+          const gr = Number(it?.g)
+          if (!f || !Number.isFinite(gr) || gr <= 0) throw new Error('Chaque ligne veut un « food » (identifiant du catalogue) et des « g » strictement positifs.')
+          if (!foods[f]) { inconnus.push(f); continue }
+          propres.push({ food: f, g: Math.round(gr * 10) / 10 })
+        }
+        if (inconnus.length) {
+          throw new Error(`Ces aliments n'existent pas : ${inconnus.join(', ')}. Appelle « aliments » pour les identifiants valides, ou propose-les avec « cible: aliment ».`)
+        }
+        const apporte = roundMacros(macrosOf(propres, foods))
+        return {
+          date: jour,
+          detail: propres.map((it) => {
+            const f = foods[it.food]
+            const k = it.g / 100
+            const cuit = cookedWeight(it.food, it.g, { mesures: (nut.cookedRatios ?? {}) as Record<string, number> })
+            return {
+              aliment: it.food,
+              nom: f.name,
+              grammes_crus: it.g,
+              ...(cuit ? { grammes_cuits: cuit } : {}),
+              kcal: Math.round(f.kcal * k),
+              p: Math.round(f.p * k * 10) / 10,
+              g: Math.round(f.g * k * 10) / 10,
+              l: Math.round(f.l * k * 10) / 10,
+            }
+          }),
+          total: apporte,
+          // La confrontation, c'est tout l'intérêt : savoir que le plat fait 640 kcal
+          // ne sert à rien si on ignore qu'il en restait 500.
+          dans_la_journee: fitInto(apporte, budget),
+          reste_avant_ce_repas: budget.reste,
+          rappel: 'Ces chiffres sont calculés depuis le catalogue : reprends-les tels quels dans « proposer_modification », ne les recalcule pas.',
+        }
+      }
+
+      return {
+        date: jour,
+        jour: DAY_NAMES[dow],
+        jour_de_salle: resolu.gym,
+        teletravail: resolu.tt,
+        depense: energie
+          ? {
+              metabolisme: energie.bmr,
+              base_kcal: energie.baseKcal,
+              pas_kcal: energie.stepsKcal,
+              seance_kcal: energie.sessionKcal,
+              seance_estimee: !seancesDuJour.length && resolu.gym,
+            }
+          : null,
+        cible_kcal: budget.cible,
+        cible_proteines_g: budget.cibleProteines,
+        deja_mange: budget.mange,
+        prevu_sur_la_journee: budget.prevu,
+        reste_a_manger: budget.reste,
+        // La différence entre `reste_a_manger` et `apport_des_creneaux_restants` dit
+        // s'il faut alléger ou ajouter, et de combien. C'est LE chiffre à lire.
+        apport_des_creneaux_restants: budget.restePrevu,
+        creneaux: slots.map(sl => ({
+          creneau: sl.slot, heure: sl.time, intitule: sl.label,
+          plat: sl.plat, hors_plan: sl.libre, mange: sl.mange, macros: sl.macros,
+        })),
+        extras_notes: extras.length,
+        rappel: energie
+          ? 'Pour composer un repas qui tombe juste : « composer » avec la liste d\'ingrédients, il calcule et confronte à ce reste. Ne calcule pas de tête.'
+          : 'Cible indisponible : il manque une pesée récente, la taille ou l\'année de naissance dans le profil.',
       }
     }
     case 'nutrition': {

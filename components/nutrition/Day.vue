@@ -5,6 +5,7 @@ import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
 import { useWorkout } from '~/composables/useWorkout'
 import type { DayMeal, DayStatus } from '~/lib/nutritionStats'
+import type { FreeMeal } from '~/lib/freeMeal'
 import {
   DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, choicesForSlot, dayBurn,
   dayEnergy, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
@@ -36,6 +37,27 @@ const { bodyWeight, sessionLog } = useWorkout()
 const { bodyComp } = useWithings()
 
 const sheet = ref<DayMeal | null>(null)
+/**
+ * Le repas hors plan dont on regarde la composition.
+ *
+ * Séparé de `sheet` parce que ce n'est pas la même fiche : celle d'un plat lit le
+ * catalogue par son identifiant, celle-ci n'a pas d'identifiant du tout — sa
+ * composition vit dans le repas lui-même, pour ce jour-là seulement.
+ */
+const freeSheet = ref<{ meal: FreeMeal, slotLabel: string, time: string } | null>(null)
+/** Fiche de catalogue ouverte DEPUIS une variante — elle n'a pas de repas derrière. */
+const sheetId = ref<string | null>(null)
+const fermerFiches = () => { sheet.value = null; sheetId.value = null }
+/** La composition d'un créneau, s'il en a une. Sans elle, rien à ouvrir. */
+const freeOf = (slot: string) => {
+  const f = freeMealFor(props.todayIso, slot)
+  return f?.items?.length ? f : null
+}
+function openMeal(m: DayMeal) {
+  const f = m.free ? freeOf(m.slot) : null
+  if (f) { freeSheet.value = { meal: f, slotLabel: m.label, time: m.time }; return }
+  if (!m.free) sheet.value = m
+}
 const adding = ref(false)
 const quickLabel = ref('')
 const quickKcal = ref('')
@@ -351,7 +373,11 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
     </p>
     <div class="nu-meals">
       <div v-for="m in day.meals" :key="m.slot" class="card nu-meal" :class="{ done: isEaten(props.todayIso, m.slot) }">
-        <button class="nu-meal-main" :disabled="m.free" @click="sheet = m">
+        <!-- Un repas hors plan n'était PAS cliquable : il n'y avait rien derrière.
+             Il l'est redevenu dès qu'il porte une composition — c'est justement là
+             qu'on a besoin des grammages, et c'était le seul endroit où l'on ne
+             pouvait pas les lire. -->
+        <button class="nu-meal-main" :disabled="m.free && !freeOf(m.slot)" @click="openMeal(m)">
           <div class="nu-meal-top">
             <span class="nu-time mono">{{ m.time }}</span>
             <span class="nu-slot">{{ m.label }}</span>
@@ -367,7 +393,9 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
                pour une information qu'on ne lit pas en cochant un repas, et qui est
                de toute façon dans la fiche, à un clic. Reste ce qui identifie le
                plat — son nom et sa photo. -->
-          <div class="muted nu-meal-more">{{ m.free ? 'Saisi à la main' : 'Voir la recette →' }}</div>
+          <div class="muted nu-meal-more">
+            {{ m.free ? (freeOf(m.slot) ? 'Voir la composition →' : 'Saisi à la main') : 'Voir la recette →' }}
+          </div>
         </button>
         <div class="nu-meal-side">
           <!-- Photo en lecture seule, et en grand : c'est elle qu'on reconnaît d'un
@@ -494,7 +522,18 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
     <Teleport to="body">
       <div class="sport-app sport-portal">
         <transition name="sheet">
-          <NutritionRecipeSheet v-if="sheet" :id="sheet.recipeId" @close="sheet = null" />
+          <NutritionRecipeSheet v-if="sheet || sheetId" :id="sheetId ?? sheet!.recipeId" @close="fermerFiches()" />
+        </transition>
+        <!-- La composition d'un repas hors plan. « voir la recette standard »
+             enchaîne sur la fiche du catalogue : les deux se lisent en regard, ce
+             qui est tout l'intérêt d'une variante. -->
+        <transition name="sheet">
+          <NutritionFreeSheet
+            v-if="freeSheet"
+            :meal="freeSheet.meal" :slot-label="freeSheet.slotLabel" :time="freeSheet.time"
+            @close="freeSheet = null"
+            @recette="sheetId = $event; freeSheet = null"
+          />
         </transition>
       </div>
     </Teleport>
