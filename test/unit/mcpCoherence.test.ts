@@ -1,0 +1,141 @@
+import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { SESSION_FORFAIT, ageOn, sessionBurn } from '../../lib/energy'
+import { latestWeight, weightOn } from '../../lib/weight'
+import { bmrMifflin, dayEnergy, isDayPlayed, proteinPlan } from '../../lib/nutritionStats'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Le connecteur ne doit jamais contredire l'écran.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// C'est arrivé trois fois, et à chaque fois de la même façon : le serveur avait sa
+// propre copie d'une règle que l'application avait, elle, corrigée depuis.
+//
+//   · la cible protéique, calculée sur le poids total au lieu de la masse maigre —
+//     dix-huit grammes d'écart, tous les jours ;
+//   · la dépense de séance, sans la clause « journée passée » — plusieurs centaines
+//     de calories sur un jour de salle manqué ;
+//   · le poids, pris à la dernière pesée au lieu de celle du jour interrogé.
+//
+// Un conseil qui contredit l'application vaut moins que pas de conseil : on ne sait
+// plus lequel croire, donc on ne croit plus aucun des deux.
+//
+// Ces tests vérifient DEUX choses. D'abord que le serveur importe bien les fonctions
+// partagées plutôt que d'en réécrire. Ensuite, sur ses vrais chiffres, que la chaîne
+// complète donne le résultat attendu.
+
+const MCP = readFileSync('server/api/mcp.post.ts', 'utf8')
+
+describe('le serveur emprunte les règles, il ne les réécrit pas', () => {
+  it('importe le socle énergie et le socle poids', () => {
+    expect(MCP).toMatch(/from '~\/lib\/energy'/)
+    expect(MCP).toMatch(/from '~\/lib\/weight'/)
+    expect(MCP).toMatch(/sessionBurn\(/)
+  })
+
+  it('ne redéclare NI le forfait de séance NI sa propre règle de dépense', () => {
+    // Il en avait une à lui, sans la clause « journée passée ».
+    expect(MCP).not.toMatch(/DEFAULT_BURN/)
+    expect(MCP).not.toMatch(/=\s*440/)
+    expect(MCP).not.toMatch(/\bdayBurn\(/)
+  })
+
+  it('lit le poids À LA DATE demandée, pas la dernière pesée', () => {
+    expect(MCP).toMatch(/weightOn\(/)
+    // `latestWeight` conviendrait pour « aujourd'hui » et mentirait pour toute autre date.
+    expect(MCP).not.toMatch(/latestWeight\(/)
+  })
+
+  it('calcule la cible protéique sur la composition corporelle', () => {
+    expect(MCP).toMatch(/carriedComp\(/)
+    expect(MCP).toMatch(/proteinPlan\(comp\?\.kg \?\? kg, comp\)/)
+  })
+
+  /**
+   * Une cible inconnue n'est PAS zéro.
+   *
+   * Miroir jamais poussé, pesée manquante à la date demandée, profil incomplet : la
+   * cible est indisponible. Rendue à 0, elle se lisait « zéro calorie à manger », et
+   * le reste devenait négatif — le connecteur annonçait un dépassement à quelqu'un
+   * qui venait de petit-déjeuner.
+   */
+  it('rend « null » plutôt que zéro quand la cible est inconnue', () => {
+    expect(MCP).toMatch(/const sansCible = !energie/)
+    expect(MCP).toMatch(/cible_kcal: sansCible \? null : /)
+    expect(MCP).toMatch(/reste_a_manger: sansCible \? null : /)
+    expect(MCP).toMatch(/dans_la_journee: sansCible \? null : /)
+    expect(MCP).toMatch(/CIBLE INDISPONIBLE/)
+  })
+
+  /**
+   * Le serveur tourne en UTC, lui vit à Paris. Une journée « déjà jouée » se décide à
+   * 15 h locales : sans conversion, deux heures par jour où le connecteur crédite un
+   * forfait de séance que l'écran a déjà retiré.
+   */
+  it('raisonne à l’heure de Paris, pas à celle du serveur', () => {
+    expect(MCP).toMatch(/Europe\/Paris/)
+    expect(MCP).toMatch(/aujourdhuiParis\(\)/)
+    expect(MCP).toMatch(/heureParis\(\)/)
+    // Et la date par défaut aussi : à minuit passé en France, le serveur est encore la veille.
+    expect(MCP).not.toMatch(/new Date\(\)\.toISOString\(\)\.slice\(0, 10\)/)
+  })
+})
+
+describe('la chaîne complète, sur ses chiffres réels', () => {
+  // Profil réel : 179 cm, né en 1997, pesées de la semaine du 19 août 2026.
+  const PESEES = [
+    { date: '2026-08-17', kg: 91.91 },
+    { date: '2026-08-18', kg: 91.84 },
+    { date: '2026-08-19', kg: 91.58 },
+  ]
+  const chaine = (iso: string, opts: { gym: boolean, tt: boolean, records?: unknown[], played: boolean }) => {
+    const kg = weightOn(PESEES, iso)!.kg
+    const bmr = bmrMifflin(kg, 179, ageOn(iso, 1997), 'h')!
+    const burn = sessionBurn({ records: (opts.records ?? []) as never, kg, bmr, gymPlanned: opts.gym, played: opts.played })
+    return { kg, bmr, ...dayEnergy({ bmr, kg, tt: opts.tt, sessionKcal: burn }) }
+  }
+
+  it('un jour sans salle donne la cible que l’application affiche', () => {
+    const r = chaine('2026-08-19', { gym: false, tt: false, played: false })
+    expect(r.kg).toBe(91.58)
+    expect(r.bmr).toBe(1895)
+    expect(r.need).toBe(2446)
+    expect(r.target).toBe(1960)
+  })
+
+  it('un jour de salle à venir crédite le forfait, et lui seul', () => {
+    const r = chaine('2026-08-19', { gym: true, tt: false, played: false })
+    expect(r.sessionKcal).toBe(SESSION_FORFAIT)
+    expect(r.need).toBe(2886)
+  })
+
+  /** LA correction : la séance prévue que la journée a laissée passer. */
+  it('un jour de salle MANQUÉ ne crédite rien', () => {
+    const r = chaine('2026-08-19', { gym: true, tt: false, played: true })
+    expect(r.sessionKcal).toBe(0)
+    expect(r.need).toBe(2446)
+    // 350 kcal de cible en moins : c'est l'écart que le connecteur annonçait en trop.
+    expect(chaine('2026-08-19', { gym: true, tt: false, played: false }).target - r.target).toBe(350)
+  })
+
+  it('relire une date passée emploie la pesée de CE jour-là', () => {
+    expect(chaine('2026-08-17', { gym: false, tt: false, played: true }).kg).toBe(91.91)
+    expect(chaine('2026-08-19', { gym: false, tt: false, played: true }).kg).toBe(91.58)
+    // La dernière pesée connue donnerait 91,58 partout — soit un métabolisme faux de 3 kcal
+    // le 17, et bien davantage sur une date plus ancienne.
+    expect(latestWeight(PESEES)).toBe(91.58)
+  })
+
+  it('la cible protéique suit la masse maigre, comme à l’écran', () => {
+    const comp = { kg: 91.58, fatRatio: 26.4, leanMass: 67.39 }
+    expect(proteinPlan(comp.kg, comp as never).g).toBe(174)
+    // Sur le poids total, on obtiendrait 192 : c'est ce que le connecteur disait.
+    expect(proteinPlan(91.58).g).toBe(192)
+  })
+
+  it('la journée bascule en « jouée » à 15 h, pas à l’heure du serveur', () => {
+    expect(isDayPlayed('2026-08-19', '2026-08-19', 14)).toBe(false)
+    expect(isDayPlayed('2026-08-19', '2026-08-19', 15)).toBe(true)
+    expect(isDayPlayed('2026-08-18', '2026-08-19', 9)).toBe(true)
+  })
+})

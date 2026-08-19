@@ -3,9 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
+import { useEnergy } from '~/composables/useEnergy'
+import { useDayPlan } from '~/composables/useDayPlan'
 import { useWorkout } from '~/composables/useWorkout'
 import {
-  adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, carryAdjustedTarget, dayBurn, dayEnergy, dayIntake, donutArcs, hhmm, isDayPlayed, macroTargets, mondayOf, nextMeal, proteinPlan, sessionsOn, sumMacros, timelineOf, weekBalance,
+  adjustRemaining, adjustSignature, applySteps, buildDay, carryAdjustedTarget, dayIntake, donutArcs, hhmm, isDayPlayed, macroTargets, mondayOf, nextMeal, sessionsOn, sumMacros, timelineOf, weekBalance,
 } from '~/lib/nutritionStats'
 import { shiftIso } from '~/utils/sportStats'
 
@@ -25,8 +27,11 @@ const {
 // Le bandeau peut être monté sans passer par l'onglet Nutrition : il hydrate lui-même.
 onMounted(hydrate)
 const { profile } = useProfile()
-const { bodyWeight, sessionLog } = useWorkout()
+const { currentWeight, sessionLog } = useWorkout()
 const { bodyComp } = useWithings()
+// Âge, métabolisme, dépense, cible protéique : le socle partagé.
+const { burnOn, energyOn, proteinTarget } = useEnergy()
+const { viewOf } = useDayPlan()
 
 const open = ref(false)
 const eatSheet = ref(false)
@@ -38,35 +43,38 @@ const time = ref(hhmm(new Date()))
 // diverger l'accueil de la feuille des repas passé 15 h.
 const { nowHour, nowMin } = useNow()
 
-const kg = computed(() => [...bodyWeight.value].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? null)
-const age = computed(() => (profile.value.birthYear ? new Date(props.todayIso + 'T00:00:00').getFullYear() - profile.value.birthYear : null))
-const bmr = computed(() => bmrMifflin(kg.value, profile.value.heightCm, age.value, profile.value.sex))
+const kg = currentWeight
 
-const DEFAULT_BURN = 440
 
-/** Bilan d'une journée quelconque : sert pour aujourd'hui et pour le report hebdo. */
+/**
+ * Bilan d'une journée quelconque : sert pour aujourd'hui et pour le report hebdo.
+ *
+ * La règle de dépense qui vivait ici — enregistré, sinon forfait tant que la journée
+ * n'est pas finie, sinon zéro — était la BONNE. Elle est simplement devenue celle de
+ * tout le monde : deux autres écrans oubliaient la dernière clause et créditaient
+ * quatre cents calories à une séance jamais faite. Voir composables/useEnergy.ts.
+ */
 function energyOf(iso: string) {
-  if (bmr.value === null || !kg.value) return null
-  const r = dayFor(iso)
-  const rec = sessionsOn(sessionLog(), iso)
-  const played = isDayPlayed(iso, props.todayIso, nowHour.value)
-  const burn = rec.length ? dayBurn(rec, kg.value, bmr.value) : (r.gym && !played ? DEFAULT_BURN : 0)
-  return { r, burn, energy: dayEnergy({ bmr: bmr.value, kg: kg.value, tt: r.tt, steps: stepsFor(iso), sessionKcal: burn }) }
+  const energy = energyOn(iso)
+  if (!energy) return null
+  return { r: dayFor(iso), burn: burnOn(iso), energy }
 }
 
-const planOf = (iso: string, trained: boolean) => dayPlanFor(iso, trained)
 
 const today = computed(() => energyOf(props.todayIso))
 
 // Ce qui a déjà été avalé : repas validés + extras. L'ajustement ne doit porter que
 // sur les repas restants, sinon un écart déjà encaissé se paierait deux fois.
-const eatenSoFar = computed(() => {
-  const base = planOf(props.todayIso, (today.value?.burn ?? 0) > 0)
-  const done = new Set(eatenSlots(props.todayIso))
-  const meals = base.meals.filter(m => done.has(m.slot)).map(m => m.macros)
-  const ex = extrasFor(props.todayIso).map(e => ({ kcal: e.kcal, p: e.p, g: e.g, l: e.l }))
-  return sumMacros([...meals, ...ex]).kcal
-})
+/**
+ * La journée d'aujourd'hui, construite par le socle partagé.
+ *
+ * Tout ce bloc — déjà avalé, séance en attente, ajustement conseillé, plan
+ * effectif — existait à l'identique dans l'onglet Nutrition. Deux écrans qui
+ * calculent séparément les calories restantes de la MÊME journée finissent par en
+ * afficher deux. Voir composables/useDayPlan.ts.
+ */
+const vue = computed(() => viewOf(props.todayIso))
+const eatenSoFar = computed(() => vue.value.eatenKcal)
 
 /**
  * Séance prévue mais pas encore enregistrée. Tant qu'on est dans cet état, la
@@ -75,28 +83,11 @@ const eatenSoFar = computed(() => {
  * L'écran Jour s'en garde déjà ; Hero ne le faisait pas, et les deux affichaient
  * donc des « kcal restantes » différentes au même moment.
  */
-const pending = computed(() => {
-  const t = today.value
-  if (!t) return false
-  return t.r.gym
-    && sessionsOn(sessionLog(), props.todayIso).length === 0
-    && !isDayPlayed(props.todayIso, props.todayIso, nowHour.value)
-})
+// « Séance prévue, pas encore enregistrée » : c'est exactement ce que dit
+// `dayStatus`, qui était réimplémenté ici à la main.
+const pending = computed(() => vue.value.status === 'pending')
 
-const day = computed(() => {
-  const base = planOf(props.todayIso, (today.value?.burn ?? 0) > 0)
-  if (!today.value || pending.value) return base
-  const adj = adjustRemaining(
-    base, today.value.energy.target,
-    eatenSlots(props.todayIso), eatenSoFar.value,
-    prepMode.value, library.value.foods,
-  )
-  // Même règle que l'écran Jour : un ajustement non confirmé reste un conseil. Sans
-  // ce garde-fou, le bandeau afficherait des kcal restantes déjà corrigées pendant
-  // que l'écran Jour attend encore la confirmation — deux chiffres, une seule journée.
-  if (!isAdjustApplied(props.todayIso, adjustSignature(adj))) return base
-  return applySteps(base, adj, library.value.foods)
-})
+const day = computed(() => vue.value.plan)
 
 // ─── Report hebdomadaire ─────────────────────────────────────────────────────
 // Un écart ne se rattrape pas le lendemain : il se lisse sur les jours qui restent.
@@ -106,7 +97,9 @@ const balance = computed(() => {
     const iso = shiftIso(monday, i)
     const e = energyOf(iso)
     if (!e) return null
-    const intake = dayIntake(planOf(iso, e.burn > 0), eatenSlots(iso), extrasFor(iso), e.energy.target)
+    // Le plan EFFECTIF de chaque jour, ajustement confirmé compris : le bilan de la
+    // semaine doit additionner ce qui a été mangé, pas ce qui était prévu.
+    const intake = dayIntake(viewOf(iso, { past: iso < props.todayIso }).plan, eatenSlots(iso), extrasFor(iso), e.energy.target)
     return { iso, target: e.energy.target, eaten: intake.eaten.kcal, closed: iso < props.todayIso }
   }).filter(Boolean) as { iso: string, target: number, eaten: number, closed: boolean }[]
   return rows.length ? weekBalance(rows) : null
@@ -148,11 +141,7 @@ const arcs = computed(() => {
 
 // ─── Statistiques de tête ───────────────────────────────────────────────────
 // Même source que dans Day.vue, pour que les deux écrans ne se contredisent jamais.
-const pTarget = computed(() => {
-  const c = bodyComp.value
-  if (c?.kg) return proteinPlan(c.kg, c).g
-  return kg.value ? proteinPlan(kg.value).g : null
-})
+const pTarget = computed(() => proteinTarget.value?.g ?? null)
 const stepsToday = computed(() => stepsFor(props.todayIso))
 const doneCount = computed(() => line.value.filter(e => e.done).length)
 const totalMeals = computed(() => line.value.filter(e => e.kind === 'plan').length)

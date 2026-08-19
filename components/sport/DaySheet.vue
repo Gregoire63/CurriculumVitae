@@ -5,14 +5,15 @@ import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { choicesForSlot } from '~/lib/nutritionStats'
 import { useNutrition } from '~/composables/useNutrition'
-import { useProfile } from '~/composables/useProfile'
 import { useTraining } from '~/composables/useTraining'
 import { useWithings } from '~/composables/useWithings'
 import { EFFORT_OPTIONS } from '~/utils/sportStats'
 import { variantName } from '~/data/exerciseVariants'
 import {
-  bmrMifflin, buildDay, dayBurn, dayEnergy, roundMacros, sessionsOn,
+  buildDay, roundMacros, sessionsOn,
 } from '~/lib/nutritionStats'
+import { useEnergy } from '~/composables/useEnergy'
+import { useDayPlan } from '~/composables/useDayPlan'
 
 // Ce qui s'est passé une journée donnée — et deux façons d'y revenir : rouvrir la
 // séance, ou rouvrir les repas.
@@ -28,9 +29,10 @@ import {
 const props = defineProps<{ iso: string, todayIso: string | null }>()
 const emit = defineEmits<{ close: [], edit: [rec: SessionRecord] }>()
 
-const { sessionLog, bodyWeight } = useWorkout()
+const { sessionLog } = useWorkout()
 const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots, library, stock, pickedFor, setPicked, freeMealFor } = useNutrition()
-const { profile } = useProfile()
+const { burnOn, energyOn } = useEnergy()
+const { viewOf } = useDayPlan()
 const { entries: bodyEntries, suspectAts } = useWithings()
 
 const DOW = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
@@ -51,26 +53,24 @@ const isToday = computed(() => props.iso === props.todayIso)
 const resolved = computed(() => dayFor(props.iso))
 const records = computed(() => sessionsOn(sessionLog(), props.iso))
 
-// Poids le plus proche AVANT la date : le métabolisme d'un mardi ne doit pas être
-// calculé avec le poids d'aujourd'hui quand on relit une semaine d'il y a un mois.
-const kg = computed(() => {
-  const before = [...bodyWeight.value].filter(e => e.date <= props.iso).sort((a, b) => a.date.localeCompare(b.date))
-  return before.at(-1)?.kg ?? bodyWeight.value[0]?.kg ?? null
-})
-const age = computed(() => (profile.value.birthYear ? Number(props.iso.slice(0, 4)) - profile.value.birthYear : null))
-const bmr = computed(() => bmrMifflin(kg.value, profile.value.heightCm, age.value, profile.value.sex))
+// Âge, métabolisme, dépense : la chaîne entière vient du socle partagé, indexée par
+// DATE. Le métabolisme d'un mardi de mars se calcule avec le poids de ce mardi-là.
+// Et une séance prévue mais jamais enregistrée ne crédite plus le forfait une fois
+// la journée passée — voir composables/useEnergy.ts.
+const burn = computed(() => burnOn(props.iso))
+const energy = computed(() => energyOn(props.iso))
 
-const DEFAULT_BURN = 440
-const burn = computed(() => {
-  if (!kg.value || bmr.value === null) return 0
-  if (records.value.length) return dayBurn(records.value, kg.value, bmr.value)
-  return resolved.value.gym ? DEFAULT_BURN : 0
-})
-const energy = computed(() => (bmr.value !== null && kg.value
-  ? dayEnergy({ bmr: bmr.value, kg: kg.value, tt: resolved.value.tt, steps: stepsFor(props.iso), sessionKcal: burn.value })
-  : null))
-
-const plan = computed(() => dayPlanFor(props.iso, burn.value > 0))
+/**
+ * LA MÊME journée que l'accueil et que l'onglet Nutrition.
+ *
+ * Elle était reconstruite ici avec `dayPlanFor`, c'est-à-dire le plan de BASE. Si
+ * l'ajustement du soir avait été confirmé ce jour-là — « j'ai bien retiré les 100 g
+ * de riz » —, l'accueil et Nutrition montraient le dîner allégé, et le Journal, en
+ * relisant la même date, montrait le dîner d'origine. Deux totaux pour une seule
+ * assiette, et c'est le Journal qu'on consulte quand on cherche à comprendre une
+ * semaine. Voir composables/useDayPlan.ts.
+ */
+const plan = computed(() => viewOf(props.iso, { past: true }).plan)
 const planTotal = computed(() => (plan.value ? roundMacros(plan.value.total) : null))
 const done = computed(() => new Set(eatenSlots(props.iso)))
 const doneCount = computed(() => plan.value?.meals.filter(m => done.value.has(m.slot)).length ?? 0)

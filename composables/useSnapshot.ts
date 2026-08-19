@@ -2,6 +2,7 @@ import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import { useNutrition } from '~/composables/useNutrition'
 import { useWithings } from '~/composables/useWithings'
+import { useRestTimer } from '~/composables/useRestTimer'
 
 /**
  * L'instantané complet des données, en un seul endroit.
@@ -22,6 +23,7 @@ export function useSnapshot() {
   const { profile, weekPlan, planDays } = useProfile()
   const { exportData } = useNutrition()
   const { snapshot: withingsData } = useWithings()
+  const { snapshot: timerData } = useRestTimer()
 
   function buildSnapshot(): Record<string, unknown> {
     return {
@@ -33,6 +35,7 @@ export function useSnapshot() {
       planDays: planDays.value,
       nutrition: exportData(),
       ...withingsData(),
+      ...timerData(),
     }
   }
 

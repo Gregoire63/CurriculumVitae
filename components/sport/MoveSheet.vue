@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useWorkout } from '~/composables/useWorkout'
-import { useNutrition } from '~/composables/useNutrition'
-import { useProfile } from '~/composables/useProfile'
 import { useTraining } from '~/composables/useTraining'
-import { bmrMifflin, dayEnergy } from '~/lib/nutritionStats'
+import { useEnergy } from '~/composables/useEnergy'
 import { shiftIso } from '~/utils/sportStats'
 
 /**
@@ -18,34 +15,25 @@ import { shiftIso } from '~/utils/sportStats'
 const props = defineProps<{ iso: string, name: string, todayIso: string | null }>()
 const emit = defineEmits<{ close: [], pick: [iso: string] }>()
 
-const { bodyWeight } = useWorkout()
-const { dayFor, stepsFor } = useNutrition()
-const { profile } = useProfile()
+const { energyIfTrained } = useEnergy()
 const { plannedFor } = useTraining()
 
 const DOW = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
-/** Dépense d'une séance moyenne — la même hypothèse que partout ailleurs. */
-const DEFAULT_BURN = 440
 /** Deux jours avant, douze après : de quoi avancer d'un jour comme de repousser
  *  à la semaine suivante, sans faire défiler un calendrier entier. */
 const BEFORE = 2
 const AFTER = 12
 
-const kg = computed(() => [...bodyWeight.value].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? null)
-const age = computed(() => (profile.value.birthYear ? Number(props.iso.slice(0, 4)) - profile.value.birthYear : null))
-const bmr = computed(() => bmrMifflin(kg.value, profile.value.heightCm, age.value, profile.value.sex))
-
-/** Cible calorique d'une date SI l'on s'entraîne (ou non) ce jour-là. */
+/**
+ * Cible calorique d'une date SI l'on s'entraîne (ou non) ce jour-là.
+ *
+ * C'est bien une HYPOTHÈSE : on cherche où déplacer une séance, elle n'a pas eu
+ * lieu. D'où `energyIfTrained` et non `energyOn`, qui répondrait « zéro » pour une
+ * séance non enregistrée sur une journée déjà passée.
+ */
 function targetFor(iso: string, gym: boolean): number | null {
-  if (bmr.value === null || !kg.value) return null
-  return dayEnergy({
-    bmr: bmr.value,
-    kg: kg.value,
-    tt: dayFor(iso).tt,
-    steps: stepsFor(iso),
-    sessionKcal: gym ? DEFAULT_BURN : 0,
-  }).target
+  return energyIfTrained(iso, gym)?.target ?? null
 }
 
 function label(iso: string) {

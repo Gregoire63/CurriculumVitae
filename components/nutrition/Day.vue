@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useNutrition } from '~/composables/useNutrition'
-import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
 import { useWorkout } from '~/composables/useWorkout'
 import type { DayMeal, DayStatus } from '~/lib/nutritionStats'
 import type { FreeMeal } from '~/lib/freeMeal'
 import {
-  DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, bmrMifflin, buildDay, choicesForSlot, dayBurn,
-  dayEnergy, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
-  isDayPlayed, macroSplit, proteinPlan, quickExtra, roundMacros, sessionsOn, sumMacros,
+  DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, buildDay, choicesForSlot, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
+  isDayPlayed, macroSplit, quickExtra, roundMacros, sessionsOn, sumMacros,
 } from '~/lib/nutritionStats'
 import { GYM_BAG } from '~/data/nutritionProgram'
+import { useEnergy } from '~/composables/useEnergy'
+import { useDayPlan } from '~/composables/useDayPlan'
 
 // Vue « Aujourd'hui » : le tableau de bord du jour.
 // Trois postes de dépense explicites — métabolisme, pas, séance — au lieu d'un
@@ -32,8 +32,10 @@ const {
   freeMealFor,
   isAdjustApplied, setAdjustApplied, clearAdjustApplied,
 } = useNutrition()
-const { profile } = useProfile()
-const { bodyWeight, sessionLog } = useWorkout()
+const { currentWeight, sessionLog } = useWorkout()
+// Âge, métabolisme, dépense, cible protéique : un seul chemin pour tous les écrans.
+const { burnOn, energyOn, proteinTarget } = useEnergy()
+const { viewOf } = useDayPlan()
 const { bodyComp } = useWithings()
 
 const sheet = ref<DayMeal | null>(null)
@@ -68,23 +70,11 @@ const { nowHour } = useNow()
 const resolved = computed(() => dayFor(props.todayIso))
 
 // ─── Profil ──────────────────────────────────────────────────────────────────
-const kg = computed(() => {
-  const sorted = [...bodyWeight.value].sort((a, b) => b.date.localeCompare(a.date))
-  return sorted[0]?.kg ?? null
-})
-const age = computed(() => (profile.value.birthYear ? new Date(props.todayIso + 'T00:00:00').getFullYear() - profile.value.birthYear : null))
-const bmr = computed(() => bmrMifflin(kg.value, profile.value.heightCm, age.value, profile.value.sex))
+const kg = currentWeight
 
 // ─── Séance réellement enregistrée ──────────────────────────────────────────
 const todaySessions = computed(() => sessionsOn(sessionLog(), props.todayIso))
-const status = computed<DayStatus>(() => dayStatus({
-  planned: resolved.value.gym,
-  recorded: todaySessions.value.length,
-  skipped: !resolved.value.gym,
-  isPast: isDayPlayed(props.todayIso, props.todayIso, nowHour.value),
-}))
-/** Dépense d'une séance moyenne, tant que la vraie n'est pas connue. */
-const DEFAULT_BURN = 440
+const status = computed<DayStatus>(() => vue.value.status)
 
 // ─── Sac de sport ───────────────────────────────────────────────────────────
 // Visible seulement tant que la séance est à venir : une fois qu'elle est
@@ -94,47 +84,27 @@ const DEFAULT_BURN = 440
 const showBag = computed(() => !props.past && status.value === 'pending')
 const bagPacked = computed(() => GYM_BAG.filter(item => isPacked(props.todayIso, item)).length)
 
-const burn = computed(() => {
-  if (!kg.value || bmr.value === null) return 0
-  if (status.value === 'pending') return DEFAULT_BURN
-  return dayBurn(todaySessions.value, kg.value, bmr.value)
-})
-
 // ─── Énergie du jour ─────────────────────────────────────────────────────────
-const energy = computed(() => {
-  if (bmr.value === null || !kg.value) return null
-  return dayEnergy({
-    bmr: bmr.value,
-    kg: kg.value,
-    tt: resolved.value.tt,
-    steps: stepsFor(props.todayIso),
-    sessionKcal: burn.value,
-  })
-})
-
-const trained = computed(() => burn.value > 0)
-const base = computed(() => dayPlanFor(props.todayIso, trained.value))
+// La chaîne complète — âge, métabolisme, dépense, cible — vient du socle partagé.
+// Elle était recopiée ici comme dans six autres écrans, et les six ne disaient pas
+// tout à fait la même chose. Voir composables/useEnergy.ts.
+const burn = computed(() => burnOn(props.todayIso))
+const energy = computed(() => energyOn(props.todayIso))
 
 /**
- * Ce qui a déjà été avalé : repas validés + extras notés. L'ajustement ne porte que
- * sur ce qui reste, sinon un déjeuner déjà allégé de sa propre initiative se voyait
- * retirer autant une seconde fois le soir.
+ * La journée, construite UNE fois pour toute l'application.
+ *
+ * Le plan de base, ce qui est déjà avalé, l'ajustement du soir et le plan effectif
+ * étaient reconstruits ici ET sur l'accueil, avec des gardes qui ne coïncidaient pas
+ * tout à fait. C'est la même journée : elle ne peut pas afficher deux nombres de
+ * calories restantes selon l'écran par lequel on la regarde.
+ * Voir composables/useDayPlan.ts.
  */
-const eatenSoFar = computed(() => {
-  const done = new Set(eatenSlots(props.todayIso))
-  const meals = base.value.meals.filter(m => done.has(m.slot)).map(m => m.macros)
-  const ex = extrasFor(props.todayIso).map(e => ({ kcal: e.kcal, p: e.p, g: e.g, l: e.l }))
-  return sumMacros([...meals, ...ex]).kcal
-})
-
-const adjustment = computed(() => {
-  if (props.past || !energy.value || status.value === 'pending') return null
-  return adjustRemaining(
-    base.value, energy.value.target,
-    eatenSlots(props.todayIso), eatenSoFar.value,
-    prepMode.value, library.value.foods,
-  )
-})
+const vue = computed(() => viewOf(props.todayIso, { past: props.past }))
+const trained = computed(() => vue.value.trained)
+const base = computed(() => vue.value.base)
+const eatenSoFar = computed(() => vue.value.eatenKcal)
+const adjustment = computed(() => vue.value.suggestion)
 /**
  * L'ajustement n'est plus appliqué d'office : c'est un conseil tant qu'il n'est pas
  * confirmé.
@@ -145,10 +115,9 @@ const adjustment = computed(() => {
  * à rien tant que « C'est fait » n'a pas été pressé — et la confirmation expire
  * d'elle-même si le conseil change (voir `adjustSignature`).
  */
-const adjustSig = computed(() => adjustSignature(adjustment.value))
-const adjustDone = computed(() => isAdjustApplied(props.todayIso, adjustSig.value))
-const day = computed(() =>
-  applySteps(base.value, adjustDone.value ? adjustment.value : null, library.value.foods))
+const adjustSig = computed(() => vue.value.signature)
+const adjustDone = computed(() => vue.value.confirmed)
+const day = computed(() => vue.value.plan)
 
 function confirmAdjust() {
   if (adjustSig.value) setAdjustApplied(props.todayIso, adjustSig.value)
@@ -172,11 +141,7 @@ const split = computed(() => (intake.value ? macroSplit(intake.value.eaten) : nu
  * dernière pesée qui en avait un. Une pesée sans impédance ne fait donc plus bondir
  * la cible du jour au lendemain.
  */
-const pPlan = computed(() => {
-  const c = bodyComp.value
-  if (c?.kg) return proteinPlan(c.kg, c)
-  return kg.value ? proteinPlan(kg.value) : null
-})
+const pPlan = proteinTarget
 const pTarget = computed(() => pPlan.value?.g ?? null)
 
 /**

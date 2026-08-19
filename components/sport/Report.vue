@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
+import { useEnergy } from '~/composables/useEnergy'
 import {
   avgSessionDuration, volumeOf, weeklyStatus, startOfWeek, FATIGUE_LABELS,
   WEEKLY_TARGET_MIN, WEEKLY_TARGET_MAX, SPRINT_SECONDS_MIN, SPEED_PLAN_MAX,
@@ -24,7 +25,8 @@ const PARTS: { id: Part, label: string }[] = [
 ]
 const part = ref<Part>('corps')
 
-const { logs, bodyWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWithGaps, daysSinceExport, lastExportAt, fatigue, milestoneOf, sprintObjective } = useWorkout()
+const { logs, currentWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWithGaps, daysSinceExport, lastExportAt, fatigue, milestoneOf, sprintObjective } = useWorkout()
+const { age: ageDe } = useEnergy()
 const { profile } = useProfile()
 
 const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères', 'curl-ez': 'Curl barre EZ' }
@@ -33,8 +35,8 @@ const fmtVol = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} t` : `${Mat
 const fmtDate = (iso: string) => (iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '')
 
 // Poids : lu seulement pour le métabolisme. L'affichage complet est dans <SportBody>.
-const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
-const age = computed(() => { const y = profile.value.birthYear; return y && props.todayIso ? parseInt(props.todayIso.slice(0, 4), 10) - y : null })
+const latestWeight = currentWeight
+const age = computed(() => (props.todayIso ? ageDe(props.todayIso) : null))
 const bmr = computed(() => {
   const w = latestWeight.value, h = profile.value.heightCm, a = age.value, s = profile.value.sex
   if (!w || !h || !a || !s) return null

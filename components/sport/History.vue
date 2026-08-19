@@ -4,8 +4,7 @@ import { PROGRAM } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { useNutrition } from '~/composables/useNutrition'
-import { useProfile } from '~/composables/useProfile'
-import { bmrMifflin, dayBurn, dayEnergy } from '~/lib/nutritionStats'
+import { useEnergy } from '~/composables/useEnergy'
 
 // Vue « Journal » : UN calendrier, rien d'autre. Le détail d'une journée s'ouvre en
 // feuille au clic.
@@ -17,9 +16,10 @@ import { bmrMifflin, dayBurn, dayEnergy } from '~/lib/nutritionStats'
 const props = defineProps<{ todayIso: string | null }>()
 const emit = defineEmits<{ edit: [rec: SessionRecord] }>()
 
-const { sessionLog, bodyWeight } = useWorkout()
-const { hydrate, dayFor, stepsFor, ttConfirmed } = useNutrition()
-const { profile } = useProfile()
+const { sessionLog } = useWorkout()
+const { hydrate, ttConfirmed } = useNutrition()
+// Âge, métabolisme et dépense : une seule chaîne, partagée — voir composables/useEnergy.ts.
+const { energyOn } = useEnergy()
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const p2 = (n: number) => String(n).padStart(2, '0')
@@ -52,11 +52,8 @@ interface Cell {
  * complets de l'historique à chaque rendu du calendrier — et le calendrier se
  * réévalue au moindre changement réactif.
  */
-function targetOf(iso: string, gym: boolean, tt: boolean): number | null {
-  if (bmr.value === null || !kg.value) return null
-  const rec = sessionsByDay.value[iso] ?? []
-  const burn = rec.length ? dayBurn(rec, kg.value, bmr.value) : (gym ? DEFAULT_BURN : 0)
-  return dayEnergy({ bmr: bmr.value, kg: kg.value, tt, steps: stepsFor(iso), sessionKcal: burn }).target
+function targetOf(iso: string): number | null {
+  return energyOn(iso)?.target ?? null
 }
 
 /**
@@ -67,7 +64,6 @@ function targetOf(iso: string, gym: boolean, tt: boolean): number | null {
  */
 function makeCell(y: number, m: number, d: number, outside: -1 | 0 | 1): Cell {
   const iso = `${y}-${p2(m + 1)}-${p2(d)}`
-  const r = dayFor(iso)
   return {
     iso,
     day: d,
@@ -75,7 +71,7 @@ function makeCell(y: number, m: number, d: number, outside: -1 | 0 | 1): Cell {
     sessions: sessionsByDay.value[iso] || [],
     tt: ttConfirmed(iso),
     future: !!props.todayIso && iso > props.todayIso,
-    kcal: targetOf(iso, r.gym, r.tt),
+    kcal: targetOf(iso),
   }
 }
 
@@ -102,13 +98,6 @@ const calCells = computed<Cell[]>(() => {
   return cells
 })
 const monthLabel = computed(() => `${MONTHS[calMonth.value.m]} ${calMonth.value.y}`)
-
-const DEFAULT_BURN = 440
-const kg = computed(() => [...bodyWeight.value].sort((a, b) => b.date.localeCompare(a.date))[0]?.kg ?? null)
-const age = computed(() => (profile.value.birthYear && props.todayIso
-  ? Number(props.todayIso.slice(0, 4)) - profile.value.birthYear
-  : null))
-const bmr = computed(() => bmrMifflin(kg.value, profile.value.heightCm, age.value, profile.value.sex))
 
 function calShift(delta: number) {
   let m = calMonth.value.m + delta

@@ -1,6 +1,6 @@
 import { addProposal, readMirror, readProposals, verifyToken } from '../utils/vault'
 import { noteCall } from '../utils/trace'
-import { DAY_NAMES, KIND_GROUP_LABELS, PAL_SEDENTARY, bmrMifflin, builtinWeeks, dayBurn, dayEnergy, dowIndex, expandItems, keepsOf, macrosOf, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, proteinPlan, recipeForSlot, resolveDay, roundMacros } from '~/lib/nutritionStats'
+import { DAY_NAMES, KIND_GROUP_LABELS, bmrMifflin, builtinWeeks, dayEnergy, dowIndex, expandItems, isDayPlayed, keepsOf, macrosOf, mergeRecipes, mergeFoods, mondayOf, normalizeWeek, proteinPlan, recipeForSlot, resolveDay, roundMacros } from '~/lib/nutritionStats'
 import { cookedWeight } from '~/lib/cooked'
 import { dayBudget, fitInto } from '~/lib/dayBudget'
 import type { SlotState } from '~/lib/dayBudget'
@@ -8,6 +8,9 @@ import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { getAt } from '~/lib/pointer'
 import { checkFieldFix, foodFor, planFor, recipeFor, twinPath } from '~/lib/proposals'
 import { weightTrend } from '~/lib/bilan'
+import { carriedComp } from '~/lib/withings'
+import { weightOn } from '~/lib/weight'
+import { ageOn, sessionBurn } from '~/lib/energy'
 import { PROGRAM } from '~/data/sportProgram'
 import { VARIANTS } from '~/data/exerciseVariants'
 
@@ -709,7 +712,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       const nut = (d.nutrition ?? {}) as Record<string, unknown>
       const jour = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date)
         ? args.date
-        : new Date().toISOString().slice(0, 10)
+        : aujourdhuiParis()
       const dow = dowIndex(jour)
 
       const recettes = mergeRecipes(
@@ -720,26 +723,42 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
 
       // ─── Le poids, l'âge, le métabolisme ──────────────────────────────────
-      const pesees = (asArray(d.bodyWeight) as { date?: string, kg?: number }[])
-        .filter(w => typeof w.kg === 'number')
-        .sort((a, b) => String(b.date).localeCompare(String(a.date)))
-      const kg = pesees[0]?.kg ?? null
+      /**
+       * Le poids DE CE JOUR-LÀ, pas le dernier connu.
+       *
+       * L'application calcule le métabolisme d'un mardi de mars avec la pesée de ce
+       * mardi-là. Prendre ici la pesée du matin ferait diverger le connecteur de
+       * l'écran dès qu'on interroge une autre date que today — et un conseil qui
+       * contredit l'application vaut moins que pas de conseil.
+       */
+      const kg = weightOn(asArray(d.bodyWeight) as never, jour)?.kg ?? null
+      // La composition corporelle PORTÉE : la dernière pesée qui donne un taux de
+      // masse grasse exploitable, reconduite quelques jours. C'est la même fonction
+      // que l'application, pour que la cible protéique soit la même des deux côtés.
+      const comp = carriedComp(asArray(d.withingsBody) as never)
       const profil = (d.profile ?? {}) as { heightCm?: number, sex?: 'h' | 'f', birthYear?: number }
-      const age = profil.birthYear ? Number(jour.slice(0, 4)) - profil.birthYear : null
-      const bmr = bmrMifflin(kg ?? null, profil.heightCm ?? null, age, profil.sex ?? null)
+      const bmr = bmrMifflin(kg ?? null, profil.heightCm ?? null, ageOn(jour, profil.birthYear), profil.sex ?? null)
 
       // ─── Salle ou repos, télétravail, pas ────────────────────────────────
       const semaineType = (nut.week ?? { gym: [], tt: [] }) as never
       const resolu = resolveDay(jour, semaineType, ((nut.overrides ?? {}) as Record<string, never>)[jour])
       const seancesDuJour = (asArray(d.sessions) as { at?: string }[])
         .filter(x => String(x.at ?? '').slice(0, 10) === jour)
-      // Séance enregistrée → dépense estimée sur ce qui a vraiment été fait ; séance
-      // prévue mais pas encore faite → le forfait de l'écran, pour ne pas annoncer
-      // une cible qui bondira le soir venu.
-      const DEFAULT_BURN = 440
-      const brule = !kg || bmr === null
-        ? 0
-        : (seancesDuJour.length ? dayBurn(seancesDuJour as never, kg, bmr) : (resolu.gym ? DEFAULT_BURN : 0))
+      /**
+       * EXACTEMENT la règle de l'application — la même fonction, pas une copie.
+       *
+       * Elle en avait une à elle, qui oubliait le dernier cas : une séance prévue
+       * que la journée avait laissée passer se voyait quand même créditer le
+       * forfait. Le connecteur annonçait alors une cible plusieurs centaines de
+       * calories trop haute sur les jours de salle manqués. Voir lib/energy.ts.
+       */
+      const brule = sessionBurn({
+        records: seancesDuJour as never,
+        kg,
+        bmr,
+        gymPlanned: resolu.gym,
+        played: isDayPlayed(jour, aujourdhuiParis(), heureParis()),
+      })
       const energie = (bmr !== null && kg)
         ? dayEnergy({ bmr, kg, tt: resolu.tt, steps: resolu.steps, sessionKcal: brule })
         : null
@@ -784,9 +803,24 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       const extras = (((nut.extras ?? {}) as Record<string, Record<string, number>[]>)[jour] ?? [])
         .map(e => ({ kcal: Number(e.kcal) || 0, p: Number(e.p) || 0, g: Number(e.g) || 0, l: Number(e.l) || 0 }))
 
+      /**
+       * Sans cible, on ne REND PAS zéro.
+       *
+       * Faute de pesée à cette date ou de profil complet — miroir jamais poussé,
+       * taille absente — la cible est inconnue. La rendre à 0 la faisait lire comme
+       * « zéro calorie à manger », et le reste devenait négatif : le connecteur
+       * annonçait un dépassement à quelqu'un qui venait de petit-déjeuner. Inconnu
+       * se dit `null`, et se dit en toutes lettres.
+       */
+      const sansCible = !energie
       const budget = dayBudget({
         cible: energie?.target ?? 0,
-        cibleProteines: kg ? proteinPlan(kg).g : null,
+        // Sur la MASSE MAIGRE quand la balance la donne, comme l'écran du jour.
+        // Calculée sur le poids total, la cible sortait à 192 g là où l'application
+        // en affiche 174 : le connecteur conseillait 18 g de protéines de plus que
+        // l'écran, tous les jours. Deux chiffres qui se contredisent valent moins
+        // qu'un seul, même approximatif.
+        cibleProteines: kg ? proteinPlan(comp?.kg ?? kg, comp).g : null,
         slots,
         extras,
       })
@@ -828,9 +862,11 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
           total: apporte,
           // La confrontation, c'est tout l'intérêt : savoir que le plat fait 640 kcal
           // ne sert à rien si on ignore qu'il en restait 500.
-          dans_la_journee: fitInto(apporte, budget),
-          reste_avant_ce_repas: budget.reste,
-          rappel: 'Ces chiffres sont calculés depuis le catalogue : reprends-les tels quels dans « proposer_modification », ne les recalcule pas.',
+          dans_la_journee: sansCible ? null : fitInto(apporte, budget),
+          reste_avant_ce_repas: sansCible ? null : budget.reste,
+          rappel: sansCible
+            ? 'Macros exactes, mais AUCUNE cible disponible pour les situer dans la journée : ne dis pas si le repas « rentre » ou non.'
+            : 'Ces chiffres sont calculés depuis le catalogue : reprends-les tels quels dans « proposer_modification », ne les recalcule pas.',
         }
       }
 
@@ -848,11 +884,11 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
               seance_estimee: !seancesDuJour.length && resolu.gym,
             }
           : null,
-        cible_kcal: budget.cible,
+        cible_kcal: sansCible ? null : budget.cible,
         cible_proteines_g: budget.cibleProteines,
         deja_mange: budget.mange,
         prevu_sur_la_journee: budget.prevu,
-        reste_a_manger: budget.reste,
+        reste_a_manger: sansCible ? null : budget.reste,
         // La différence entre `reste_a_manger` et `apport_des_creneaux_restants` dit
         // s'il faut alléger ou ajouter, et de combien. C'est LE chiffre à lire.
         apport_des_creneaux_restants: budget.restePrevu,
@@ -863,7 +899,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         extras_notes: extras.length,
         rappel: energie
           ? 'Pour composer un repas qui tombe juste : « composer » avec la liste d\'ingrédients, il calcule et confronte à ce reste. Ne calcule pas de tête.'
-          : 'Cible indisponible : il manque une pesée récente, la taille ou l\'année de naissance dans le profil.',
+          : 'CIBLE INDISPONIBLE — ne conclus rien sur les calories. Il manque une pesée à cette date, la taille ou l\'année de naissance dans le profil. Les macros des repas ci-dessous restent exactes : c\'est la cible qui manque, pas le contenu des assiettes.',
       }
     }
     case 'nutrition': {
@@ -909,9 +945,13 @@ function bilan(
   args: Record<string, unknown>,
   props: { status: string }[],
 ): unknown {
+  // À l'heure de PARIS. Le serveur tourne en UTC : entre minuit et deux heures du
+  // matin en France, il est encore la veille pour lui. Le premier outil de toute
+  // conversation annonçait alors la séance et les repas de la veille comme étant
+  // ceux d'aujourd'hui — et rien dans la réponse ne permettait de s'en apercevoir.
   const jour = typeof args.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.date)
     ? args.date
-    : new Date().toISOString().slice(0, 10)
+    : aujourdhuiParis()
   const combien = clampInt(args.seances, 5, 1, 15)
   const nut = (d.nutrition ?? {}) as Record<string, unknown>
 
@@ -998,6 +1038,20 @@ function bilan(
     pour_aller_plus_loin: 'Séries détaillées : « seances ». Historique d\'un mouvement : « exercice ». Un champ précis : « champ ».',
   }
 }
+
+/**
+ * L'heure et la date DE GRÉGOIRE, pas celles du serveur.
+ *
+ * Netlify tourne en UTC ; lui vit à Paris. Une journée « déjà jouée » se décide à
+ * 15 h locales — à 15 h 30 Paris en été, le serveur croit qu'il est 13 h 30 et
+ * conclut que la séance de midi est encore à venir. Deux heures pendant lesquelles
+ * le connecteur crédite un forfait de séance que l'écran, lui, a déjà retiré.
+ */
+const PARIS = 'Europe/Paris'
+const aujourdhuiParis = (): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: PARIS, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+const heureParis = (): number =>
+  Number(new Intl.DateTimeFormat('en-GB', { timeZone: PARIS, hour: '2-digit', hour12: false }).format(new Date()))
 
 const asArray = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 

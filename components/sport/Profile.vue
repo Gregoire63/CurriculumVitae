@@ -7,12 +7,13 @@ import { useProfile } from '~/composables/useProfile'
 import { useSnapshot } from '~/composables/useSnapshot'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { DAY_NAMES } from '~/lib/nutritionStats'
+import { useEnergy } from '~/composables/useEnergy'
 
 // Vue « Profil » extraite de /sport (chargée à la demande). État partagé via composables.
 const props = defineProps<{ todayIso: string | null, withingsError?: string | null }>()
 const emit = defineEmits<{ flash: [msg: string] }>()
 
-const { bodyWeight, exportJSON, importJSON, lastExportAt, daysSinceExport, backupDate, restoreBackup } = useWorkout()
+const { currentWeight, exportJSON, importJSON, lastExportAt, daysSinceExport, backupDate, restoreBackup } = useWorkout()
 // Un seul assemblage des données, partagé par l'export manuel et par le miroir.
 const { buildSnapshot } = useSnapshot()
 
@@ -28,6 +29,8 @@ function onRestore() {
   emit('flash', restoreBackup() ? 'Instantané restauré ✓' : 'Aucun instantané disponible')
 }
 
+// Âge et métabolisme : le socle partagé, jamais recalculés ici.
+const { age: ageDe, bmrOn, maintenanceFor } = useEnergy()
 const { profile, weekPlan, planDays, setHeight, setSex, setBirthYear, resetPlan, restore: restoreProfile } = useProfile()
 // Le module nutrition part dans la même sauvegarde : une seule sauvegarde à gérer.
 const { exportData: nutritionData, restore: restoreNutrition, week, setWeekDay, resetWeek, hydrate: hydrateNutrition } = useNutrition()
@@ -38,7 +41,7 @@ const {
   connected: withingsOn, connect: connectWithings, disconnect: disconnectWithings, entries: weighIns,
 } = useWithings()
 hydrateWithings()
-const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS, watchNotify, watchStatus, setWatchNotify, testWatch } = useRestTimer()
+const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS, watchNotify, watchStatus, setWatchNotify, testWatch, restore: restoreTimer } = useRestTimer()
 
 // Relais montre : la fin de repos part en notification téléphone même app ouverte,
 // pour que la montre (FIT 100 S…) la répercute et vibre au poignet.
@@ -56,7 +59,8 @@ const volPct = computed({
   set: (v: number) => { soundVolume.value = Math.min(1, Math.max(0, (Number(v) || 0) / 100)) },
 })
 
-const latestWeight = computed(() => (bodyWeight.value.length ? bodyWeight.value[bodyWeight.value.length - 1].kg : null))
+// La pesée du matin vient de `useWorkout`, triée par date — voir lib/weight.ts.
+const latestWeight = currentWeight
 const bmi = computed(() => { const h = profile.value.heightCm, w = latestWeight.value; return h && w ? +(w / ((h / 100) ** 2)).toFixed(1) : null })
 const bmiCat = computed(() => {
   const b = bmi.value
@@ -66,14 +70,40 @@ const bmiCat = computed(() => {
   if (b < 30) return { label: 'Surpoids', color: '#a97b1e' }
   return { label: 'Obésité', color: '#b5502f' }
 })
-const age = computed(() => { const y = profile.value.birthYear; return y && props.todayIso ? parseInt(props.todayIso.slice(0, 4), 10) - y : null })
-const bmr = computed(() => {
-  const w = latestWeight.value, h = profile.value.heightCm, a = age.value, s = profile.value.sex
-  if (!w || !h || !a || !s) return null
-  const base = 10 * w + 6.25 * h - 5 * a
-  return Math.round(s === 'h' ? base + 5 : base - 161)
+const age = computed(() => (props.todayIso ? ageDe(props.todayIso) : null))
+const bmr = computed(() => (props.todayIso ? bmrOn(props.todayIso) : null))
+
+/**
+ * Le maintien, calculé COMME L'ÉCRAN DU JOUR le calcule.
+ *
+ * Il valait `bmr × 1,55` — le facteur d'activité « modérément actif » des tables
+ * génériques, appliqué tel quel à toutes les journées. Le reste de l'application
+ * n'a jamais fonctionné comme ça : `dayEnergy` décompose la dépense en trois postes
+ * explicites — métabolisme, pas, séance — précisément pour éviter un coefficient
+ * qu'on ne peut ni vérifier ni discuter.
+ *
+ * Les deux ne tombaient pas au même endroit, et l'écart n'était pas anecdotique :
+ * à 91,6 kg, le forfait annonçait 2937 kcal quand le modèle du jour en calculait
+ * 2446 un jour sans salle. Cinq cents calories d'écart sur le chiffre auquel on
+ * compare ce qu'on mange — de quoi croire à un déficit de 700 kcal là où il y en a
+ * 250, et se resservir « pour compenser ».
+ *
+ * On affiche donc les DEUX journées, parce qu'il n'existe pas de maintien unique
+ * quand quatre jours sur sept comportent une séance. Un seul chiffre aurait forcé à
+ * choisir lequel mentir.
+ */
+const maintienSalle = computed(() => maintenanceFor({ gym: true, tt: false }))
+const maintienRepos = computed(() => maintenanceFor({ gym: false, tt: false }))
+/**
+ * La moyenne pondérée par sa semaine type : c'est ELLE qu'il faut comparer à une
+ * moyenne d'apports sur la semaine, et c'est la comparaison qu'on fait naturellement.
+ */
+const maintienMoyen = computed(() => {
+  const salle = maintienSalle.value, repos = maintienRepos.value
+  if (salle === null || repos === null) return null
+  const jours = weekPlan.value.filter(Boolean).length
+  return Math.round((salle * jours + repos * (7 - jours)) / 7)
 })
-const maintenance = computed(() => (bmr.value ? Math.round(bmr.value * 1.55) : null))
 
 async function onImport(ev: Event) {
   const file = (ev.target as HTMLInputElement).files?.[0]
@@ -83,6 +113,8 @@ async function onImport(ev: Event) {
       restoreProfile(data as { profile?: typeof profile.value; weekPlan?: typeof weekPlan.value; planDays?: typeof planDays.value })
       restoreNutrition(data as Parameters<typeof restoreNutrition>[0])
       restoreWithings(data)
+      // Les réglages du minuteur partaient dans l'export sans jamais en revenir.
+      restoreTimer(data)
     })
     emit('flash', 'Données importées ✓')
   } catch { emit('flash', 'Fichier invalide') }
@@ -110,7 +142,16 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         <span v-if="bmi" class="ps-item">IMC <b :style="{ color: bmiCat!.color }">{{ bmi }}</b> · {{ bmiCat!.label }}</span>
         <span v-if="age" class="ps-item">{{ age }} ans</span>
         <span v-if="bmr" class="ps-item">Métabolisme de base <b>{{ bmr }} kcal</b></span>
-        <span v-if="maintenance" class="ps-item">Maintien ≈ <b>{{ maintenance }} kcal</b></span>
+        <span v-if="maintienMoyen" class="ps-item">Maintien moyen <b>{{ maintienMoyen }} kcal</b></span>
+      </div>
+      <!-- Deux chiffres et non un seul : avec quatre séances par semaine, il n'existe
+           pas de maintien unique. Un chiffre moyen affiché seul se compare à une
+           journée précise, et se trompe des deux côtés selon le jour. -->
+      <div v-if="maintienSalle && maintienRepos" class="muted mt-6">
+        Détail : <b>{{ maintienSalle }} kcal</b> un jour de salle, <b>{{ maintienRepos }} kcal</b> un jour sans.
+        Ces chiffres sont ceux de l'écran du jour — métabolisme, pas et séance additionnés —
+        et non un facteur d'activité forfaitaire. La cible à manger est <b>en dessous</b> :
+        c'est le maintien moins le déficit, et c'est elle qui s'affiche dans Nutrition.
       </div>
       <div v-else class="muted">Renseigne taille, sexe et année de naissance : tout le reste en découle. La pesée, elle, se fait dans <b>Rapport</b>.</div>
     </div>

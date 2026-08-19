@@ -355,10 +355,46 @@ if (import.meta.client) {
 
 export function useRestTimer() {
   hydrateSettings()
+  /**
+   * Les réglages partent dans la sauvegarde, et en reviennent.
+   *
+   * Ils étaient écrits en localStorage et NULLE PART ailleurs : ni dans l'export
+   * manuel, ni dans le miroir. Restaurer sur un téléphone neuf remettait donc le son
+   * par défaut, le volume par défaut, la vibration par défaut — et surtout coupait le
+   * relais vers la montre, silencieusement. On croit avoir tout récupéré, et le
+   * minuteur de repos ne vibre plus au poignet sans qu'on comprenne pourquoi.
+   *
+   * Aucun secret là-dedans : cinq réglages d'interface, rien qui identifie ni qui
+   * ouvre quoi que ce soit.
+   */
+  function snapshot() {
+    return {
+      restTimer: {
+        enabled: soundEnabled.value,
+        volume: soundVolume.value,
+        type: soundType.value,
+        vibration: vibrationLevel.value,
+        watch: watchNotify.value,
+      },
+    }
+  }
+
+  /** Restauration TOLÉRANTE : une sauvegarde d'avant ce champ passe sans erreur. */
+  function restore(data: Record<string, unknown>) {
+    const s = data?.restTimer as Record<string, unknown> | undefined
+    if (!s || typeof s !== 'object') return
+    if (typeof s.enabled === 'boolean') soundEnabled.value = s.enabled
+    if (typeof s.volume === 'number') soundVolume.value = Math.min(1, Math.max(0, s.volume))
+    if (typeof s.type === 'string' && SOUNDS[s.type]) soundType.value = s.type
+    if (typeof s.vibration === 'string' && VIBRATION_LEVELS[s.vibration as keyof typeof VIBRATION_LEVELS]) vibrationLevel.value = s.vibration as typeof vibrationLevel.value
+    if (typeof s.watch === 'boolean') watchNotify.value = s.watch
+  }
+
   return {
     secondsLeft, totalSeconds, start, stop, addTime,
     soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS,
     vibrationLevel, VIBRATION_OPTIONS,
     watchNotify, watchStatus, setWatchNotify, testWatch,
+    snapshot, restore,
   }
 }

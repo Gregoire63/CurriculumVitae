@@ -7,6 +7,7 @@ import {
   nextMilestone, sprintGoal, sprintSessionOf, measuredRatio, rescaleSets, roundToStep,
 } from '~/utils/sportStats'
 import { defaultRatio } from '~/data/exerciseVariants'
+import { latestWeight, weightOn } from '~/lib/weight'
 import type { Effort, PrKind, SetLike, SprintSession, WeekStats } from '~/utils/sportStats'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
@@ -200,10 +201,20 @@ export function useWorkout() {
   /** Poids de corps connu le plus proche (≤) d'une date — sert à retrouver le LEST
    *  réellement ajouté sur les exercices au poids du corps (tractions, dips). */
   function bodyWeightAt(dateIso: string): number | null {
-    const before = bodyWeight.value.filter(e => e.date <= dateIso)
-    if (before.length) return before[before.length - 1].kg
-    return bodyWeight.value.length ? bodyWeight.value[0].kg : null
+    return weightOn(bodyWeight.value, dateIso)?.kg ?? null
   }
+
+  /**
+   * LA pesée courante, celle du matin. Un seul chemin pour tout le monde.
+   *
+   * Cinq écrans la recalculaient chacun de son côté, et deux d'entre eux lisaient le
+   * dernier élément du tableau au lieu de la date la plus récente. Tant que le
+   * tableau est trié — ce que `setWeight` garantit — les deux coïncident. Un import
+   * de sauvegarde, lui, écrit le tableau tel quel : le jour où il arrive dans le
+   * désordre, les réglages et l'écran du jour affichent deux poids différents, donc
+   * deux métabolismes, donc deux cibles caloriques. Voir lib/weight.ts.
+   */
+  const currentWeight = computed(() => latestWeight(bodyWeight.value))
 
   /** Records d'un exercice SUR UNE MACHINE donnée (par défaut : celle du programme).
    *  Un record est un poids qu'on a réellement soulevé, jamais une conversion. */
@@ -725,7 +736,7 @@ export function useWorkout() {
 
   return {
     logs, bodyWeight, sessionHistory, lastExportAt,
-    lastPerf, lastOn, lastEffort, bestCharge, recordsOf, bodyWeightAt,
+    lastPerf, lastOn, lastEffort, bestCharge, recordsOf, bodyWeightAt, currentWeight,
     onVariant, ratioFor, comparable, variantsUsed,
     recordSession, updateSession, progressionHint, suggestWeight, chartData, history, sessionLog,
     muscleSets, muscleSetsWithGaps, weeklyStats, fatigue, stalledCount,
