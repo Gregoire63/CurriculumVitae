@@ -3,6 +3,7 @@ import { planFor } from '../../lib/proposals'
 import { FOOD_BY_ID, RECIPE_BY_ID } from '../../data/nutritionProgram'
 import { PROGRAM } from '../../data/sportProgram'
 import { mergeProgram } from '../../lib/program'
+import { restFor } from '../../lib/rest'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le chemin d'écriture du connecteur, de bout en bout.
@@ -51,7 +52,15 @@ const ctxProg = {
   sessionKnown: (id: string) => PROGRAM.some(s => s.id === id),
   exerciseKnown: (id: string) => PROGRAM.some(s => s.exercises.some(e => e.id === id)),
   exercisesOf: (sid: string) => PROGRAM.find(s => s.id === sid)?.exercises.map(e => e.id) ?? [],
+  exerciseAt: (id: string) => {
+    for (const s of PROGRAM) {
+      const e = s.exercises.find(x => x.id === id)
+      if (e) return { seance: s.id, seanceNom: s.name, actif: true, ex: e }
+    }
+    return null
+  },
 }
+const REPOS_ACTUEL = restFor(PROGRAM[0].exercises[0])
 
 describe('les dix formes de proposition', () => {
   it('plat : remplacer le plat d’un créneau', () => {
@@ -176,7 +185,7 @@ describe('les cibles annoncées au connecteur existent toutes', () => {
       ['recette', { nom: 'Z', kind: 'diner', items: [{ food: UN_ALIMENT, g: 100 }] }],
       ['semaine-type', { salle: [true, false, false, false, false, false, false] }],
       ['correction', { quoi: 'pesee', date: '2026-08-17', de: 91.9, vers: 91.5 }],
-      ['programme', { action: 'modifier', seance: UNE_SEANCE, exercice: UN_EXERCICE, patch: { repos: 150 } }],
+      ['programme', { op: 'modifier', seance: UNE_SEANCE, exercice: UN_EXERCICE, de_repos_s: REPOS_ACTUEL, patch: { repos_s: 150 } }],
     ]
     const muettes = cas.filter(([action, patch]) => planFor(brut(action, patch), ctxProg) === null).map(c => c[0])
     expect(muettes, `cibles sans effet : ${muettes.join(', ')}`).toEqual([])
@@ -191,17 +200,22 @@ describe('le programme, modifié depuis une conversation', () => {
    * de comprendre.
    */
   it('modifie séries, reps et repos d’un exercice réel', () => {
-    const plan = planFor(brut('programme', { action: 'modifier', seance: UNE_SEANCE, exercice: UN_EXERCICE, patch: { series: 5, reps: '5', repos: 180 } }), ctxProg)
-    expect(plan).toMatchObject({ kind: 'programme', action: 'modifier', exercice: UN_EXERCICE, patch: { sets: 5, reps: '5', rest: 180 } })
+    const ex = PROGRAM[0].exercises[0]
+    const plan = planFor(brut('programme', {
+      op: 'modifier', seance: UNE_SEANCE, exercice: UN_EXERCICE,
+      de_series: ex.sets, de_reps: ex.reps, de_repos_s: REPOS_ACTUEL,
+      patch: { series: 5, reps: '5', repos_s: 180 },
+    }), ctxProg)
+    expect(plan).toMatchObject({ kind: 'programme', op: 'modifier', exercice: UN_EXERCICE, patch: { sets: 5, reps: '5', rest: 180 } })
   })
 
   it('refuse un exercice qui n’est pas au programme', () => {
-    expect(planFor(brut('programme', { action: 'modifier', seance: UNE_SEANCE, exercice: 'squat-du-futur', patch: { series: 3 } }), ctxProg)).toBeNull()
+    expect(planFor(brut('programme', { op: 'modifier', seance: UNE_SEANCE, exercice: 'squat-du-futur', patch: { nom: 'X' } }), ctxProg)).toBeNull()
   })
 
   it('retire un exercice sans toucher à l’historique', () => {
-    const plan = planFor(brut('programme', { action: 'retirer', seance: UNE_SEANCE, exercice: UN_EXERCICE }), ctxProg)
-    expect(plan).toEqual({ kind: 'programme', seance: UNE_SEANCE, action: 'retirer', exercice: UN_EXERCICE })
+    const plan = planFor(brut('programme', { op: 'retirer', seance: UNE_SEANCE, exercice: UN_EXERCICE }), ctxProg)
+    expect(plan).toEqual({ kind: 'programme', seance: UNE_SEANCE, op: 'retirer', exercice: UN_EXERCICE })
     // Le geste appliqué DÉSACTIVE : la fiche reste, donc les séances passées
     // continuent d'afficher un nom plutôt qu'un identifiant.
     const apres = mergeProgram(PROGRAM, { disabled: [UN_EXERCICE] })

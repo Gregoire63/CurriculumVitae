@@ -40,7 +40,12 @@ export interface ExercisePatch {
   /** Les deux mouvements enchaînés, par leur LIBELLÉ — pas par identifiant : la
    *  saisie affiche une colonne de charge par mouvement, elle n'ouvre pas de fiche. */
   superset?: [string, string]
+  mesure?: 'reps' | 'temps'
+  optionnel?: boolean
 }
+
+/** Une machine de remplacement, telle qu'une proposition a le droit de la décrire. */
+export interface VariantSpec { id: string, name: string, ratio: number }
 
 export interface ProgramCustom {
   /** Modifications d'exercices livrés, par identifiant. */
@@ -51,6 +56,15 @@ export interface ProgramCustom {
   disabled?: string[]
   /** Ordre voulu des exercices d'une séance, par identifiant de séance. */
   order?: Record<string, string[]>
+  /**
+   * Machines de remplacement redéfinies, par identifiant d'exercice.
+   *
+   * Elles vivent dans `data/exerciseVariants.ts`, avec quatre champs de plus que ce
+   * qu'une proposition sait décrire — `gear` pilote l'icône de matériel, `hint` et
+   * `why` la phrase d'explication. La liste stockée ici ne porte donc QUE l'essentiel,
+   * et la fusion rend le reste au catalogue quand l'identifiant s'y trouve encore.
+   */
+  variants?: Record<string, VariantSpec[]>
 }
 
 const patchOf = (e: Exercise, p?: ExercisePatch): Exercise => {
@@ -66,6 +80,8 @@ const patchOf = (e: Exercise, p?: ExercisePatch): Exercise => {
   if (Array.isArray(p.muscles) && p.muscles.length) out.muscles = p.muscles.filter(m => typeof m === 'string')
   if (typeof p.bodyweight === 'boolean') out.bodyweight = p.bodyweight
   if (Array.isArray(p.superset) && p.superset.length === 2) out.superset = [String(p.superset[0]), String(p.superset[1])]
+  if (p.mesure === 'reps' || p.mesure === 'temps') out.mesure = p.mesure
+  if (typeof p.optionnel === 'boolean') out.optionnel = p.optionnel
   return out
 }
 
@@ -76,28 +92,58 @@ const patchOf = (e: Exercise, p?: ExercisePatch): Exercise => {
  * figurent : réordonner les trois premiers exercices ne doit pas obliger à énumérer
  * les six.
  */
-export function mergeProgram(builtin: Session[], custom: ProgramCustom = {}): Session[] {
+export function mergeProgram(builtin: Session[], custom: ProgramCustom = {}, avecInactifs = false): Session[] {
   const off = new Set(custom.disabled ?? [])
   return builtin.map((s) => {
     const ajoutes = (custom.added?.[s.id] ?? []).filter(e => e && typeof e.id === 'string')
     const tous = [...s.exercises, ...ajoutes]
-      .filter(e => !off.has(e.id))
+      .filter(e => avecInactifs || !off.has(e.id))
       .map(e => patchOf(e, custom.patches?.[e.id]))
 
+    /**
+     * L'ordre voulu déplace les ACTIFS entre eux ; les inactifs gardent leur place.
+     *
+     * C'est ce qui fait qu'une réactivation sans position demandée retrouve l'endroit
+     * d'origine — l'exercice n'a jamais bougé du tableau, il en était seulement filtré.
+     * Trier tout le monde ensemble aurait ramené les inactifs en fin de liste, et un
+     * mouvement repris trois mois plus tard serait revenu à un autre endroit de la
+     * séance que celui d'où il était parti.
+     */
     const voulu = custom.order?.[s.id]
-    if (!voulu?.length) return { ...s, exercises: tous }
+    if (!voulu?.length) return { ...s, exercises: finDeBloc(tous) }
     const rang = new Map(voulu.map((id, i) => [id, i]))
-    const trie = [...tous].sort((a, b) => {
-      const ra = rang.get(a.id), rb = rang.get(b.id)
-      if (ra === undefined && rb === undefined) return 0
-      // Un exercice non cité reste après ceux qui le sont, sans changer d'ordre entre eux.
-      if (ra === undefined) return 1
-      if (rb === undefined) return -1
-      return ra - rb
-    })
-    return { ...s, exercises: trie }
+    const places = tous.map((e, i) => i).filter(i => rang.has(tous[i].id))
+    const deplaces = places
+      .map(i => tous[i])
+      .sort((a, b) => (rang.get(a.id) ?? 0) - (rang.get(b.id) ?? 0))
+    const sortie = [...tous]
+    places.forEach((pos, k) => { sortie[pos] = deplaces[k] })
+    return { ...s, exercises: finDeBloc(sortie) }
   })
 }
+
+/**
+ * Les mouvements facultatifs, toujours en fin de séance.
+ *
+ * C'est fait ICI, dans la fusion, et pas à l'affichage — sinon l'écran montrerait un
+ * ordre et l'outil `programme` en annoncerait un autre, ce qui ferait proposer des
+ * réordonnancements par rapport à une liste que personne ne voit. Un seul ordre,
+ * pour tout le monde.
+ *
+ * Conséquence assumée : un `reordonner` qui place un facultatif au milieu est
+ * accepté — les identifiants sont bons — mais le facultatif redescend en fin de bloc.
+ */
+const finDeBloc = (list: Exercise[]): Exercise[] =>
+  [...list.filter(e => !e.optionnel), ...list.filter(e => e.optionnel)]
+
+/** Un exercice mesuré en TEMPS, et non en répétitions. Le point d'entrée unique des
+ *  trois court-circuits — progression, record, 1RM. */
+export const isTimed = (e: { mesure?: 'reps' | 'temps' } | null | undefined): boolean =>
+  e?.mesure === 'temps'
+
+/** Actif = présent dans le programme. Un exercice retiré reste dans les données. */
+export const isActive = (custom: ProgramCustom, exId: string): boolean =>
+  !(custom.disabled ?? []).includes(exId)
 
 /** Tous les exercices du programme effectif, à plat. */
 export const allExercises = (sessions: Session[]): Exercise[] => sessions.flatMap(s => s.exercises)

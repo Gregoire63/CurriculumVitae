@@ -76,7 +76,9 @@ const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).m
             <div v-if="stats" class="prog-ex-kpis">
               <span class="pk"><b class="mono">{{ stats.max }}</b> kg max</span>
               <span class="pk" :class="{ pos: stats.gain > 0 }"><b class="mono">{{ stats.gain > 0 ? '+' : '' }}{{ stats.gain }}</b> kg évol.</span>
-              <span class="pk"><b class="mono">{{ stats.e1rm }}</b> kg 1RM</span>
+              <!-- Sur un exercice au temps il n'y a pas de 1RM : afficher « 0 kg 1RM »
+                   serait pire que ne rien afficher, on le lirait comme une mesure. -->
+              <span v-if="stats.e1rm" class="pk"><b class="mono">{{ stats.e1rm }}</b> kg 1RM</span>
             </div>
           </div>
           <p v-if="stats?.converted" class="muted prog-conv">

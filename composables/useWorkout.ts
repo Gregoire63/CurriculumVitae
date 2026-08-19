@@ -9,6 +9,7 @@ import {
 import { defaultRatio } from '~/data/exerciseVariants'
 import { latestWeight, weightOn } from '~/lib/weight'
 import { useProgram } from '~/composables/useProgram'
+import { isTimed } from '~/lib/program'
 import type { Effort, PrKind, SetLike, SprintSession, WeekStats } from '~/utils/sportStats'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
@@ -85,7 +86,7 @@ export function useWorkout() {
    * cesser de peser dans la fatigue, sinon il stagne pour l'éternité et tire le
    * verdict vers le bas des mois après qu'on a arrêté de le faire.
    */
-  const { exercises: exos, program: prog } = useProgram()
+  const { exercises: exos, program: prog, exerciseById } = useProgram()
 
   if (!hydrated && import.meta.client) {
     logs.value = safeParse(localStorage.getItem(LOGS_KEY), {})
@@ -233,11 +234,15 @@ export function useWorkout() {
   function recordsOf(exId: string, variant?: string): { charge: number; chargeDate: string; e1rm: number; e1rmDate: string; reps: number; repsDate: string } | null {
     const h = onVariant(exId, variant).filter(s => working(s.sets).length)
     if (!h.length) return null
+    // Le 1RM estimé part d'une formule charge × reps : sur des secondes elle rend un
+    // nombre, et ce nombre ne veut rien dire. On laisse la charge record, qui elle
+    // est réelle — on a bien porté ces kilos — et on n'estime pas de maximum.
+    const temps = isTimed(exerciseById(exId))
     let charge = 0, chargeDate = '', e1rm = 0, e1rmDate = '', reps = 0, repsDate = ''
     for (const s of h) {
       const c = topWeight(s.sets)
       if (c > charge) { charge = c; chargeDate = s.date }
-      const r = e1rmOf(s.sets)
+      const r = temps ? 0 : e1rmOf(s.sets)
       if (r > e1rm) { e1rm = r; e1rmDate = s.date }
     }
     // Meilleur nombre de reps réalisé à la charge record (la perf « qualité »)
@@ -267,7 +272,9 @@ export function useWorkout() {
       if (!sets.length) continue
       // Les records se comparent À MACHINE ÉGALE : 140 kg au squat guidé ne battent
       // pas 100 kg au squat barre, ils ne se soulèvent simplement pas de la même façon.
-      const kinds = detectPRs(onVariant(exId, variant), sets)
+      // Pas de record sur un exercice au temps : comparer des secondes à des reps
+      // produirait un « nouveau record » à chaque série un peu plus longue.
+      const kinds = isTimed(exerciseById(exId)) ? [] : detectPRs(onVariant(exId, variant), sets)
       if (kinds.length) {
         const ex = exos.value.find(e => e.id === exId)
         prs.push({ name: ex ? ex.name : exId, kinds })
@@ -354,6 +361,14 @@ export function useWorkout() {
    * met 110.
    */
   function suggestWeight(ex: Exercise, variant?: string) {
+    /**
+     * Un exercice au TEMPS n'a pas de charge conseillée par les reps.
+     *
+     * « 30-40 s » se lit 40 répétitions pour `topOfRange` : toutes les séries
+     * « atteignent la cible », et l'app conseille de charger — sur du farmer's walk
+     * où l'on a tenu trente secondes. Le conseil serait faux et rien ne le dirait.
+     */
+    if (isTimed(ex)) return { weight: 0, base: 0, inc: 0, streak: 0, reason: 'temps' as const, ratio: 1 }
     const hist = comparable(ex.id)
     const last = hist.length ? hist[hist.length - 1] : null
     const inc = suggestedIncrement(ex)
@@ -386,11 +401,12 @@ export function useWorkout() {
    *  ne doit pas se lire comme un gain. */
   function chartData(exId: string) {
     const raw = logs.value[exId] || []
+    const temps = isTimed(exerciseById(exId))
     return comparable(exId).map((sess, i) => ({
       date: sess.date.slice(5),
       charge: Math.round(topWeight(sess.sets) * 10) / 10,
       volume: volumeOf(sess.sets),
-      e1rm: e1rmOf(sess.sets),
+      e1rm: temps ? 0 : e1rmOf(sess.sets),
       variant: raw[i]?.variant,
       realCharge: topWeight(raw[i]?.sets ?? sess.sets),
     })).filter(d => d.charge > 0)
@@ -493,6 +509,8 @@ export function useWorkout() {
   // ─── Objectifs atteignables ────────────────────────────────────────────
   /** Prochain palier de charge d'un exercice et sa date estimée. */
   function milestoneOf(ex: Exercise, todayIso: string) {
+    // Un palier est un 1RM estimé à franchir. Sans 1RM, pas de palier.
+    if (isTimed(ex)) return null
     return nextMilestone(comparable(ex.id), suggestedIncrement(ex), todayIso)
   }
 

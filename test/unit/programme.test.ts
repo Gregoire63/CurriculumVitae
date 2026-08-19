@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { LEGACY_NAMES, allExercises, mergeProgram, retiredExercises, sessionOf } from '../../lib/program'
+import { LEGACY_NAMES, allExercises, isTimed, mergeProgram, retiredExercises, sessionOf } from '../../lib/program'
 import { programFor, slugify } from '../../lib/proposals'
 import type { RawProposal } from '../../lib/proposals'
+import { PROGRAM } from '../../data/sportProgram'
 import type { Exercise, Session } from '../../data/sportProgram'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -26,14 +27,6 @@ const LIVRE: Session[] = [
 
 const prop = (patch: Record<string, unknown>): RawProposal =>
   ({ id: '1', at: '', action: 'programme', summary: '', patch, status: 'pending' })
-
-/** Le contexte réel : actifs, retirés, séances — tel que le construisent le coffre
- *  et le serveur. Les trois prédicats se distinguent, et c'est le point. */
-const ctxDe = (sessions: Session[], retires: string[] = []) => ({
-  sessionKnown: (id: string) => sessions.some(s => s.id === id),
-  exerciseKnown: (id: string) => sessions.some(s => s.exercises.some(e => e.id === id)) || retires.includes(id),
-  exercisesOf: (sid: string) => sessions.find(s => s.id === sid)?.exercises.map(e => e.id) ?? [],
-})
 
 describe('la fusion du programme', () => {
   it('rend le livré tel quel quand rien n’a été modifié', () => {
@@ -75,9 +68,38 @@ describe('la fusion du programme', () => {
     expect(LIVRE[0].exercises.map(e => e.id)).toEqual(['dc', 'ecarte', 'dips'])
   })
 
-  it('réordonne, et laisse APRÈS ceux qu’on n’a pas cités', () => {
-    const [s1] = mergeProgram(LIVRE, { order: { s1: ['dips'] } })
+  it('réordonne les ACTIFS entre eux, et laisse les inactifs à leur place', () => {
+    const [s1] = mergeProgram(LIVRE, { order: { s1: ['dips', 'dc', 'ecarte'] } })
     expect(s1.exercises.map(e => e.id)).toEqual(['dips', 'dc', 'ecarte'])
+  })
+
+  /**
+   * Le cas qui décide de tout : un exercice retiré ne doit pas dériver.
+   *
+   * S'il glissait en fin de liste à chaque réordonnancement, le reprendre trois mois
+   * plus tard le ferait réapparaître ailleurs que là où il était — et l'ordre a un
+   * sens physiologique : un mouvement de poigne remonté avant un soulevé ruine le
+   * soulevé. On échange donc les POSITIONS des actifs entre elles, sans toucher au reste.
+   */
+  it('ne déplace jamais un exercice inactif en réordonnant', () => {
+    const custom = { disabled: ['ecarte'], order: { s1: ['dips', 'dc'] } }
+    expect(mergeProgram(LIVRE, custom)[0].exercises.map(e => e.id)).toEqual(['dips', 'dc'])
+    // Vu avec les inactifs : « ecarte » n'a pas bougé de son index 1.
+    expect(mergeProgram(LIVRE, custom, true)[0].exercises.map(e => e.id)).toEqual(['dips', 'ecarte', 'dc'])
+  })
+
+  it('rend sa place d’origine à un exercice réactivé', () => {
+    const retire = { disabled: ['ecarte'] }
+    expect(mergeProgram(LIVRE, retire)[0].exercises.map(e => e.id)).toEqual(['dc', 'dips'])
+    // Réactivé — sans rien d'autre —, il retrouve l'index 1.
+    expect(mergeProgram(LIVRE, {})[0].exercises.map(e => e.id)).toEqual(['dc', 'ecarte', 'dips'])
+  })
+
+  it('distingue un exercice mesuré en temps', () => {
+    expect(isTimed({ mesure: 'temps' })).toBe(true)
+    expect(isTimed({ mesure: 'reps' })).toBe(false)
+    expect(isTimed({})).toBe(false)
+    expect(isTimed(null)).toBe(false)
   })
 
   it('retrouve la séance d’un exercice, et garde les noms d’avant', () => {
@@ -87,76 +109,274 @@ describe('la fusion du programme', () => {
   })
 })
 
-describe('une modification de programme proposée', () => {
+// ─────────────────────────────────────────────────────────────────────────────
+// Les cinq gestes, et surtout les refus.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Un geste accepté qui fait la bonne chose est facile à écrire. Ce qui coûte cher,
+// c'est le geste accepté qui fait une chose VOISINE de ce qu'on croyait : un ordre
+// partiel appliqué comme s'il était complet, une modification bâtie sur un miroir de
+// trois heures, un identifiant réutilisé qui range de vieux records sous un mouvement
+// jamais fait. Aucun de ces trois-là ne se voit à l'écran ; ils se découvrent en
+// salle, ou trois mois plus tard dans une courbe qui ne veut rien dire.
+//
+// D'où la proportion : un test par geste, et une dizaine pour ce qui doit être refusé.
+
+/** Le contexte que fournissent le coffre et le serveur, avec ses trois niveaux :
+ *  les actifs d'une séance, l'existence d'un identifiant partout, et l'état complet
+ *  d'un exercice — c'est ce dernier qui permet de refuser utilement. */
+const ctxDe = (sessions: Session[], off: string[] = []) => ({
+  sessionKnown: (id: string) => sessions.some(s => s.id === id),
+  exerciseKnown: (id: string) => sessions.some(s => s.exercises.some(e => e.id === id)),
+  exercisesOf: (sid: string) =>
+    (sessions.find(s => s.id === sid)?.exercises ?? []).filter(e => !off.includes(e.id)).map(e => e.id),
+  exerciseAt: (id: string) => {
+    for (const s of sessions) {
+      const e = s.exercises.find(x => x.id === id)
+      if (e) return { seance: s.id, seanceNom: s.name, actif: !off.includes(id), ex: e }
+    }
+    return null
+  },
+})
+
+describe('modifier un exercice', () => {
   const ctx = ctxDe(LIVRE)
 
-  it('modifie un exercice existant', () => {
-    const plan = programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { series: 5, reps: '5', repos: 180 } }), ctx)
-    expect(plan).toEqual({ kind: 'programme', seance: 's1', action: 'modifier', exercice: 'dc', patch: { sets: 5, reps: '5', rest: 180 } })
+  it('change séries, reps et repos quand la proposition sait ce qu’elle remplace', () => {
+    const plan = programFor(prop({
+      op: 'modifier', seance: 's1', exercice: 'dc',
+      de_series: 4, de_reps: '8-10', de_repos_s: 120,
+      patch: { series: 5, reps: '5', repos_s: 180 },
+    }), ctx)
+    expect(plan).toEqual({
+      kind: 'programme', seance: 's1', op: 'modifier', exercice: 'dc',
+      patch: { sets: 5, reps: '5', rest: 180 },
+    })
   })
 
-  it('accepte les mots français comme les anglais', () => {
-    const a = programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { sets: 3, rest: 90 } }), ctx)
-    const b = programFor(prop({ geste: 'modifier', session: 's1', exercice: 'dc', vers: { series: 3, pause: 90 } }), ctx)
-    expect(a).toEqual(b)
+  /**
+   * LE refus qui justifie tout le mécanisme.
+   *
+   * Le miroir peut avoir des heures de retard. Une proposition écrite ce matin sur
+   * « 4 séries » écraserait sans le savoir un passage à 3 fait depuis sur le
+   * téléphone — et trois séries au lieu de quatre, on ne le remarque pas en salle,
+   * on les fait, c'est tout.
+   */
+  it('refuse une valeur changée sans son « de_… »', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', patch: { series: 5 } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', patch: { reps: '5' } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', patch: { repos_s: 180 } }), ctx)).toBeNull()
   })
 
-  it('refuse un exercice, une séance ou un geste inconnus', () => {
-    expect(programFor(prop({ action: 'modifier', seance: 's1', exercice: 'fantome', patch: { sets: 3 } }), ctx)).toBeNull()
-    expect(programFor(prop({ action: 'modifier', seance: 's9', exercice: 'dc', patch: { sets: 3 } }), ctx)).toBeNull()
-    expect(programFor(prop({ action: 'supprimer', seance: 's1', exercice: 'dc' }), ctx)).toBeNull()
+  it('refuse un « de_… » qui ne correspond pas à la valeur enregistrée', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', de_series: 3, patch: { series: 5 } }), ctx)).toBeNull()
   })
 
-  it('refuse un patch qui ne dit rien, ou des valeurs hors bornes', () => {
-    expect(programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: {} }), ctx)).toBeNull()
+  it('tolère « 4 » pour 4 : c’est la même valeur', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', de_series: '4', patch: { series: 5 } }), ctx))
+      .toMatchObject({ patch: { sets: 5 } })
+  })
+
+  it('n’exige aucun « de_… » sur ce qui n’est pas une valeur chiffrée', () => {
+    // Nom, machine, muscles, consignes : les changer n'écrase pas un réglage
+    // d'entraînement, et exiger une confirmation les rendrait pénibles pour rien.
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', patch: { nom: 'Développé couché', machine: 'Barre olympique' } }), ctx))
+      .toMatchObject({ patch: { name: 'Développé couché', machine: 'Barre olympique' } })
+  })
+
+  it('accepte de vider « machine », qui est du texte libre', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'ecarte', patch: { machine: '' } }), ctx))
+      .toMatchObject({ patch: { machine: '' } })
+  })
+
+  it('accepte mesure et optionnel', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dips', patch: { mesure: 'temps', optionnel: true } }), ctx))
+      .toMatchObject({ patch: { mesure: 'temps', optionnel: true } })
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dips', patch: { mesure: 'au feeling' } }), ctx)).toBeNull()
+  })
+
+  it('refuse un patch vide, un exercice inconnu, une séance inconnue, un geste inventé', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', patch: {} }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'fantome', patch: { nom: 'X' } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'modifier', seance: 's9', exercice: 'dc', patch: { nom: 'X' } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'supprimer', seance: 's1', exercice: 'dc' }), ctx)).toBeNull()
+  })
+
+  it('refuse des bornes absurdes', () => {
     // 40 séries et 2 secondes de repos passent le typage et donnent un écran
     // inutilisable qu'il faudrait corriger à la main sans savoir d'où ça vient.
-    expect(programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { series: 40 } }), ctx)).toBeNull()
-    expect(programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { repos: 2 } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', de_series: 4, patch: { series: 40 } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', de_repos_s: 120, patch: { repos_s: 2 } }), ctx)).toBeNull()
   })
 
-  it('ajoute un exercice, et déduit son identifiant du nom', () => {
-    const plan = programFor(prop({ action: 'ajouter', seance: 's2', nouveau: { nom: 'Tirage horizontal', series: 4, reps: '10-12', repos: 120, muscles: ['dos'] } }), ctx)
-    expect(plan?.action).toBe('ajouter')
-    expect(plan?.nouveau).toEqual({ id: 'tirage-horizontal', name: 'Tirage horizontal', sets: 4, reps: '10-12', muscles: ['dos'], cues: [], machine: '', rest: 120 })
+  it('accepte l’ancien nom du geste, « action », et l’ancien « ordre »', () => {
+    // Une session Claude garde sa liste d'outils en cache pendant des heures :
+    // refuser l'ancien vocabulaire ferait échouer des propositions claires.
+    expect(programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { nom: 'X' } }), ctx)?.op).toBe('modifier')
+    expect(programFor(prop({ action: 'ordre', seance: 's2', ordre: ['rowing', 'traction'] }), ctx)?.op).toBe('reordonner')
+  })
+})
+
+describe('ajouter un exercice', () => {
+  const ctx = ctxDe(LIVRE)
+  const NEUF = { nom: 'Farmer\'s walk', series: 3, reps: '30-40 s', mesure: 'temps', repos_s: 90, muscles: ['avant-bras', 'abdos'], machine: 'Haltères lourds ou trap bar' }
+
+  it('crée le mouvement, avec son identifiant déduit du nom', () => {
+    const plan = programFor(prop({ op: 'ajouter', seance: 's2', ...NEUF }), ctx)
+    expect(plan?.op).toBe('ajouter')
+    expect(plan?.nouveau).toEqual({
+      id: 'farmer-s-walk', name: 'Farmer\'s walk', sets: 3, reps: '30-40 s', rest: 90,
+      muscles: ['avant-bras', 'abdos'], cues: [], machine: 'Haltères lourds ou trap bar', mesure: 'temps',
+    })
   })
 
-  it('refuse un identifiant DÉJÀ PRIS', () => {
-    // Le réutiliser rangerait des séries réellement soulevées sous un mouvement
-    // qu'on n'a jamais fait. C'est le refus qui coûte le plus cher à ne pas avoir.
-    expect(programFor(prop({ action: 'ajouter', seance: 's1', nouveau: { id: 'dc', nom: 'Autre chose', series: 3, reps: '10' } }), ctx)).toBeNull()
+  it('accepte un identifiant choisi, et une position', () => {
+    const plan = programFor(prop({ op: 'ajouter', seance: 's2', id: 'farmer-walk', apres: 'traction', ...NEUF }), ctx)
+    expect(plan?.nouveau?.id).toBe('farmer-walk')
+    expect(plan?.apres).toBe('traction')
   })
 
-  it('refuse un exercice neuf sans nom, séries ou reps', () => {
-    expect(programFor(prop({ action: 'ajouter', seance: 's1', nouveau: { nom: 'Sans rien' } }), ctx)).toBeNull()
-    expect(programFor(prop({ action: 'ajouter', seance: 's1', nouveau: { series: 3, reps: '10' } }), ctx)).toBeNull()
+  /**
+   * L'historique de charges est indexé sur l'identifiant SEUL, pas sur le couple
+   * séance + identifiant. Réutiliser « dc » pour un autre mouvement rangerait des
+   * séries réellement soulevées sous un exercice qu'on n'a jamais fait.
+   */
+  it('refuse un identifiant déjà pris, y compris dans une AUTRE séance', () => {
+    expect(programFor(prop({ op: 'ajouter', seance: 's1', id: 'rowing', ...NEUF }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'ajouter', seance: 's1', id: 'dc', ...NEUF }), ctx)).toBeNull()
   })
 
-  it('retire, puis réactive — et refuse chacun des deux quand il ne ferait rien', () => {
-    expect(programFor(prop({ action: 'retirer', seance: 's1', exercice: 'ecarte' }), ctx))
-      .toEqual({ kind: 'programme', seance: 's1', action: 'retirer', exercice: 'ecarte' })
-    // Déjà actif : « réactiver » s'archiverait en « appliquée » sans rien changer.
-    expect(programFor(prop({ action: 'reactiver', seance: 's1', exercice: 'ecarte' }), ctx)).toBeNull()
-
-    const apres = mergeProgram(LIVRE, { disabled: ['ecarte'] })
-    const ctx2 = ctxDe(apres, ['ecarte'])
-    expect(programFor(prop({ action: 'reactiver', seance: 's1', exercice: 'ecarte' }), ctx2))
-      .toEqual({ kind: 'programme', seance: 's1', action: 'reactiver', exercice: 'ecarte' })
-    expect(programFor(prop({ action: 'retirer', seance: 's1', exercice: 'ecarte' }), ctx2)).toBeNull()
+  it('refuse un identifiant déjà pris par un exercice RETIRÉ', () => {
+    // Il est retiré du programme, pas de l'historique : ses courbes existent toujours.
+    expect(programFor(prop({ op: 'ajouter', seance: 's1', id: 'ecarte', ...NEUF }), ctxDe(LIVRE, ['ecarte']))).toBeNull()
   })
 
-  it('réordonne, et refuse un exercice d’une AUTRE séance', () => {
-    expect(programFor(prop({ action: 'ordre', seance: 's1', ordre: ['dips', 'dc', 'ecarte'] }), ctx)?.ordre)
+  it('refuse un ajout sans repos : il n’y a pas de défaut à inventer', () => {
+    const { repos_s: _, ...sansRepos } = NEUF
+    expect(programFor(prop({ op: 'ajouter', seance: 's2', ...sansRepos }), ctx)).toBeNull()
+  })
+
+  it('refuse un ajout sans nom, séries ou reps', () => {
+    expect(programFor(prop({ op: 'ajouter', seance: 's1', nouveau: { nom: 'Sans rien' } }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'ajouter', seance: 's1', nouveau: { series: 3, reps: '10', repos_s: 60 } }), ctx)).toBeNull()
+  })
+
+  it('refuse une position qui n’existe pas, sans repli silencieux', () => {
+    // Un exercice de poigne qui atterrit avant un soulevé ruine le soulevé : mieux
+    // vaut refuser que de le poser « en fin de séance » sans le dire.
+    expect(programFor(prop({ op: 'ajouter', seance: 's2', apres: 'fantome', ...NEUF }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'ajouter', seance: 's2', apres: 'dc', ...NEUF }), ctx)).toBeNull()
+  })
+})
+
+describe('retirer et réactiver', () => {
+  it('retire, et refuse de retirer deux fois', () => {
+    const ctx = ctxDe(LIVRE)
+    expect(programFor(prop({ op: 'retirer', seance: 's1', exercice: 'ecarte' }), ctx))
+      .toEqual({ kind: 'programme', seance: 's1', op: 'retirer', exercice: 'ecarte' })
+    expect(programFor(prop({ op: 'retirer', seance: 's1', exercice: 'ecarte' }), ctxDe(LIVRE, ['ecarte']))).toBeNull()
+  })
+
+  it('réactive, et refuse de réactiver ce qui est déjà là', () => {
+    const apres = ctxDe(LIVRE, ['ecarte'])
+    expect(programFor(prop({ op: 'reactiver', seance: 's1', exercice: 'ecarte' }), apres))
+      .toEqual({ kind: 'programme', seance: 's1', op: 'reactiver', exercice: 'ecarte' })
+    expect(programFor(prop({ op: 'reactiver', seance: 's1', exercice: 'ecarte' }), ctxDe(LIVRE))).toBeNull()
+  })
+
+  it('réactive à une position demandée', () => {
+    expect(programFor(prop({ op: 'reactiver', seance: 's1', exercice: 'ecarte', apres: 'dips' }), ctxDe(LIVRE, ['ecarte'])))
+      .toMatchObject({ op: 'reactiver', apres: 'dips' })
+    // « apres » sur un exercice lui-même inactif : refus.
+    expect(programFor(prop({ op: 'reactiver', seance: 's1', exercice: 'ecarte', apres: 'dips' }), ctxDe(LIVRE, ['ecarte', 'dips']))).toBeNull()
+  })
+})
+
+describe('réordonner', () => {
+  const ctx = ctxDe(LIVRE)
+
+  it('accepte la liste complète des actifs', () => {
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dips', 'dc', 'ecarte'] }), ctx)?.ordre)
       .toEqual(['dips', 'dc', 'ecarte'])
-    // Le citer ne le déplacerait pas : l'ordre s'applique séance par séance, et on
-    // obtiendrait silencieusement un ordre différent de celui demandé.
-    expect(programFor(prop({ action: 'ordre', seance: 's1', ordre: ['dips', 'rowing'] }), ctx)).toBeNull()
-    expect(programFor(prop({ action: 'ordre', seance: 's1', ordre: ['dc', 'dc'] }), ctx)).toBeNull()
-    expect(programFor(prop({ action: 'ordre', seance: 's1', ordre: [] }), ctx)).toBeNull()
+  })
+
+  /**
+   * Une liste partielle est le refus le plus important des cinq.
+   *
+   * Elle a l'air correcte, elle s'applique, et l'ordre obtenu n'est pas celui qu'on
+   * a demandé : les exercices oubliés gardent leur place et s'intercalent. On croit
+   * avoir mis la poigne en dernier, elle est toujours au milieu.
+   */
+  it('refuse une liste incomplète', () => {
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dips', 'dc'] }), ctx)).toBeNull()
+  })
+
+  it('refuse un exercice d’une autre séance, un inactif, un doublon, une liste vide', () => {
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dips', 'dc', 'rowing'] }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dips', 'dc', 'ecarte'] }), ctxDe(LIVRE, ['ecarte']))).toBeNull()
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dc', 'dc', 'dips'] }), ctx)).toBeNull()
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: [] }), ctx)).toBeNull()
+  })
+
+  it('la liste des actifs exclut les retirés', () => {
+    expect(programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dips', 'dc'] }), ctxDe(LIVRE, ['ecarte']))?.ordre)
+      .toEqual(['dips', 'dc'])
+  })
+})
+
+describe('les machines de remplacement', () => {
+  const ctx = ctxDe(LIVRE)
+
+  it('remplacent la liste, avec leurs coefficients', () => {
+    const plan = programFor(prop({
+      op: 'modifier', seance: 's1', exercice: 'dc',
+      machines_de_remplacement: [{ id: 'dc-guidee', nom: 'Développé guidé', coefficient: 1.15 }],
+    }), ctx)
+    expect(plan?.variants).toEqual([{ id: 'dc-guidee', name: 'Développé guidé', ratio: 1.15 }])
+  })
+
+  it('refusent un coefficient absurde, un doublon, un identifiant vide', () => {
+    const cas = [
+      [{ id: 'x', nom: 'X', coefficient: 42 }],
+      [{ id: 'x', nom: 'X', coefficient: 1 }, { id: 'x', nom: 'Y', coefficient: 1.2 }],
+      [{ id: '', nom: 'X', coefficient: 1 }],
+      [{ id: 'x', coefficient: 1 }],
+    ]
+    for (const v of cas) {
+      expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', machines_de_remplacement: v }), ctx), JSON.stringify(v)).toBeNull()
+    }
+  })
+
+  it('une liste vide efface les machines de remplacement, et c’est voulu', () => {
+    expect(programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', machines_de_remplacement: [] }), ctx)?.variants).toEqual([])
+  })
+})
+
+describe('le geste proposé se rejoue vraiment sur le programme', () => {
+  /** Une proposition validée doit produire l'effet annoncé — pas un effet voisin. */
+  it('les cinq gestes aboutissent au programme attendu', () => {
+    const ctx = ctxDe(LIVRE)
+    const p1 = programFor(prop({ op: 'modifier', seance: 's1', exercice: 'dc', de_series: 4, de_repos_s: 120, patch: { series: 5, repos_s: 180 } }), ctx)!
+    const p2 = programFor(prop({ op: 'ajouter', seance: 's1', nom: 'Pec deck', series: 3, reps: '12', repos_s: 60, optionnel: true }), ctx)!
+    const p3 = programFor(prop({ op: 'retirer', seance: 's1', exercice: 'ecarte' }), ctx)!
+    const p4 = programFor(prop({ op: 'reordonner', seance: 's1', ordre: ['dips', 'dc'] }), ctxDe(LIVRE, ['ecarte']))!
+
+    const apres = mergeProgram(LIVRE, {
+      patches: { [p1.exercice!]: p1.patch! },
+      added: { s1: [p2.nouveau!] },
+      disabled: [p3.exercice!],
+      order: { s1: p4.ordre! },
+    })
+    // « pec-deck » est facultatif : il passe en fin de bloc, quoi qu'en dise l'ordre.
+    expect(apres[0].exercises.map(e => e.id)).toEqual(['dips', 'dc', 'pec-deck'])
+    expect(apres[0].exercises.find(e => e.id === 'dc')).toMatchObject({ sets: 5, rest: 180, reps: '8-10' })
+    expect(apres[0].exercises.find(e => e.id === 'pec-deck')).toMatchObject({ optionnel: true })
+    // Et l'autre séance n'a pas bougé.
+    expect(apres[1].exercises.map(e => e.id)).toEqual(['traction', 'rowing'])
   })
 
   it('ne répond qu’aux propositions de programme', () => {
-    expect(programFor({ ...prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { sets: 3 } }), action: 'plat' }, ctx)).toBeNull()
+    expect(programFor({ ...prop({ op: 'modifier', seance: 's1', exercice: 'dc', patch: { nom: 'X' } }), action: 'plat' }, ctxDe(LIVRE))).toBeNull()
   })
 
   it('translittère les accents dans un identifiant déduit', () => {
@@ -165,24 +385,41 @@ describe('une modification de programme proposée', () => {
   })
 })
 
-describe('le geste proposé se rejoue vraiment sur le programme', () => {
-  /** Une proposition validée doit produire l'effet annoncé — pas un effet voisin. */
-  it('modifier, ajouter, retirer et ordre aboutissent au programme attendu', () => {
-    const ctx = ctxDe(LIVRE)
-    const p1 = programFor(prop({ action: 'modifier', seance: 's1', exercice: 'dc', patch: { series: 5, repos: 180 } }), ctx)!
-    const p2 = programFor(prop({ action: 'ajouter', seance: 's1', nouveau: { nom: 'Pec deck', series: 3, reps: '12' } }), ctx)!
-    const p3 = programFor(prop({ action: 'retirer', seance: 's1', exercice: 'ecarte' }), ctx)!
-    const p4 = programFor(prop({ action: 'ordre', seance: 's1', ordre: ['dips', 'dc'] }), ctx)!
+// ─────────────────────────────────────────────────────────────────────────────
+// Non-régression : les vingt-trois mouvements livrés.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// La migration est « silencieuse » — c'est-à-dire qu'il n'y en a pas. `mesure`,
+// `optionnel` et `actif` sont absents des fiches livrées, et leurs défauts sont ceux
+// du comportement d'avant. Un test plutôt qu'une affirmation : c'est le genre de
+// chose dont on est sûr jusqu'au jour où un champ prend la valeur `false` quelque part.
 
-    const apres = mergeProgram(LIVRE, {
-      patches: { [p1.exercice!]: p1.patch! },
-      added: { s1: [p2.nouveau!] },
-      disabled: [p3.exercice!],
-      order: { s1: p4.ordre! },
-    })
-    expect(apres[0].exercises.map(e => e.id)).toEqual(['dips', 'dc', 'pec-deck'])
-    expect(apres[0].exercises.find(e => e.id === 'dc')).toMatchObject({ sets: 5, rest: 180, reps: '8-10' })
-    // Et l'autre séance n'a pas bougé.
-    expect(apres[1].exercises.map(e => e.id)).toEqual(['traction', 'rowing'])
+describe('le programme livré traverse la migration sans bouger', () => {
+  it('aucun exercice livré n’est mesuré au temps ni facultatif', () => {
+    for (const s of PROGRAM) {
+      for (const e of s.exercises) {
+        expect(isTimed(e), e.id).toBe(false)
+        expect(!!e.optionnel, e.id).toBe(false)
+      }
+    }
+  })
+
+  it('la fusion sans modification rend le programme livré à l’identique', () => {
+    expect(mergeProgram(PROGRAM)).toEqual(PROGRAM)
+    expect(mergeProgram(PROGRAM, {})).toEqual(PROGRAM)
+    // Y compris en demandant les inactifs : il n'y en a aucun.
+    expect(mergeProgram(PROGRAM, {}, true)).toEqual(PROGRAM)
+  })
+
+  it('l’ordre livré ne change pas', () => {
+    const avant = PROGRAM.map(s => s.exercises.map(e => e.id))
+    expect(mergeProgram(PROGRAM, {}).map(s => s.exercises.map(e => e.id))).toEqual(avant)
+  })
+
+  it('tous les exercices livrés portent un repos explicite', () => {
+    // `repos_s` devient obligatoire à l'ajout ; les livrés doivent déjà l'avoir,
+    // sinon l'outil « programme » annoncerait une valeur déduite qu'un « de_repos_s »
+    // ne pourrait pas confronter de façon stable.
+    for (const s of PROGRAM) for (const e of s.exercises) expect(typeof e.rest, e.id).toBe('number')
   })
 })

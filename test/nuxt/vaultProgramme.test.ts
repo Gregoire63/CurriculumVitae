@@ -22,7 +22,11 @@ const PROPOSITION: RawProposal = {
   at: '2026-08-19T10:00:00.000Z',
   action: 'programme',
   summary: 'Développé haltères : 4×8-10 → 5×5, repos 3 min',
-  patch: { action: 'modifier', seance: 's4', exercice: 'dev-halteres', patch: { series: 5, reps: '5', repos: 180 } },
+  patch: {
+    op: 'modifier', seance: 's4', exercice: 'dev-halteres',
+    de_series: 4, de_reps: '8-10', de_repos_s: 120,
+    patch: { series: 5, reps: '5', repos_s: 180 },
+  },
   status: 'pending',
 }
 
@@ -75,6 +79,31 @@ describe('une modification de programme, dans la boîte de réception', () => {
 
     expect(JSON.parse(localStorage.getItem('gr-prog-patch-v1') ?? '{}'))
       .toEqual({ 'dev-halteres': { sets: 5, reps: '5', rest: 180 } })
+    w.unmount()
+    document.body.querySelectorAll('.sport-portal').forEach(n => n.remove())
+  })
+
+  /**
+   * Le deuxième étage de la garde, et celui qui fait foi.
+   *
+   * Le serveur confronte les « de_… » au MIROIR, qui peut avoir des heures de retard.
+   * L'application les confronte à ses propres données. Sans ce second contrôle, une
+   * proposition déposée ce matin sur « 4 séries » s'appliquerait ce soir sur un
+   * exercice passé à 3 entre-temps — et l'écart ne se verrait jamais.
+   */
+  it('refuse à la validation une proposition bâtie sur une valeur périmée', async () => {
+    localStorage.clear()
+    // Le téléphone est déjà passé à 3 séries : le « de_series: 4 » de la proposition
+    // ne décrit plus rien.
+    localStorage.setItem('gr-prog-patch-v1', JSON.stringify({ 'dev-halteres': { sets: 3 } }))
+    const w = mount(Vault, { props: { snapshot: () => ({}) }, attachTo: document.body, global: { stubs: { transition: false } } })
+    await attendre(); await attendre()
+    await w.get('.vt-inbox').trigger('click')
+    await attendre(); await attendre()
+
+    const boutons = [...document.body.querySelectorAll('button')].map(b => b.textContent)
+    expect(boutons).not.toContain('Appliquer')
+    expect(document.body.textContent).toContain('à la main')
     w.unmount()
     document.body.querySelectorAll('.sport-portal').forEach(n => n.remove())
   })

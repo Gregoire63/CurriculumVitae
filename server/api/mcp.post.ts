@@ -12,7 +12,7 @@ import { carriedComp } from '~/lib/withings'
 import { weightOn } from '~/lib/weight'
 import { ageOn, sessionBurn } from '~/lib/energy'
 import { PROGRAM } from '~/data/sportProgram'
-import type { Session } from '~/data/sportProgram'
+import type { Exercise, Session } from '~/data/sportProgram'
 import { mergeProgram, retiredExercises } from '~/lib/program'
 import { restFor } from '~/lib/rest'
 import type { ProgramCustom } from '~/lib/program'
@@ -235,10 +235,13 @@ const TOOLS = [
   },
   {
     name: 'programme',
-    description: 'Le programme d\'entraînement : séances (identifiant, nom, jour), exercices de chacune, et pour chaque exercice les machines de remplacement connues.',
+    description: 'Le programme d\'entraînement TEL QU\'IL EST aujourd\'hui : séances (identifiant, nom, jour) et, pour chaque exercice, séries, reps, repos en secondes, mesure (reps ou temps), s\'il est actif, s\'il est facultatif, sa position dans la séance, et les machines de remplacement avec leur coefficient. À lire AVANT toute proposition « cible: programme » : les identifiants et les valeurs actuelles viennent d\'ici.',
     inputSchema: {
       type: 'object',
-      properties: { seance: { type: 'string', description: 'Identifiant d\'une séance (s1…s4) pour n\'avoir qu\'elle' } },
+      properties: {
+        seance: { type: 'string', description: 'Identifiant d\'une séance (s1…s4) pour n\'avoir qu\'elle' },
+        inclure_inactifs: { type: 'boolean', description: 'Montrer aussi les exercices RETIRÉS du programme, à leur place, avec actif: false. À utiliser avant de proposer une réactivation : leur historique est intact.' },
+      },
     },
   },
   {
@@ -288,13 +291,17 @@ const TOOLS = [
             '• semaine-type : { seances?: ["s1","s2",null,"s3","s4",null,null], salle?: [7 booléens], teletravail?: [7 booléens] } — lundi en premier, les trois axes sont indépendants',
             '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", sauce?: "<id de sauce>", keeps?: 4, items: [ { food: "<id d\'aliment>", g: 120 } ] } — « items » REMPLACE la liste, envoie-la complète. Lis d\'abord la recette avec l\'outil « recette » : sans ça tu effaces des ingrédients sans le savoir. « steps » est la marche à suivre du batch cooking, « keeps » la conservation en jours — c\'est elle qui décide dans quelle session de cuisine le plat tombe.',
             '• aliment : { id?: "<id existant pour corriger>", nom, cat: "viandes"|"poissons"|"oeufs"|"laitiers"|"feculents"|"legumes"|"fruits"|"grasses"|"aromates"|"complements"|"boissons", kcal, p, g, l, cook?: "6 min vapeur", buy?: "1 c. à café = 5 g", keeps?: 5 } — valeurs POUR 100 g, viandes et féculents crus. Les macros doivent expliquer les calories à 25 % près, sinon c\'est refusé : une étiquette mal recopiée ne fait rien planter, elle fausse les calories pour toujours.',
-            '• programme : { seance: "s1".."s4", action: "modifier"|"ajouter"|"retirer"|"reactiver"|"ordre", … } — tout ce qu\'un coach fait sur un plan. Lis d\'abord l\'outil « programme » : il donne les identifiants, les séries, les reps ET le repos actuels.',
-            '    · modifier : { action: "modifier", seance: "s1", exercice: "<id>", patch: { series?: 5, reps?: "5", repos?: 180, nom?, machine?, muscles?: [...], consignes?: [...] } } — le patch ne touche QUE ce qu\'il mentionne, le reste est conservé. Repos en SECONDES, entre 20 et 900.',
-            '    · ajouter : { action: "ajouter", seance: "s3", nouveau: { nom: "Hip thrust", series: 4, reps: "8-10", repos: 150, machine: "Barre + banc", muscles: ["fessiers"], consignes: ["…"] } } — l\'identifiant est déduit du nom ; donne-le explicitement (id) si tu veux le choisir. Un identifiant déjà pris est REFUSÉ : les séances enregistrées sont indexées dessus, le réutiliser rangerait de vieux records sous un mouvement jamais fait.',
-            '    · retirer : { action: "retirer", seance: "s2", exercice: "<id>" } — le mouvement sort du programme et RESTE dans l\'historique. Rien n\'est supprimé, donc c\'est réversible avec "reactiver".',
-            '    · reactiver : { action: "reactiver", seance: "s2", exercice: "<id>" } — le remet dans la séance.',
-            '    · ordre : { action: "ordre", seance: "s1", ordre: ["<id>", "<id>", …] } — les identifiants doivent tous appartenir à CETTE séance ; ceux que tu omets restent après, dans leur ordre actuel.',
-            '  Une seule action par proposition : Grégoire valide geste par geste, et un refus ne doit pas emporter les quatre autres.',
+            '• programme : { seance: "s1".."s4", op: "ajouter"|"modifier"|"retirer"|"reactiver"|"reordonner", … } — tout ce qu\'un coach fait sur un plan. LIS D\'ABORD l\'outil « programme » : il donne les identifiants, les séries, les reps, le repos, la mesure, les positions et les machines de remplacement ACTUELS. Une seule op par proposition — Grégoire valide geste par geste, et un refus ne doit pas emporter les autres.',
+            '    · ajouter : { op: "ajouter", seance: "s2", id: "farmer-walk", nom: "Farmer\'s walk", series: 3, reps: "30-40 s", mesure: "temps", repos_s: 90, muscles: ["avant-bras","abdos"], machine: "Haltères lourds ou trap bar", optionnel?: true, apres?: "curl-marteau", machines_de_remplacement?: [{ id, nom, coefficient }] }',
+            '      « repos_s » est OBLIGATOIRE, en secondes (20 à 900) : il n\'y a pas de défaut, le déduire des reps donnerait 40 secondes sur « 30-40 s », c\'est-à-dire un repos calculé sur une durée d\'effort. « id » est déduit du nom si tu ne le donnes pas ; un identifiant DÉJÀ PRIS — même dans une autre séance, même sur un exercice retiré — est REFUSÉ : l\'historique de charges est indexé sur l\'identifiant seul, le réutiliser rangerait de vieux records sous un mouvement jamais fait. « apres » insère juste après cet exercice actif ; absent, l\'exercice va en fin de séance ; invalide, c\'est un refus et non un repli silencieux.',
+            '    · modifier : { op: "modifier", seance: "s1", exercice: "squat", series?: 3, de_series: 2, reps?: "6-8", de_reps: "8-10", repos_s?: 150, de_repos_s: 120, nom?, mesure?, machine?, optionnel?, muscles?: [...], machines_de_remplacement?: [...] } — ne change QUE les champs envoyés.',
+            '      « series », « reps » et « repos_s » exigent leur « de_… » : la valeur actuellement enregistrée, telle que « programme » la donne. Manquant ou faux = REFUS. C\'est ce qui empêche une proposition bâtie sur un miroir de trois heures d\'écraser un réglage changé depuis sur le téléphone — trois séries au lieu de quatre, ça ne se remarque pas en salle, on les fait, c\'est tout. Les autres champs (nom, machine, muscles, consignes) n\'en demandent pas.',
+            '    · retirer : { op: "retirer", seance: "s2", exercice: "sdt-r" } — DÉSACTIVE, ne supprime PAS. Le mouvement sort de la séance du jour, son historique de charges reste intact et reste lisible par l\'outil « exercice ». Repris trois mois plus tard, il retrouve ses courbes au lieu de repartir de zéro. Le retirer deux fois est un refus, pas un geste sans effet.',
+            '    · reactiver : { op: "reactiver", seance: "s2", exercice: "sdt-r", apres?: "squat" } — sans « apres », il reprend exactement la place qu\'il occupait. Appelle « programme » avec inclure_inactifs: true pour voir ce qui a été retiré.',
+            '    · reordonner : { op: "reordonner", seance: "s3", ordre: ["squat","sdt-r","fentes","leg-curl","mollets","releves"] } — la liste COMPLÈTE des actifs de la séance, dans l\'ordre voulu. Une liste partielle est refusée : les exercices omis garderaient leur place et s\'intercaleraient, donnant un ordre silencieusement différent de celui demandé. L\'ordre a un sens physiologique : un exercice de poigne ou de gainage placé AVANT un soulevé lourd dégrade le soulevé — la poigne lâche avant les ischios, le gainage avant le tronc.',
+            '  « muscles » et « machines_de_remplacement » REMPLACENT la liste, ils ne fusionnent pas — même règle que « items » sur une recette. Repars de la liste complète donnée par « programme », sinon tu effaces ce que tu n\'as pas recopié.',
+            '  « mesure: "temps" » (défaut : "reps") sort l\'exercice de la progression automatique, de la détection de record et du 1RM estimé. Mets-le sur tout ce qui se compte en secondes — portés, suspensions, gainage : sinon « 30-40 s » se lit 40 répétitions, l\'app croit la cible atteinte et conseille de charger.',
+            '  « optionnel: true » : le mouvement s\'affiche grisé en fin de séance et ne compte pas dans le seuil des 80 % qui autorise l\'enregistrement, mais compte normalement dans le volume et les records dès qu\'il est fait.',
             '• correction, série : { quoi: "serie", exercice: "<id>", date: "AAAA-MM-JJ", serie: 0, de: { w, r }, vers: { w, r } }',
             '• correction, pesée : { quoi: "pesee", date: "AAAA-MM-JJ", de: 77.4, vers: 76.9 } — « vers: null » supprime la pesée',
             '• correction, champ quelconque : { quoi: "champ", chemin: "/sessions/12/durationMin", de: 50, vers: 65 } — n\'importe quelle valeur SIMPLE de la sauvegarde (nombre, texte, booléen). Le chemin doit exister, on ne crée rien, et on ne remplace jamais un objet ou un tableau entier. Lis-le d\'abord avec l\'outil « champ ».',
@@ -315,38 +322,113 @@ const TOOLS = [
  * calories, une catégorie inventée — se distinguent en quelques lignes, et chacune
  * dit quoi corriger.
  */
-function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnown: (id: string) => boolean, recipeKnown: (id: string) => boolean, sessionKnown?: (id: string) => boolean, exerciseKnown?: (id: string) => boolean, exercisesOf?: (id: string) => string[] }): string {
+interface RefusCtx {
+  foodKnown: (id: string) => boolean
+  recipeKnown: (id: string) => boolean
+  sessionKnown?: (id: string) => boolean
+  exerciseKnown?: (id: string) => boolean
+  exercisesOf?: (id: string) => string[]
+  exerciseAt?: (id: string) => { seance: string, seanceNom: string, actif: boolean, ex: Exercise } | null
+}
+
+function refusMessage(cible: string, d: Record<string, unknown>, ctx: RefusCtx): string {
   if (cible === 'programme') {
-    const action = String(d.action ?? d.geste ?? '')
+    const op = String(d.op ?? d.action ?? d.geste ?? '').replace(/^ordre$/, 'reordonner')
     const seance = String(d.seance ?? d.session ?? '')
-    if (!['modifier', 'ajouter', 'retirer', 'reactiver', 'ordre'].includes(action)) {
-      return `« action » doit valoir modifier, ajouter, retirer, reactiver ou ordre — pas ${JSON.stringify(action)}.`
+    const src = ((d.patch ?? d.nouveau ?? d.vers) && typeof (d.patch ?? d.nouveau ?? d.vers) === 'object'
+      ? (d.patch ?? d.nouveau ?? d.vers)
+      : d) as Record<string, unknown>
+    const lire = (o: Record<string, unknown>, ...k: string[]) => k.map(x => o[x]).find(v => v !== undefined)
+
+    if (!['ajouter', 'modifier', 'retirer', 'reactiver', 'reordonner'].includes(op)) {
+      return `« op » doit valoir ajouter, modifier, retirer, reactiver ou reordonner — pas ${JSON.stringify(op)}.`
     }
-    if (ctx.sessionKnown && !ctx.sessionKnown(seance)) {
+    if (!ctx.sessionKnown?.(seance)) {
       return `La séance « ${seance} » n'existe pas. Appelle « programme » : elles s'appellent s1 à s4. On n'ajoute pas de séance, seulement des exercices dans une séance.`
     }
-    const ex = String(d.exercice ?? d.exercise ?? d.id ?? '')
-    if (action === 'ordre') {
-      const dedans = ctx.exercisesOf?.(seance) ?? []
+    const dedans = ctx.exercisesOf?.(seance) ?? []
+
+    if (op === 'reordonner') {
       const ordre = asArray(d.ordre ?? d.order ?? d.exercices).filter((v): v is string => typeof v === 'string')
       const dehors = ordre.filter(id => !dedans.includes(id))
-      if (dehors.length) return `Ces exercices n'appartiennent pas à « ${seance} » : ${dehors.join(', ')}. L'ordre s'applique séance par séance — les citer ne les déplacerait pas. Exercices de cette séance : ${dedans.join(', ')}.`
-      if (!ordre.length) return '« ordre » doit être la liste des identifiants d\'exercices, dans l\'ordre voulu.'
-      return 'Ordre refusé : un identifiant est cité deux fois, ou la liste dépasse 40 entrées.'
+      // Deux causes, deux gestes différents — les confondre ferait chercher au
+      // mauvais endroit. Un identifiant inconnu, c'est la proposition qui est
+      // fautive ; un actif oublié, c'est presque toujours un miroir périmé.
+      if (dehors.length) {
+        return `Ces exercices ne sont pas des actifs de « ${seance} » : ${dehors.join(', ')}. Erreur de construction : l'ordre s'applique séance par séance, et un exercice retiré n'a pas de place à occuper. Actifs de cette séance, dans l'ordre : ${dedans.join(', ')}.`
+      }
+      const manquants = dedans.filter(id => !ordre.includes(id))
+      if (manquants.length) {
+        return `Il manque ${manquants.join(', ')} dans « ordre ». « reordonner » attend la liste COMPLÈTE des actifs : un exercice omis garderait sa place et l'ordre obtenu ne serait pas celui que tu demandes. Ton miroir est probablement périmé — relis « programme » et redépose. Actifs attendus : ${dedans.join(', ')}.`
+      }
+      if (new Set(ordre).size !== ordre.length) return 'Un identifiant est cité deux fois dans « ordre ».'
+      return 'Ordre refusé : la liste doit contenir entre 1 et 40 identifiants.'
     }
-    if (action === 'ajouter') {
-      const src = (d.nouveau && typeof d.nouveau === 'object' ? d.nouveau : d) as Record<string, unknown>
-      const id = String(src.id ?? '')
-      if (id && ctx.exerciseKnown?.(id)) return `L'identifiant « ${id} » est déjà pris. Les séances enregistrées sont indexées dessus : le réutiliser rangerait de vieux records sous un mouvement jamais fait. Choisis-en un autre, ou modifie l'exercice existant avec action: "modifier".`
-      if (!src.nom && !src.name) return 'Un exercice neuf a besoin d\'un « nom », de « series » (1 à 12) et de « reps » — sans eux la fiche s\'affiche vide et la saisie n\'a plus de lignes.'
-      return 'Ajout refusé : vérifie « series » (1 à 12), « reps » (texte, ex. "8-10") et « repos » (20 à 900 secondes).'
+
+    if (op === 'ajouter') {
+      const id = String(lire(src, 'id') ?? '')
+      const place = id ? ctx.exerciseAt?.(id) : null
+      if (place) {
+        return `L'identifiant « ${id} » est déjà pris par « ${place.ex.name} » dans ${place.seanceNom} (${place.seance})${place.actif ? '' : ', retiré du programme mais toujours dans l\'historique'}. L'historique de charges est indexé sur l'identifiant seul : le réutiliser rangerait de vieux records sous un mouvement jamais fait. Choisis-en un autre, ou modifie l'exercice existant avec op: "modifier".`
+      }
+      if (!lire(src, 'nom', 'name')) return 'Un exercice neuf a besoin d\'un « nom », de « series » (1 à 12) et de « reps ».'
+      if (lire(src, 'repos_s', 'rest', 'repos') === undefined) {
+        return '« repos_s » est OBLIGATOIRE à l\'ajout, en secondes (20 à 900). Il n\'y a pas de défaut : le déduire des reps donnerait 40 secondes sur « 30-40 s », c\'est-à-dire un repos calculé sur une durée d\'effort.'
+      }
+      const apres = lire(src, 'apres', 'after') ?? lire(d, 'apres', 'after')
+      if (typeof apres === 'string' && apres && !dedans.includes(apres)) {
+        return `« apres: ${apres} » ne désigne pas un exercice actif de « ${seance} ». Pas de repli sur « en fin de séance » : l'ordre a un sens physiologique. Positions valides : ${dedans.join(', ')}.`
+      }
+      return 'Ajout refusé : vérifie « series » (1 à 12), « reps » (texte, ex. "8-10" ou "30-40 s"), « repos_s » (20 à 900), et « machines_de_remplacement » si tu en donnes (coefficient entre 0,2 et 5).'
     }
-    if (ctx.exerciseKnown && ex && !ctx.exerciseKnown(ex)) {
-      return `L'exercice « ${ex} » n'existe pas. Appelle « programme » pour les identifiants exacts.`
+
+    const ex = String(lire(d, 'exercice', 'exercise', 'id') ?? '')
+    const place = ctx.exerciseAt?.(ex) ?? null
+    if (!place) {
+      return `L'exercice « ${ex} » n'existe nulle part. Appelle « programme » pour les identifiants exacts — ajoute inclure_inactifs: true s'il s'agit d'un mouvement retiré. Actifs de « ${seance} » : ${dedans.join(', ')}.`
     }
-    if (action === 'modifier') return 'Modification refusée : « patch » doit contenir au moins un champ valide — series (1 à 12), reps (texte), repos (20 à 900 s), nom, machine, muscles ou consignes.'
-    if (action === 'retirer') return `« ${ex} » n'est déjà plus dans « ${seance} ». Un geste qui ne change rien ne doit pas s'archiver comme appliqué.`
-    return `« ${ex} » est déjà actif dans « ${seance} » : il n'y a rien à réactiver.`
+    if (op === 'retirer') {
+      if (!place.actif) return `« ${ex} » est déjà retiré du programme. Un geste sans effet ne doit pas s'archiver comme appliqué.`
+      return `Retrait refusé : « ${ex} » appartient à ${place.seanceNom} (${place.seance}), pas à « ${seance} ».`
+    }
+    if (op === 'reactiver') {
+      if (place.actif) return `« ${ex} » est déjà actif dans ${place.seanceNom} : il n'y a rien à réactiver.`
+      const apres = lire(d, 'apres', 'after')
+      if (typeof apres === 'string' && apres && !dedans.includes(apres)) {
+        return `« apres: ${apres} » ne désigne pas un exercice actif de « ${seance} ». Positions valides : ${dedans.join(', ')}.`
+      }
+      return `Réactivation refusée : « ${ex} » appartient à ${place.seanceNom} (${place.seance}).`
+    }
+
+    // modifier : le refus le plus fréquent est le « de_… » manquant ou faux.
+    const GARDES: [string[], string[], string | number][] = [
+      [['series', 'sets'], ['de_series', 'de_sets'], place.ex.sets],
+      [['reps', 'repetitions'], ['de_reps'], place.ex.reps],
+      [['repos_s', 'rest', 'repos'], ['de_repos_s', 'de_rest', 'de_repos'], restFor(place.ex)],
+    ]
+    for (const [champs, des, actuel] of GARDES) {
+      if (lire(src, ...champs) === undefined) continue
+      const annonce = lire(src, ...des) ?? lire(d, ...des)
+      if (annonce === undefined) {
+        return `Tu changes « ${champs[0]} » sans donner « ${des[0]} ». La valeur enregistrée est ${JSON.stringify(actuel)} : renvoie-la dans « ${des[0]} ». Le miroir peut avoir des heures de retard, et sans cette confrontation une proposition écrite ce matin écraserait un réglage changé depuis sur le téléphone.`
+      }
+      if (String(annonce) !== String(actuel)) {
+        return `« ${des[0]} » ne correspond pas : « ${ex} » est à ${JSON.stringify(actuel)}, pas ${JSON.stringify(annonce)}. Relis « programme », puis repropose.`
+      }
+    }
+    // Une liste de machines mal formée tombait dans le message générique, qui
+    // n'aidait pas : il énumérait les champs valides sans dire lequel était fautif.
+    const mdr = lire(src, 'machines_de_remplacement', 'variants') ?? lire(d, 'machines_de_remplacement')
+    if (mdr !== undefined) {
+      const lignes = asArray(mdr) as Record<string, unknown>[]
+      const mauvais = lignes.filter(v => !v || typeof v !== 'object'
+        || !v.id || !(v.nom ?? v.name)
+        || !(Number(v.coefficient ?? v.ratio) >= 0.2 && Number(v.coefficient ?? v.ratio) <= 5))
+      if (mauvais.length) {
+        return `« machines_de_remplacement » : ${mauvais.length} ligne(s) invalide(s). Chacune veut { id, nom, coefficient }, coefficient entre 0,2 et 5 — au-delà ce n'est plus une conversion de charge, c'est une faute de frappe. Rappel : la liste REMPLACE, relis « programme » et repars de la liste complète.`
+      }
+    }
+    return 'Modification refusée : donne au moins un champ valide — series (1 à 12), reps (texte), repos_s (20 à 900 s), nom, mesure ("reps" ou "temps"), machine, optionnel, muscles ou machines_de_remplacement.'
   }
   if (cible === 'repas-libre') {
     const vers = ((d.vers ?? d.repas) ?? {}) as Record<string, unknown>
@@ -453,14 +535,22 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
        */
       const custom = (data.programme ?? {}) as ProgramCustom
       const sessions = mergeProgram(PROGRAM, custom)
-      const retires = retiredExercises(PROGRAM, custom)
+      const toutes = mergeProgram(PROGRAM, custom, true)
+      const off = new Set(custom.disabled ?? [])
       const actifsDe = (sid: string) => sessions.find(s => s.id === sid)?.exercises.map(e => e.id) ?? []
       const ctx = {
         foodKnown: (id: string) => !!foods[id],
         recipeKnown: (id: string) => !!recettes[id],
         sessionKnown: (id: string) => sessions.some(s => s.id === id),
-        exerciseKnown: (id: string) => sessions.some(s => s.exercises.some(e => e.id === id)) || !!retires[id],
+        exerciseKnown: (id: string) => toutes.some(s => s.exercises.some(e => e.id === id)),
         exercisesOf: actifsDe,
+        exerciseAt: (id: string) => {
+          for (const s of toutes) {
+            const ex = s.exercises.find(e => e.id === id)
+            if (ex) return { seance: s.id, seanceNom: s.name, actif: !off.has(id), ex }
+          }
+          return null
+        },
       }
       const brut = { id: '', at: '', action: cible, summary: resume, patch: detail, status: 'pending' as const }
       const plan = cible === 'aliment'
@@ -507,42 +597,64 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
    */
   if (name === 'programme') {
     const seance = typeof args.seance === 'string' ? args.seance : ''
+    const avecInactifs = args.inclure_inactifs === true
     const m = await readMirror()
     const custom = ((m?.data as Record<string, unknown>)?.programme ?? {}) as ProgramCustom
-    const sessions = mergeProgram(PROGRAM, custom)
-    const retires = retiredExercises(PROGRAM, custom)
+    const off = new Set(custom.disabled ?? [])
+    /**
+     * La POSITION est celle du programme actif, pas celle du tableau brut.
+     *
+     * C'est le chiffre affiché à l'écran — « 3. Tractions » — et donc le seul dont on
+     * puisse parler avec lui. Un exercice retiré n'en a pas : il n'occupe aucun rang
+     * dans une séance dont il est absent, et lui en donner un ferait proposer des
+     * réordonnancements sur des places qui n'existent pas.
+     */
+    const sessions = mergeProgram(PROGRAM, custom, avecInactifs)
     return {
-      seances: sessions.filter(s => !seance || s.id === seance).map(s => ({
-        id: s.id,
-        nom: s.name,
-        jour: s.tag,
-        sprint: !!s.sprint,
-        exercices: s.exercises.map(e => ({
-          id: e.id,
-          nom: e.name,
-          series: e.sets,
-          reps: e.reps,
-          repos_s: restFor(e),
-          muscles: e.muscles,
-          machine: e.machine,
-          ...(e.superset ? { superset: e.superset } : {}),
-          ...(e.bodyweight ? { poids_de_corps: true } : {}),
-          machines_de_remplacement: (VARIANTS[e.id] ?? []).map(v => ({
-            id: v.id,
-            nom: v.name,
-            coefficient: Math.round(v.ratio * 100) / 100,
-          })),
-        })),
-      })),
-      // Les mouvements retirés du programme, que l'historique référence encore. Sans
-      // eux, une réponse sur « où j'en suis au curl EZ » afficherait un identifiant brut.
-      ...(Object.keys(retires).length
-        ? { retires: Object.values(retires).map(e => ({ id: e.id, nom: e.name })) }
-        : {}),
+      seances: sessions.filter(s => !seance || s.id === seance).map((s) => {
+        let rang = 0
+        return {
+          id: s.id,
+          nom: s.name,
+          jour: s.tag,
+          sprint: !!s.sprint,
+          exercices: s.exercises.map((e) => {
+            const actif = !off.has(e.id)
+            if (actif) rang += 1
+            return {
+              id: e.id,
+              nom: e.name,
+              series: e.sets,
+              reps: e.reps,
+              repos_s: restFor(e),
+              mesure: e.mesure ?? 'reps',
+              actif,
+              optionnel: !!e.optionnel,
+              position: actif ? rang : null,
+              muscles: e.muscles,
+              machine: e.machine,
+              ...(e.superset ? { superset: e.superset } : {}),
+              ...(e.bodyweight ? { poids_de_corps: true } : {}),
+              machines_de_remplacement: (custom.variants?.[e.id] ?? VARIANTS[e.id] ?? []).map(v => ({
+                id: v.id,
+                nom: (v as { name: string }).name,
+                coefficient: Math.round(v.ratio * 100) / 100,
+              })),
+            }
+          }),
+        }
+      }),
+      ...(avecInactifs
+        ? {}
+        // Les mouvements retirés, que l'historique référence encore. Sans eux, une
+        // réponse sur « où j'en suis au curl EZ » afficherait un identifiant brut.
+        : { retires: Object.values(retiredExercises(PROGRAM, custom)).map(e => ({ id: e.id, nom: e.name })) }),
       modifie: !!(custom.patches && Object.keys(custom.patches).length)
         || !!(custom.added && Object.keys(custom.added).length)
         || !!custom.disabled?.length
-        || !!(custom.order && Object.keys(custom.order).length),
+        || !!(custom.order && Object.keys(custom.order).length)
+        || !!(custom.variants && Object.keys(custom.variants).length),
+      rappel: 'Un exercice « mesure: temps » est hors progression automatique, hors record et hors 1RM. « position » est le rang affiché, les inactifs n\'en ont pas.',
     }
   }
 

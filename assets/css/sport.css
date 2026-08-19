@@ -335,6 +335,13 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .vt-prog-t td { text-align: right; padding: 3px 0; }
 .vt-prog-av { color: var(--text-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
 .vt-prog-o { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.6; }
+/* ─── Exercice facultatif ─────────────────────────────────────────────────── */
+/* Grisé, pas caché : il reste faisable, il ne compte simplement pas dans le seuil
+   des 80 %. L'opacité s'annule au survol et au focus, sinon on le lit mal quand on
+   décide justement de le faire. */
+.ex-opt { opacity: 0.72; }
+.ex-opt:hover, .ex-opt:focus-within { opacity: 1; }
+.ex-opt-tag { margin-left: 7px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); border: 1px solid var(--bg-accent); border-radius: 6px; padding: 1px 5px; vertical-align: middle; white-space: nowrap; }
 .pg-line { font-size: 12.5px; line-height: 1.4; padding: 5px 0; border-bottom: 1px dotted var(--bg-accent); gap: 10px; }
 .pg-line:last-of-type { border-bottom: none; }
 .vt-prog-n { font-size: 11.5px; line-height: 1.45; color: var(--text-muted); margin: 6px 0 0; }

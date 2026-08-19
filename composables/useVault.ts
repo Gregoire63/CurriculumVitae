@@ -79,7 +79,10 @@ export function useVault() {
     sessionKnown: (id: string) => !!program.sessionById(id),
     // Retirés COMPRIS : c'est ce qui permet de réactiver un mouvement mis de côté.
     exerciseKnown: (id: string) => !!program.exerciseById(id),
+    // Les ACTIFS, dans l'ordre. C'est cette différence avec `exerciseKnown` qui
+    // distingue « déjà retiré » de « inconnu », et qui valide un réordonnancement.
     exercisesOf: (sessionId: string) => program.sessionById(sessionId)?.exercises.map(e => e.id) ?? [],
+    exerciseAt: program.exerciseAt,
   }
 
   async function hydrate() {
@@ -227,11 +230,17 @@ export function useVault() {
       // Mêmes fonctions que l'écran d'édition. « retirer » DÉSACTIVE : les séances
       // enregistrées sont indexées par identifiant d'exercice, et supprimer
       // effacerait des records réellement soulevés.
-      if (plan.action === 'modifier' && plan.patch) program.patchExercise(plan.exercice!, plan.patch)
-      else if (plan.action === 'ajouter' && plan.nouveau) program.addExercise(plan.seance, plan.nouveau)
-      else if (plan.action === 'retirer') program.disableExercise(plan.exercice!)
-      else if (plan.action === 'reactiver') program.enableExercise(plan.exercice!)
-      else if (plan.action === 'ordre' && plan.ordre) program.setOrder(plan.seance, plan.ordre)
+      if (plan.op === 'modifier') {
+        if (plan.patch && Object.keys(plan.patch).length) program.patchExercise(plan.exercice!, plan.patch)
+        if (plan.variants) program.setVariants(plan.exercice!, plan.variants)
+      }
+      else if (plan.op === 'ajouter' && plan.nouveau) {
+        program.addExercise(plan.seance, plan.nouveau, plan.apres)
+        if (plan.variants) program.setVariants(plan.nouveau.id, plan.variants)
+      }
+      else if (plan.op === 'retirer') program.disableExercise(plan.exercice!)
+      else if (plan.op === 'reactiver') program.enableExercise(plan.exercice!, plan.apres)
+      else if (plan.op === 'reordonner' && plan.ordre) program.setOrder(plan.seance, plan.ordre)
       else { error.value = 'Modification de programme incomplète.'; return false }
     }
     else if (plan.kind === 'correction-pesee') {

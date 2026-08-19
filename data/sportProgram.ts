@@ -20,6 +20,29 @@ export interface Exercise {
    * par `restFor` dans lib/rest.ts.
    */
   rest?: number
+  /**
+   * Ce que compte une série : des RÉPÉTITIONS, ou du TEMPS.
+   *
+   * Absent = `reps`, et c'est le cas des vingt-trois mouvements livrés. Le champ
+   * n'existe que parce qu'un coach peut vouloir ajouter du farmer's walk ou une
+   * suspension à la barre, dont la série se mesure en secondes.
+   *
+   * Ce n'est pas une étiquette d'affichage. Trois mécanismes lisent `reps` comme un
+   * nombre — la progression automatique, la détection de record, le 1RM estimé — et
+   * « 30-40 s » leur donnerait 40 répétitions : une charge conseillée à la hausse
+   * parce qu'on a « atteint 40 reps », un record de 1RM calculé sur des secondes.
+   * Faux, et faux silencieusement. `mesure: 'temps'` les court-circuite tous les trois.
+   */
+  mesure?: 'reps' | 'temps'
+  /**
+   * Un mouvement de confort : on le fait s'il reste du temps.
+   *
+   * Il s'affiche grisé en fin de séance et ne compte pas dans le seuil des 80 %
+   * qui autorise l'enregistrement — sinon un accessoire facultatif bloquerait la
+   * validation d'une séance faite. En revanche il compte NORMALEMENT dans le volume,
+   * les records et l'historique dès qu'il est réellement fait : c'est du travail.
+   */
+  optionnel?: boolean
 }
 
 // Plan de sprint détaillé, avec variante extérieur (piste) et tapis

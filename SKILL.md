@@ -59,8 +59,9 @@ cible-en une). `etat` existe encore mais `bilan` le contient.
 créneau, conservation), **`recette`** (le contenu RÉEL d'un plat : ingrédients,
 grammages crus ET cuits, préparation, sauce, macros, conservation — indispensable
 avant de modifier quoi que ce soit), `aliments` (les ingrédients : identifiants et macros pour
-100 g), `programme` (séances, exercices, séries, reps, **repos**, machines de remplacement
-avec leur coefficient, et les mouvements retirés), `menus` (ses semaines de menus et à quel lundi elles sont appliquées).
+100 g), `programme` (séances, exercices, séries, reps, **repos**, **mesure**, **actif**,
+**facultatif**, **position**, machines de remplacement avec leur coefficient ;
+`inclure_inactifs: true` montre aussi les mouvements retirés), `menus` (ses semaines de menus et à quel lundi elles sont appliquées).
 
 **Atteindre n'importe quel champ** — `champ`. Sans argument il rend la carte de la
 sauvegarde : les sections, leur taille, un exemple de chemin. Avec un chemin
@@ -285,49 +286,73 @@ trois axes sont indépendants, n'envoie que celui qui change.
 
 ### « Change mon programme »
 
-Tout ce qu'un coach fait sur un plan : allonger un repos, passer de 4×8 à 5×5,
-retirer un mouvement qui fait mal, en ajouter un, changer l'ordre. **Appelle
-`programme` d'abord** — il donne les identifiants, les séries, les reps et le repos
-actuels. Une action par proposition : il valide geste par geste, et un refus ne doit
-pas emporter les autres.
+Tout ce qu'un coach fait sur un plan. **Appelle `programme` d'abord** — il donne les
+identifiants, les séries, les reps, le repos, la mesure et les positions actuels.
+Une `op` par proposition : il valide geste par geste, et un refus ne doit pas
+emporter les autres.
 
 ```json
 { "resume": "Développé haltères : 4×8-10 → 5×5, repos 2 → 3 min",
   "cible": "programme",
-  "detail": { "action": "modifier", "seance": "s4", "exercice": "dev-halteres",
-              "patch": { "series": 5, "reps": "5", "repos": 180 } } }
+  "detail": { "op": "modifier", "seance": "s4", "exercice": "dev-halteres",
+              "de_series": 4, "de_reps": "8-10", "de_repos_s": 120,
+              "series": 5, "reps": "5", "repos_s": 180 } }
 
-{ "resume": "Ajouter le hip thrust en fin de séance jambes",
+{ "resume": "Farmer's walk en fin de s2 — la poigne lâche avant les ischios",
   "cible": "programme",
-  "detail": { "action": "ajouter", "seance": "s3",
-              "nouveau": { "nom": "Hip thrust barre", "series": 4, "reps": "8-10",
-                           "repos": 150, "machine": "Barre + banc",
-                           "muscles": ["fessiers", "ischios"],
-                           "consignes": ["Menton rentré", "Pause 1 s en haut"] } } }
+  "detail": { "op": "ajouter", "seance": "s2", "id": "farmer-walk",
+              "nom": "Farmer's walk", "series": 3, "reps": "30-40 s",
+              "mesure": "temps", "repos_s": 90, "optionnel": true,
+              "muscles": ["avant-bras", "abdos"], "machine": "Trap bar" } }
 
 { "resume": "Retirer les écartés poulie (épaule douloureuse)",
   "cible": "programme",
-  "detail": { "action": "retirer", "seance": "s4", "exercice": "ecartes" } }
+  "detail": { "op": "retirer", "seance": "s4", "exercice": "ecartes" } }
 
-{ "resume": "s4 : finir sur les bras",
+{ "resume": "s3 : la poigne en dernier, elle ruinait le soulevé",
   "cible": "programme",
-  "detail": { "action": "ordre", "seance": "s4",
-              "ordre": ["dev-halteres", "tractions", "curl-21"] } }
+  "detail": { "op": "reordonner", "seance": "s3",
+              "ordre": ["squat", "sdt-r", "fentes", "leg-curl", "mollets", "releves"] } }
 ```
 
-Le patch ne touche **que ce qu'il mentionne** : le reste est conservé, et on peut
-revenir à la fiche d'origine. Le repos est en secondes, entre 20 et 900 ; les séries
-entre 1 et 12.
+#### Les six choses à ne pas oublier
 
-**Retirer ne supprime rien.** Les séances enregistrées sont indexées par identifiant
-d'exercice : le mouvement sort du programme, l'historique le garde avec ses records,
-et `action: "reactiver"` le remet. C'est pour la même raison qu'un identifiant déjà
-pris est refusé à l'ajout — le réutiliser rangerait de vieux records sous un
-mouvement jamais fait.
+**`de_series`, `de_reps`, `de_repos_s` sont obligatoires** dès que tu changes la
+valeur correspondante. Manquants ou faux : refus. Le miroir peut avoir des heures de
+retard, et trois séries au lieu de quatre ne se remarque pas en salle — on les fait,
+c'est tout. Les autres champs (nom, machine, muscles, consignes) n'en demandent pas.
 
-Un `ordre` ne cite que des exercices de CETTE séance ; ceux qu'on omet restent
-après, dans leur ordre actuel. On n'ajoute pas de séance : il y en a quatre, et le
-calendrier, la semaine type et l'historique s'appuient dessus.
+**`repos_s` est obligatoire à l'ajout**, en secondes. Il n'y a pas de défaut : le
+déduire des reps donnerait 40 secondes sur « 30-40 s », c'est-à-dire un repos calculé
+sur une durée d'effort.
+
+**`retirer` désactive, ne supprime pas.** Le mouvement sort de la séance du jour, son
+historique reste intact et lisible par l'outil `exercice`. Repris trois mois plus
+tard, il retrouve ses courbes au lieu de repartir de zéro — et sa place, si tu ne
+donnes pas d'`apres`.
+
+**`muscles` et `machines_de_remplacement` remplacent la liste**, comme `items` sur une
+recette. Repars de la liste complète donnée par `programme`, sinon tu effaces ce que
+tu n'as pas recopié.
+
+**`reordonner` attend la liste COMPLÈTE des actifs.** Une liste partielle est refusée :
+les exercices omis garderaient leur place et s'intercaleraient, donnant un ordre
+silencieusement différent de celui demandé. L'ordre a un sens physiologique — un
+exercice de poigne ou de gainage avant un soulevé lourd dégrade le soulevé.
+
+**`mesure: "temps"` sur tout ce qui se compte en secondes** — portés, suspensions,
+gainage. Ça sort l'exercice de la progression automatique, de la détection de record
+et du 1RM estimé. Sans ça, « 30-40 s » se lit 40 répétitions : l'app croit la cible
+atteinte et conseille de charger.
+
+Un identifiant **déjà pris** — même dans une autre séance, même sur un mouvement
+retiré — est refusé à l'ajout : l'historique de charges est indexé sur l'identifiant
+seul, le réutiliser rangerait de vieux records sous un exercice jamais fait. Pour
+« remplacer » un mouvement par un autre : `retirer` puis `ajouter`, deux propositions.
+
+`optionnel: true` affiche le mouvement grisé en fin de séance et le sort du seuil des
+80 % qui autorise l'enregistrement ; il compte normalement dans le volume et les
+records dès qu'il est fait.
 
 ### « Corrige cette erreur dans mes données »
 

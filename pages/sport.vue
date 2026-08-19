@@ -10,6 +10,7 @@ import { useWithings } from '~/composables/useWithings'
 import { usePhotos } from '~/composables/usePhotos'
 import { useVault } from '~/composables/useVault'
 import { useProgram } from '~/composables/useProgram'
+import { isTimed } from '~/lib/program'
 import { useSnapshot } from '~/composables/useSnapshot'
 import { WARMUP_REST, fmtRest, restFor } from '~/lib/rest'
 import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf, shiftIso } from '~/utils/sportStats'
@@ -580,12 +581,22 @@ const doneCount = (exId: string) => (draft[exId] || []).filter(s => s.done && !s
 const workCount = (exId: string) => (draft[exId] || []).filter(s => !s.warm).length
 // Un exercice est « fini » quand toutes ses séries de travail sont cochées
 const isExDone = (exId: string) => { const wc = workCount(exId); return wc > 0 && doneCount(exId) === wc }
-const finishedCount = computed(() => (activeSession.value ? activeSession.value.exercises.filter(e => isExDone(e.id)).length : 0))
-// On ne peut enregistrer une NOUVELLE séance qu'à partir de 80% d'exercices finis
-// (en édition, toujours possible).
+/**
+ * Le seuil des 80 % se compte sur les exercices EXIGÉS.
+ *
+ * Un mouvement facultatif est là s'il reste du temps ; le compter au dénominateur
+ * ferait qu'une séance complète mais sans les accessoires refuserait de s'enregistrer.
+ * Sur une séance de six dont deux facultatifs, faire les quatre vrais donnait 4/6 =
+ * 67 % et un bouton grisé — pour une séance faite en entier.
+ *
+ * Fait, un facultatif compte NORMALEMENT partout ailleurs : volume, records,
+ * historique. Ce n'est pas du travail au rabais, c'est du travail en plus.
+ */
+const requiredEx = computed(() => (activeSession.value?.exercises ?? []).filter(e => !e.optionnel))
+const finishedCount = computed(() => requiredEx.value.filter(e => isExDone(e.id)).length)
 const finishReady = computed(() => {
   if (editingRecord.value) return true
-  const total = activeSession.value?.exercises.length ?? 0
+  const total = requiredEx.value.length
   return total ? finishedCount.value / total >= 0.8 : true
 })
 // Un 2e tap sur le même ressenti l'annule (on peut se tromper de bouton)
@@ -701,6 +712,8 @@ const deloadAdvised = computed(() => {
 // sont tombées SOUS la fourchette.
 function overloadHint(ex: Exercise): { cls: string; text: string } | null {
   if (ex.bodyweight || ex.superset) return null // au poids du corps / superset : progression gérée à la main
+  // Série au temps : ne rien dire laisserait croire à un bug. On dit pourquoi.
+  if (isTimed(ex)) return { cls: 'keep', text: '⏱ Série au temps — la progression se joue sur la durée tenue ou la charge portée, pas sur les reps' }
   const s = suggestWeight(ex, draftVariant[ex.id])
   const felt = lastEffort(ex.id)
   if (s.reason === 'deload') return { cls: 'stall', text: `💥 À l'échec sous la fourchette → on redescend à ${s.weight} kg pour repartir propre` }
@@ -1093,7 +1106,7 @@ onUnmounted(() => {
       </aside>
 
       <div class="session-main">
-        <div v-for="(e, idx) in activeSession.exercises" :key="e.id" class="card no-pad exercise">
+        <div v-for="(e, idx) in activeSession.exercises" :key="e.id" class="card no-pad exercise" :class="{ 'ex-opt': e.optionnel }">
           <!-- L'icône vit dans l'en-tête, pas dans le corps : c'est là qu'on voit
                d'un coup d'œil quels exercices portent déjà un commentaire, sans
                déplier les six cartes une par une. Et elle ouvre une fenêtre au lieu
@@ -1102,7 +1115,7 @@ onUnmounted(() => {
           <div class="exhead-row">
             <button class="exhead" @click="openEx = openEx === e.id ? null : e.id">
               <div>
-                <div class="ex-name">{{ idx + 1 }}. {{ e.name }}</div>
+                <div class="ex-name">{{ idx + 1 }}. {{ e.name }}<span v-if="e.optionnel" class="ex-opt-tag">facultatif</span></div>
                 <div class="muted mt-2">{{ e.sets }} × {{ e.reps }}<template v-if="lastPerf(e.id)"> · dernière : {{ Math.max(...lastPerf(e.id)!.sets.map(s => s.w)) }} kg</template></div>
               </div>
               <div class="set-counter mono" :class="{ complete: draft[e.id] && workCount(e.id) > 0 && doneCount(e.id) === workCount(e.id) }">{{ doneCount(e.id) }}/{{ workCount(e.id) || e.sets }}</div>
@@ -1179,7 +1192,7 @@ onUnmounted(() => {
                   <span class="ss-move-label"></span>
                   <span class="col-head mono">kg</span>
                   <span class="times">×</span>
-                  <span class="col-head mono">reps</span>
+                  <span class="col-head mono">{{ isTimed(e) ? 'sec' : 'reps' }}</span>
                 </div>
                 <div v-for="(s, i) in draft[e.id]" :key="i" class="ss-set" :class="{ done: s.done }">
                   <div class="ss-set-top">
@@ -1191,13 +1204,13 @@ onUnmounted(() => {
                     <span class="ss-move-label">{{ e.superset[0] }}</span>
                     <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
                     <span class="times">×</span>
-                    <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
+                    <input v-model="s.r" type="number" inputmode="numeric" :placeholder="isTimed(e) ? 'sec' : 'reps'">
                   </div>
                   <div class="ss-move">
                     <span class="ss-move-label">{{ e.superset[1] }}</span>
                     <input v-model="s.w2" type="number" inputmode="decimal" placeholder="kg">
                     <span class="times">×</span>
-                    <input v-model="s.r2" type="number" inputmode="numeric" placeholder="reps">
+                    <input v-model="s.r2" type="number" inputmode="numeric" :placeholder="isTimed(e) ? 'sec' : 'reps'">
                   </div>
                 </div>
               </template>
@@ -1207,13 +1220,13 @@ onUnmounted(() => {
                   <span class="set-label"></span>
                   <span class="col-head mono">kg</span>
                   <span class="times">×</span>
-                  <span class="col-head mono">reps</span>
+                  <span class="col-head mono">{{ isTimed(e) ? 'sec' : 'reps' }}</span>
                 </div>
                 <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done, warm: s.warm }">
                   <button class="set-label mono" :class="{ warm: s.warm }" :title="s.warm ? 'Échauffement (non compté) — clic pour repasser en série' : 'Clic pour marquer en échauffement'" @click="s.warm = !s.warm">{{ setLabel(draft[e.id], i) }}</button>
                   <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
                   <span class="times">×</span>
-                  <input v-model="s.r" type="number" inputmode="numeric" placeholder="reps">
+                  <input v-model="s.r" type="number" inputmode="numeric" :placeholder="isTimed(e) ? 'sec' : 'reps'">
                   <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e)">{{ s.done ? '✓' : '○' }}</button>
                   <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>
                 </div>
@@ -1324,7 +1337,7 @@ onUnmounted(() => {
           <div class="muted mt-6">C'est ce qui expliquera une séance en dessous quand tu la reliras dans un mois.</div>
         </div>
         <button class="btn-primary finish" :disabled="!finishReady" @click="finishSession">{{ editingRecord ? 'Enregistrer les modifications' : 'Terminer et enregistrer la séance' }}</button>
-        <div v-if="!finishReady && activeSession" class="finish-hint muted">Termine au moins 80 % des exercices pour enregistrer — {{ finishedCount }}/{{ activeSession.exercises.length }} faits.</div>
+        <div v-if="!finishReady && activeSession" class="finish-hint muted">Termine au moins 80 % des exercices pour enregistrer — {{ finishedCount }}/{{ requiredEx.length }} faits.</div>
           </div>
         </div>
       </div>
@@ -1361,9 +1374,9 @@ onUnmounted(() => {
         </div>
         <div class="preview-note">🔒 Une séance est déjà en cours. Termine-la ou abandonne-la pour démarrer celle-ci.</div>
         <div class="preview-list">
-          <div v-for="(e, idx) in previewSession.exercises" :key="e.id" class="preview-ex">
+          <div v-for="(e, idx) in previewSession.exercises" :key="e.id" class="preview-ex" :class="{ 'ex-opt': e.optionnel }">
             <div class="preview-ex-head">
-              <span class="preview-ex-name">{{ idx + 1 }}. {{ e.name }}</span>
+              <span class="preview-ex-name">{{ idx + 1 }}. {{ e.name }}<span v-if="e.optionnel" class="ex-opt-tag">facultatif</span></span>
               <span class="preview-ex-sets mono">{{ e.sets }} × {{ e.reps }}</span>
             </div>
             <div class="sc-muscles"><span v-for="m in exMuscles(e)" :key="m" class="sc-chip">{{ m }}</span></div>

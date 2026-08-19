@@ -156,8 +156,9 @@ function compositionLibre(p: RawProposal) {
  */
 const prog = useProgram()
 const GESTES: Record<string, string> = {
-  modifier: 'Modifier', ajouter: 'Ajouter', retirer: 'Retirer', reactiver: 'Remettre', ordre: 'Réordonner',
+  modifier: 'Modifier', ajouter: 'Ajouter', retirer: 'Retirer', reactiver: 'Remettre', reordonner: 'Réordonner',
 }
+const MESURES: Record<string, string> = { reps: 'répétitions', temps: 'temps' }
 function programme(p: RawProposal) {
   const plan = planFor(p, v.ctx)
   if (plan?.kind !== 'programme') return null
@@ -169,35 +170,52 @@ function programme(p: RawProposal) {
     lignes.push({ champ, avant: avant === undefined ? '—' : String(avant), apres: String(apres) })
   }
 
-  if (plan.action === 'modifier' && plan.patch) {
+  if (plan.op === 'modifier' && plan.patch) {
     const q = plan.patch
     ligne('Nom', actuel?.name, q.name)
     ligne('Séries', actuel?.sets, q.sets)
     ligne('Reps', actuel?.reps, q.reps)
     if (q.rest !== undefined) ligne('Repos', actuel ? fmtRest(restFor(actuel)) : undefined, fmtRest(q.rest))
-    ligne('Machine', actuel?.machine || '—', q.machine)
+    ligne('Mesure', MESURES[actuel?.mesure ?? 'reps'], q.mesure ? MESURES[q.mesure] : undefined)
+    ligne('Machine', actuel?.machine || '—', q.machine === '' ? '—' : q.machine)
+    ligne('Facultatif', actuel?.optionnel ? 'oui' : 'non', q.optionnel === undefined ? undefined : (q.optionnel ? 'oui' : 'non'))
     ligne('Muscles', actuel?.muscles.join(', '), q.muscles?.join(', '))
     ligne('Consignes', actuel?.cues.length ? `${actuel.cues.length} ligne(s)` : '—', q.cues ? `${q.cues.length} ligne(s)` : undefined)
   }
-  if (plan.action === 'ajouter' && plan.nouveau) {
+  if (plan.op === 'ajouter' && plan.nouveau) {
     const n = plan.nouveau
     ligne('Nom', undefined, n.name)
     ligne('Séries', undefined, n.sets)
     ligne('Reps', undefined, n.reps)
     ligne('Repos', undefined, fmtRest(restFor(n)))
+    if (n.mesure) ligne('Mesure', undefined, MESURES[n.mesure])
+    if (n.optionnel) ligne('Facultatif', undefined, 'oui')
     if (n.machine) ligne('Machine', undefined, n.machine)
     if (n.muscles.length) ligne('Muscles', undefined, n.muscles.join(', '))
+    if (plan.apres) ligne('Placé après', undefined, prog.exerciseName(plan.apres))
+  }
+  if (plan.op === 'reactiver' && plan.apres) ligne('Placé après', undefined, prog.exerciseName(plan.apres))
+  /**
+   * Les machines de remplacement se relisent EN ENTIER.
+   *
+   * La liste remplace, elle ne fusionne pas : afficher seulement ce qui change
+   * cacherait justement ce qui disparaît, et c'est le seul risque du geste.
+   */
+  if (plan.variants) {
+    const av = prog.variantsFor(plan.exercice ?? '')
+    ligne('Machines', av.length ? av.map(v => `${v.name} ×${v.ratio}`).join(' · ') : '—',
+      plan.variants.length ? plan.variants.map(v => `${v.name} ×${v.ratio}`).join(' · ') : '—')
   }
 
   return {
-    geste: GESTES[plan.action] ?? plan.action,
+    geste: GESTES[plan.op] ?? plan.op,
     seance: seance?.name ?? plan.seance,
     exercice: actuel?.name ?? plan.nouveau?.name ?? plan.exercice ?? '',
     lignes,
-    ordre: plan.action === 'ordre' ? (plan.ordre ?? []).map(id => prog.exerciseName(id)) : null,
-    note: plan.action === 'retirer'
-      ? 'Sort du programme. Les séances déjà enregistrées gardent ce mouvement et ses records — rien n\'est supprimé, et on peut le remettre.'
-      : (plan.action === 'reactiver' ? 'Revient dans la séance, à sa place d\'origine.' : ''),
+    ordre: plan.op === 'reordonner' ? (plan.ordre ?? []).map(id => prog.exerciseName(id)) : null,
+    note: plan.op === 'retirer'
+      ? 'Sort du programme. Les séances déjà enregistrées gardent ce mouvement et ses records — rien n\'est supprimé, et on peut le remettre à sa place.'
+      : (plan.op === 'reactiver' && !plan.apres ? 'Revient dans la séance, à sa place d\'origine.' : ''),
   }
 }
 

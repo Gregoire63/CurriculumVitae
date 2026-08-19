@@ -2,7 +2,9 @@ import { computed, ref } from 'vue'
 import { PROGRAM } from '~/data/sportProgram'
 import type { Exercise, Session } from '~/data/sportProgram'
 import { LEGACY_NAMES, allExercises, mergeProgram, retiredExercises } from '~/lib/program'
-import type { ExercisePatch, ProgramCustom } from '~/lib/program'
+import { EXERCISE_GEAR, VARIANTS } from '~/data/exerciseVariants'
+import type { Variant } from '~/data/exerciseVariants'
+import type { ExercisePatch, ProgramCustom, VariantSpec } from '~/lib/program'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le programme d'entraînement, désormais modifiable.
@@ -21,11 +23,13 @@ const PATCH_KEY = 'gr-prog-patch-v1' // exercices livrés, modifiés
 const ADDED_KEY = 'gr-prog-added-v1' // exercices ajoutés, par séance
 const OFF_KEY = 'gr-prog-off-v1' // exercices retirés du programme
 const ORDER_KEY = 'gr-prog-order-v1' // ordre voulu, par séance
+const VAR_KEY = 'gr-prog-var-v1' // machines de remplacement redéfinies
 
 const patches = ref<Record<string, ExercisePatch>>({})
 const added = ref<Record<string, Exercise[]>>({})
 const disabled = ref<string[]>([])
 const order = ref<Record<string, string[]>>({})
+const variants = ref<Record<string, VariantSpec[]>>({})
 
 let hydrated = false
 
@@ -48,6 +52,7 @@ export function useProgram() {
     added.value = safeParse(localStorage.getItem(ADDED_KEY), {})
     disabled.value = safeParse(localStorage.getItem(OFF_KEY), [])
     order.value = safeParse(localStorage.getItem(ORDER_KEY), {})
+    variants.value = safeParse(localStorage.getItem(VAR_KEY), {})
   }
   hydrate()
 
@@ -56,13 +61,53 @@ export function useProgram() {
     added: added.value,
     disabled: disabled.value,
     order: order.value,
+    variants: variants.value,
   }))
 
   /** LE programme, celui que tous les écrans doivent lire. */
   const program = computed<Session[]>(() => mergeProgram(PROGRAM, custom.value))
   const exercises = computed<Exercise[]>(() => allExercises(program.value))
+  /** Le programme AVEC les mouvements retirés, à leur place. Ce que lit l'écran de
+   *  réactivation et l'outil « programme » quand on lui demande les inactifs. */
+  const programAll = computed<Session[]>(() => mergeProgram(PROGRAM, custom.value, true))
   /** Les mouvements retirés, pour que l'historique garde leurs noms. */
   const retired = computed<Record<string, Exercise>>(() => retiredExercises(PROGRAM, custom.value))
+  const isOff = (id: string) => disabled.value.includes(id)
+
+  /**
+   * Les machines de remplacement EFFECTIVES.
+   *
+   * Une liste proposée ne porte que trois champs. Le catalogue en a six : `gear`
+   * pilote l'icône de matériel, `hint` et `why` la phrase d'explication. On rend donc
+   * les trois manquants dès que l'identifiant existe encore au catalogue — remplacer
+   * la liste ne doit pas coûter l'icône d'une machine qu'on garde.
+   */
+  const variantsFor = (exId: string): Variant[] => {
+    const voulu = variants.value[exId]
+    if (!voulu) return VARIANTS[exId] ?? []
+    const cat = new Map((VARIANTS[exId] ?? []).map(v => [v.id, v]))
+    return voulu.map((v) => {
+      const d = cat.get(v.id)
+      return {
+        id: v.id,
+        name: v.name,
+        ratio: v.ratio,
+        hint: d?.hint ?? '',
+        why: d?.why ?? '',
+        gear: d?.gear ?? EXERCISE_GEAR[exId] ?? 'barre',
+      }
+    })
+  }
+
+  /** Où se trouve cet exercice, et dans quel état. Le refus « déjà pris dans s2 »
+   *  en dépend, et la garde des « de_… » aussi. */
+  const exerciseAt = (id: string): { seance: string, seanceNom: string, actif: boolean, ex: Exercise } | null => {
+    for (const s of programAll.value) {
+      const ex = s.exercises.find(e => e.id === id)
+      if (ex) return { seance: s.id, seanceNom: s.name, actif: !isOff(id), ex }
+    }
+    return null
+  }
 
   const sessionById = (id: string | null): Session | null =>
     (id ? program.value.find(s => s.id === id) ?? null : null)
@@ -89,11 +134,31 @@ export function useProgram() {
     patches.value = next
     write(PATCH_KEY, patches.value)
   }
-  function addExercise(sessionId: string, ex: Exercise) {
+  /**
+   * Ajoute un exercice, éventuellement juste APRÈS un autre.
+   *
+   * Les ajouts sont stockés à part et se retrouvent naturellement en fin de séance.
+   * Pour les placer ailleurs, on ne touche pas au stockage : on écrit l'ordre voulu,
+   * qui est déjà le mécanisme prévu pour ça. Deux façons de positionner un exercice
+   * auraient fini par se contredire.
+   */
+  function addExercise(sessionId: string, ex: Exercise, apres?: string) {
     added.value = { ...added.value, [sessionId]: [...(added.value[sessionId] ?? []), ex] }
     write(ADDED_KEY, added.value)
     // Un exercice ajouté puis retiré puis réajouté doit réapparaître.
     if (disabled.value.includes(ex.id)) enableExercise(ex.id)
+    if (apres) placeAfter(sessionId, ex.id, apres)
+  }
+
+  /** Place `exId` juste après `apres` dans l'ordre effectif de la séance. */
+  function placeAfter(sessionId: string, exId: string, apres: string) {
+    const s = program.value.find(x => x.id === sessionId)
+    if (!s) return
+    const ids = s.exercises.map(e => e.id).filter(id => id !== exId)
+    const i = ids.indexOf(apres)
+    if (i < 0) return
+    ids.splice(i + 1, 0, exId)
+    setOrder(sessionId, ids)
   }
   /** Retire du PROGRAMME, jamais de l'historique. */
   function disableExercise(exId: string) {
@@ -101,9 +166,31 @@ export function useProgram() {
     disabled.value = [...disabled.value, exId]
     write(OFF_KEY, disabled.value)
   }
-  function enableExercise(exId: string) {
+  /**
+   * Remet un exercice dans le programme.
+   *
+   * Sans `apres`, il retrouve sa place d'origine — il ne l'a jamais quittée, il en
+   * était seulement filtré. C'est toute la raison pour laquelle « retirer »
+   * désactive au lieu de supprimer.
+   */
+  function enableExercise(exId: string, apres?: string) {
     disabled.value = disabled.value.filter(id => id !== exId)
     write(OFF_KEY, disabled.value)
+    if (!apres) return
+    const s = programAll.value.find(x => x.exercises.some(e => e.id === exId))
+    if (s) placeAfter(s.id, exId, apres)
+  }
+
+  /** Redéfinit les machines de remplacement d'un exercice. La liste REMPLACE. */
+  function setVariants(exId: string, list: VariantSpec[]) {
+    variants.value = { ...variants.value, [exId]: list }
+    write(VAR_KEY, variants.value)
+  }
+  function resetVariants(exId: string) {
+    const next = { ...variants.value }
+    delete next[exId]
+    variants.value = next
+    write(VAR_KEY, variants.value)
   }
   function setOrder(sessionId: string, ids: string[]) {
     order.value = { ...order.value, [sessionId]: ids }
@@ -111,7 +198,7 @@ export function useProgram() {
   }
 
   function snapshot() {
-    return { programme: { patches: patches.value, added: added.value, disabled: disabled.value, order: order.value } }
+    return { programme: { patches: patches.value, added: added.value, disabled: disabled.value, order: order.value, variants: variants.value } }
   }
   /** Restauration TOLÉRANTE : une sauvegarde d'avant cette fonctionnalité passe sans erreur. */
   function restore(data: Record<string, unknown>) {
@@ -121,12 +208,14 @@ export function useProgram() {
     if (p.added && typeof p.added === 'object') { added.value = p.added; write(ADDED_KEY, added.value) }
     if (Array.isArray(p.disabled)) { disabled.value = p.disabled; write(OFF_KEY, disabled.value) }
     if (p.order && typeof p.order === 'object') { order.value = p.order; write(ORDER_KEY, order.value) }
+    if (p.variants && typeof p.variants === 'object') { variants.value = p.variants; write(VAR_KEY, variants.value) }
   }
 
   return {
-    hydrate, program, exercises, retired, custom,
-    sessionById, exerciseById, exerciseName,
+    hydrate, program, programAll, exercises, retired, custom,
+    sessionById, exerciseById, exerciseName, exerciseAt, variantsFor,
     patchExercise, resetExercise, addExercise, disableExercise, enableExercise, setOrder,
+    setVariants, resetVariants, placeAfter,
     snapshot, restore,
   }
 }

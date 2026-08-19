@@ -92,7 +92,10 @@ export const isEffort = (v: unknown): v is Effort =>
   v === 'easy' || v === 'ok' || v === 'hard' || v === 'fail'
 
 // ─── Surcharge progressive auto-régulée ──────────────────────────────────────
-export type LoadReason = 'progress' | 'stall' | 'keep' | 'deload' | 'none'
+/** `temps` : l'exercice se mesure en secondes, la charge ne s'auto-régule pas sur
+ *  des reps. Une raison à part, et non `none`, pour que l'écran puisse le DIRE
+ *  plutôt que d'afficher un conseil vide qu'on prendrait pour un bug. */
+export type LoadReason = 'progress' | 'stall' | 'keep' | 'deload' | 'none' | 'temps'
 export const STALL_SESSIONS = 3
 
 /** Charge conseillée pour la prochaine séance d'un exercice.

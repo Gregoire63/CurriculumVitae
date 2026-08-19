@@ -25,6 +25,7 @@ import { bmrMifflin, dayEnergy, isDayPlayed, proteinPlan } from '../../lib/nutri
 // complète donne le résultat attendu.
 
 const MCP = readFileSync('server/api/mcp.post.ts', 'utf8')
+const PROPOSALS = readFileSync('lib/proposals.ts', 'utf8')
 
 describe('le serveur emprunte les règles, il ne les réécrit pas', () => {
   it('importe le socle énergie et le socle poids', () => {
@@ -103,6 +104,43 @@ describe('le programme annoncé est celui de l’application', () => {
     // mais non validée au dépôt s'accumule en propositions inapplicables.
     expect(MCP).toMatch(/enum: \[[^\]]*'programme'/)
     expect(MCP).toContain('programFor(brut, ctx)')
+  })
+
+  /**
+   * Un geste que le code accepte mais que la description ne mentionne pas est INVISIBLE.
+   *
+   * C'est le seul endroit où Claude lit ce que le connecteur accepte. Un handler qui
+   * marche sans être déclaré ne sera jamais appelé — et l'inverse est pire : une op
+   * annoncée que le code refuse produit des dépôts rejetés sans qu'on comprenne, parce
+   * que la documentation dit qu'ils devraient passer.
+   *
+   * Le test lit les deux côtés et les confronte, plutôt que de faire confiance à
+   * l'habitude de mettre à jour les deux.
+   */
+  it('déclare EXACTEMENT les gestes que le code sait appliquer', () => {
+    const OPS = ['ajouter', 'modifier', 'retirer', 'reactiver', 'reordonner']
+    const codees = /const PROGRAM_OPS = \[([^\]]+)\]/.exec(PROPOSALS)?.[1] ?? ''
+    for (const op of OPS) {
+      expect(codees, `${op} doit être acceptée par le code`).toContain(`'${op}'`)
+      expect(MCP, `${op} doit être documentée dans la description de l'outil`).toContain(`· ${op} :`)
+    }
+    // Et rien de plus : une sixième op codée sans être annoncée serait morte.
+    expect(codees.split(',').length).toBe(OPS.length)
+  })
+
+  it('documente les pièges que la description doit porter', () => {
+    // Chacun a coûté quelque chose ailleurs dans ce projet : une liste partielle qui
+    // efface, une valeur écrasée sur un miroir périmé, un défaut inventé.
+    const ATTENDUS = [
+      'REMPLACENT la liste', // muscles et machines de remplacement
+      'liste COMPLÈTE des actifs', // reordonner
+      'repos_s » est OBLIGATOIRE', // pas de défaut inventé
+      'exigent leur « de_… »', // les gardes contre un miroir périmé
+      'sens physiologique', // l'ordre des exercices
+      'DÉSACTIVE, ne supprime PAS', // retirer
+      'hors progression automatique', // mesure: temps, dans l'outil de lecture
+    ]
+    for (const a of ATTENDUS) expect(MCP, a).toContain(a)
   })
 
   it('rend le repos, sans quoi on ne peut pas proposer de l’allonger', () => {
