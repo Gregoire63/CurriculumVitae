@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { PROGRAM } from '~/data/sportProgram'
 import { gearFor, variantName, variantsOf } from '~/data/exerciseVariants'
 import type { Session, Exercise } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
@@ -10,6 +9,7 @@ import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
 import { usePhotos } from '~/composables/usePhotos'
 import { useVault } from '~/composables/useVault'
+import { useProgram } from '~/composables/useProgram'
 import { useSnapshot } from '~/composables/useSnapshot'
 import { WARMUP_REST, fmtRest, restFor } from '~/lib/rest'
 import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf, shiftIso } from '~/utils/sportStats'
@@ -72,7 +72,10 @@ function exMuscles(e: Exercise): string[] {
 // toute confusion (« Push » / « Bras » étaient ambigus entre les 2 jours pecs).
 const SHORT: Record<string, string> = { s1: 'Pecs/Ép', s2: 'Dos/Bic', s3: 'Jambes', s4: 'Pecs/Bras' }
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-const sessionById = (id: string | null) => (id ? PROGRAM.find(p => p.id === id) || null : null)
+// LE programme : le livré, plus ce qu'un coach en a fait. Cette page l'affiche, le
+// démarre et l'enregistre — elle ne doit jamais lire la version figée du code, sinon
+// une séance modifiée s'ouvre avec les anciennes séries.
+const { program: prog, sessionById } = useProgram()
 
 // ─────────── Jour actuel (client) ───────────
 const todayDow = ref<number | null>(null)
@@ -106,7 +109,7 @@ const nextSession = computed(() => {
   for (let i = 1; i <= 7; i++) { const e = weekDays.value[(todayIndex.value + i) % 7]; if (e.session) return e }
   return null
 })
-const otherSessions = computed(() => { const id = todaySession.value?.id; return PROGRAM.filter(s => s.id !== id) })
+const otherSessions = computed(() => { const id = todaySession.value?.id; return prog.value.filter(s => s.id !== id) })
 const doneToday = computed(() => (todayISO.value ? sessionLog().filter(s => s.at.slice(0, 10) === todayISO.value) : []))
 // Séance du jour déjà enregistrée (→ bouton « Modifier » au lieu de « Démarrer »)
 const todayRecord = computed(() => {
@@ -530,7 +533,7 @@ function startSession(s: Session) {
 // Rouvre une séance déjà enregistrée pour la modifier (préremplie avec les perfs saisies)
 function editSession(rec: SessionRecord) {
   if (activeSession.value) { showFlash('Termine ou abandonne ta séance en cours avant d’en modifier une autre.'); return }
-  const s = sessionById(rec.sessionId) || PROGRAM.find(p => p.name === rec.name)
+  const s = sessionById(rec.sessionId) || prog.value.find(p => p.name === rec.name)
   if (!s) return
   activeSession.value = s
   editingRecord.value = rec
@@ -771,7 +774,7 @@ function restoreDraft() {
   if (!raw) return
   try {
     const s = JSON.parse(raw)
-    const sess = PROGRAM.find(p => p.id === s.id)
+    const sess = prog.value.find(p => p.id === s.id)
     if (!sess) { localStorage.removeItem(DRAFT_KEY); return }
     activeSession.value = sess
     for (const k of Object.keys(draft)) delete draft[k]

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { PROGRAM } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { useNutrition } from '~/composables/useNutrition'
 import { useEnergy } from '~/composables/useEnergy'
+import { useProgram } from '~/composables/useProgram'
 
 // Vue « Journal » : UN calendrier, rien d'autre. Le détail d'une journée s'ouvre en
 // feuille au clic.
@@ -23,7 +23,8 @@ const { energyOn } = useEnergy()
 
 const MONTHS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 const p2 = (n: number) => String(n).padStart(2, '0')
-const recColor = (rec: SessionRecord) => PROGRAM.find(p => p.id === rec.sessionId)?.color || '#8b6f5c'
+const { program: prog } = useProgram()
+const recColor = (rec: SessionRecord) => prog.value.find(p => p.id === rec.sessionId)?.color || '#8b6f5c'
 
 const sessions = computed(() => sessionLog())
 const calMonth = ref<{ y: number, m: number }>({ y: 2024, m: 0 })

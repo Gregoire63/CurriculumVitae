@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { ALL_EXERCISES, PROGRAM, bottomOfRange, topOfRange, suggestedIncrement } from '~/data/sportProgram'
+import { bottomOfRange, topOfRange, suggestedIncrement } from '~/data/sportProgram'
 import type { Exercise } from '~/data/sportProgram'
 import {
   workSets, topWeight, volumeOf, e1rmOf, setTop, detectPRs, sameWeightStreak, nextLoad,
@@ -8,6 +8,7 @@ import {
 } from '~/utils/sportStats'
 import { defaultRatio } from '~/data/exerciseVariants'
 import { latestWeight, weightOn } from '~/lib/weight'
+import { useProgram } from '~/composables/useProgram'
 import type { Effort, PrKind, SetLike, SprintSession, WeekStats } from '~/utils/sportStats'
 
 // warm : série d'échauffement — enregistrée mais exclue des stats (charge, PR, progression)
@@ -75,6 +76,17 @@ function localDateTime(d = new Date()) { return `${localDate(d)}T${pad2(d.getHou
 const lastExportAt = ref<string | null>(null)
 
 export function useWorkout() {
+  /**
+   * Le programme EFFECTIF, et non la liste figée dans le code.
+   *
+   * Trois usages en dépendent, et chacun se serait trompé silencieusement : le nom
+   * affiché sur un record, les muscles comptés dans le volume, et le filtre « cet
+   * exercice, je le fais encore ». Ce dernier surtout — un mouvement retiré doit
+   * cesser de peser dans la fatigue, sinon il stagne pour l'éternité et tire le
+   * verdict vers le bas des mois après qu'on a arrêté de le faire.
+   */
+  const { exercises: exos, program: prog } = useProgram()
+
   if (!hydrated && import.meta.client) {
     logs.value = safeParse(localStorage.getItem(LOGS_KEY), {})
     bodyWeight.value = safeParse(localStorage.getItem(BW_KEY), [])
@@ -257,7 +269,7 @@ export function useWorkout() {
       // pas 100 kg au squat barre, ils ne se soulèvent simplement pas de la même façon.
       const kinds = detectPRs(onVariant(exId, variant), sets)
       if (kinds.length) {
-        const ex = ALL_EXERCISES.find(e => e.id === exId)
+        const ex = exos.value.find(e => e.id === exId)
         prs.push({ name: ex ? ex.name : exId, kinds })
       }
       if (!logs.value[exId]) logs.value[exId] = []
@@ -391,7 +403,7 @@ export function useWorkout() {
   function muscleSets(from: string | null): Record<string, number> {
     const entries: { muscles: string[]; sets: number }[] = []
     for (const [exId, ss] of Object.entries(logs.value)) {
-      const ex = ALL_EXERCISES.find(e => e.id === exId)
+      const ex = exos.value.find(e => e.id === exId)
       if (!ex) continue
       let sets = 0
       for (const s of ss) if (!from || s.date >= from) sets += working(s.sets).length
@@ -402,7 +414,7 @@ export function useWorkout() {
   /** Idem, complété par les muscles du programme jamais travaillés (à 0) — ce sont
    *  eux qu'il faut voir. */
   function muscleSetsWithGaps(from: string | null): [string, number][] {
-    const counts = withProgramMuscles(muscleSets(from), ALL_EXERCISES)
+    const counts = withProgramMuscles(muscleSets(from), exos.value)
     return Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
   }
 
@@ -447,7 +459,7 @@ export function useWorkout() {
   function stalledCount(sinceIso: string): number {
     let n = 0
     for (const [exId, ss] of Object.entries(logs.value)) {
-      if (!ss.length || !ALL_EXERCISES.some(e => e.id === exId)) continue
+      if (!ss.length || !exos.value.some(e => e.id === exId)) continue
       if (ss[ss.length - 1].date < sinceIso) continue
       if (sameWeightStreak(comparable(exId)) >= STALL_SESSIONS) n++
     }
@@ -461,7 +473,7 @@ export function useWorkout() {
   function perfDrops(sinceIso: string): { dropped: number, tracked: number } {
     let dropped = 0, tracked = 0
     for (const [exId, ss] of Object.entries(logs.value)) {
-      if (!ss.length || !ALL_EXERCISES.some(e => e.id === exId)) continue
+      if (!ss.length || !exos.value.some(e => e.id === exId)) continue
       if (ss[ss.length - 1].date < sinceIso) continue
       if (ss.length < 2) continue // rien à comparer
       tracked++
@@ -542,7 +554,7 @@ export function useWorkout() {
     const newSessions: SessionRecord[] = []
     const N = 10
     for (let k = 0; k < N; k++) {
-      const s = PROGRAM[k % PROGRAM.length]
+      const s = prog.value[k % prog.value.length]
       const d = new Date()
       d.setDate(d.getDate() - (N - 1 - k) * 2 - 1) // une séance tous les ~2 jours
       d.setHours(18, 30, 0, 0)

@@ -3,6 +3,7 @@ import { useProfile } from '~/composables/useProfile'
 import { useNutrition } from '~/composables/useNutrition'
 import { useWithings } from '~/composables/useWithings'
 import { useRestTimer } from '~/composables/useRestTimer'
+import { useProgram } from '~/composables/useProgram'
 
 /**
  * L'instantané complet des données, en un seul endroit.
@@ -24,6 +25,7 @@ export function useSnapshot() {
   const { exportData } = useNutrition()
   const { snapshot: withingsData } = useWithings()
   const { snapshot: timerData } = useRestTimer()
+  const { snapshot: programData } = useProgram()
 
   function buildSnapshot(): Record<string, unknown> {
     return {
@@ -36,6 +38,7 @@ export function useSnapshot() {
       nutrition: exportData(),
       ...withingsData(),
       ...timerData(),
+      ...programData(),
     }
   }
 

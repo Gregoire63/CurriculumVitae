@@ -5,6 +5,8 @@ import { detailLines, planFor, weekFor } from '~/lib/proposals'
 import { checkFreeMeal } from '~/lib/freeMeal'
 import type { RawProposal } from '~/lib/proposals'
 import { useNutrition } from '~/composables/useNutrition'
+import { useProgram } from '~/composables/useProgram'
+import { fmtRest, restFor } from '~/lib/rest'
 
 /**
  * Le connecteur, vu du téléphone.
@@ -137,6 +139,65 @@ function compositionLibre(p: RawProposal) {
     })),
     base: plan.repas.base ? library.value.recipes[plan.repas.base]?.name ?? plan.repas.base : null,
     ctrl,
+  }
+}
+
+/**
+ * Une modification de programme se relit AVANT → APRÈS, pas en JSON.
+ *
+ * « patch: {"sets":5,"rest":180} » ne se valide pas : pour savoir si c'est une bonne
+ * idée il faut se rappeler ce qu'il y avait avant, et personne ne se rappelle qu'un
+ * développé haltères était à 4 séries et 120 secondes. On affiche donc les deux
+ * colonnes, et le geste en toutes lettres.
+ *
+ * Le cas « retirer » porte sa propre phrase, parce que c'est le seul dont l'effet
+ * pourrait inquiéter : rien n'est supprimé, l'historique garde le mouvement et ses
+ * records. Le dire ici évite d'hésiter au moment de valider.
+ */
+const prog = useProgram()
+const GESTES: Record<string, string> = {
+  modifier: 'Modifier', ajouter: 'Ajouter', retirer: 'Retirer', reactiver: 'Remettre', ordre: 'Réordonner',
+}
+function programme(p: RawProposal) {
+  const plan = planFor(p, v.ctx)
+  if (plan?.kind !== 'programme') return null
+  const seance = prog.sessionById(plan.seance)
+  const actuel = plan.exercice ? prog.exerciseById(plan.exercice) : null
+  const lignes: { champ: string, avant: string, apres: string }[] = []
+  const ligne = (champ: string, avant: string | number | undefined, apres: string | number | undefined) => {
+    if (apres === undefined) return
+    lignes.push({ champ, avant: avant === undefined ? '—' : String(avant), apres: String(apres) })
+  }
+
+  if (plan.action === 'modifier' && plan.patch) {
+    const q = plan.patch
+    ligne('Nom', actuel?.name, q.name)
+    ligne('Séries', actuel?.sets, q.sets)
+    ligne('Reps', actuel?.reps, q.reps)
+    if (q.rest !== undefined) ligne('Repos', actuel ? fmtRest(restFor(actuel)) : undefined, fmtRest(q.rest))
+    ligne('Machine', actuel?.machine || '—', q.machine)
+    ligne('Muscles', actuel?.muscles.join(', '), q.muscles?.join(', '))
+    ligne('Consignes', actuel?.cues.length ? `${actuel.cues.length} ligne(s)` : '—', q.cues ? `${q.cues.length} ligne(s)` : undefined)
+  }
+  if (plan.action === 'ajouter' && plan.nouveau) {
+    const n = plan.nouveau
+    ligne('Nom', undefined, n.name)
+    ligne('Séries', undefined, n.sets)
+    ligne('Reps', undefined, n.reps)
+    ligne('Repos', undefined, fmtRest(restFor(n)))
+    if (n.machine) ligne('Machine', undefined, n.machine)
+    if (n.muscles.length) ligne('Muscles', undefined, n.muscles.join(', '))
+  }
+
+  return {
+    geste: GESTES[plan.action] ?? plan.action,
+    seance: seance?.name ?? plan.seance,
+    exercice: actuel?.name ?? plan.nouveau?.name ?? plan.exercice ?? '',
+    lignes,
+    ordre: plan.action === 'ordre' ? (plan.ordre ?? []).map(id => prog.exerciseName(id)) : null,
+    note: plan.action === 'retirer'
+      ? 'Sort du programme. Les séances déjà enregistrées gardent ce mouvement et ses records — rien n\'est supprimé, et on peut le remettre.'
+      : (plan.action === 'reactiver' ? 'Revient dans la séance, à sa place d\'origine.' : ''),
   }
 }
 
@@ -343,6 +404,25 @@ async function doRefuse(p: RawProposal) {
             <template v-else><td>{{ l.midi }}</td><td>{{ l.soir }}</td></template>
           </tr>
         </table>
+        <!-- Une modification de programme aussi : c'est le contenu qu'on valide. -->
+        <div v-if="programme(p)" class="vt-prog">
+          <div class="vt-prog-h mono">
+            {{ programme(p)!.geste }} · {{ programme(p)!.seance }}
+            <b v-if="programme(p)!.exercice"> · {{ programme(p)!.exercice }}</b>
+          </div>
+          <table v-if="programme(p)!.lignes.length" class="vt-prog-t">
+            <tr><th /><th class="vt-prog-av">avant</th><th>après</th></tr>
+            <tr v-for="l in programme(p)!.lignes" :key="l.champ">
+              <th>{{ l.champ }}</th>
+              <td class="vt-prog-av">{{ l.avant }}</td>
+              <td><b>{{ l.apres }}</b></td>
+            </tr>
+          </table>
+          <ol v-if="programme(p)!.ordre" class="vt-prog-o">
+            <li v-for="(n, i) in programme(p)!.ordre" :key="i">{{ n }}</li>
+          </ol>
+          <p v-if="programme(p)!.note" class="vt-prog-n">{{ programme(p)!.note }}</p>
+        </div>
         <button class="vt-p-toggle" @click="showDetail = showDetail === p.id ? null : p.id">
           {{ showDetail === p.id ? '▲ Masquer le détail' : '▼ Voir le détail' }}
         </button>

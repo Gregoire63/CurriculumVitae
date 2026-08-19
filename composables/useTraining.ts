@@ -1,7 +1,7 @@
-import { PROGRAM } from '~/data/sportProgram'
 import type { Session } from '~/data/sportProgram'
 import { useProfile } from '~/composables/useProfile'
 import { useNutrition } from '~/composables/useNutrition'
+import { useProgram } from '~/composables/useProgram'
 
 /**
  * Le planning des séances et la journée alimentaire, tenus ensemble.
@@ -21,8 +21,10 @@ export function useTraining() {
   const { sessionIdFor, isPlanMoved, setDayPlan, clearDayPlan } = useProfile()
   const { setOverride } = useNutrition()
 
-  const sessionById = (id: string | null): Session | null =>
-    (id ? PROGRAM.find(p => p.id === id) ?? null : null)
+  // Le programme EFFECTIF, pas celui du code : une séance dont un exercice a été
+  // retiré doit s'ouvrir sans ce mouvement, que ce soit depuis le calendrier ou
+  // depuis une proposition.
+  const { sessionById } = useProgram()
 
   /** La séance prévue à cette date — exception du jour, sinon semaine type. */
   const plannedFor = (iso: string): Session | null => sessionById(sessionIdFor(iso))

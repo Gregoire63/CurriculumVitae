@@ -6,6 +6,7 @@ import { useNutrition } from '~/composables/useNutrition'
 import { useTraining } from '~/composables/useTraining'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
+import { useProgram } from '~/composables/useProgram'
 import { useWithings } from '~/composables/useWithings'
 import { useSnapshot } from '~/composables/useSnapshot'
 import { setAt as setPointer } from '~/lib/pointer'
@@ -57,6 +58,7 @@ export function useVault() {
   const training = useTraining()
   const workout = useWorkout()
   const profileStore = useProfile()
+  const program = useProgram()
   const withings = useWithings()
   const { buildSnapshot } = useSnapshot()
 
@@ -74,6 +76,10 @@ export function useVault() {
     setAt: workout.setAt,
     weightAt: workout.weightAt,
     snapshot: buildSnapshot,
+    sessionKnown: (id: string) => !!program.sessionById(id),
+    // Retirés COMPRIS : c'est ce qui permet de réactiver un mouvement mis de côté.
+    exerciseKnown: (id: string) => !!program.exerciseById(id),
+    exercisesOf: (sessionId: string) => program.sessionById(sessionId)?.exercises.map(e => e.id) ?? [],
   }
 
   async function hydrate() {
@@ -215,6 +221,18 @@ export function useVault() {
       profileStore.restore(snap as never)
       nutrition.restore({ nutrition: snap.nutrition } as never)
       withings.restore(snap as never)
+      program.restore(snap)
+    }
+    else if (plan.kind === 'programme') {
+      // Mêmes fonctions que l'écran d'édition. « retirer » DÉSACTIVE : les séances
+      // enregistrées sont indexées par identifiant d'exercice, et supprimer
+      // effacerait des records réellement soulevés.
+      if (plan.action === 'modifier' && plan.patch) program.patchExercise(plan.exercice!, plan.patch)
+      else if (plan.action === 'ajouter' && plan.nouveau) program.addExercise(plan.seance, plan.nouveau)
+      else if (plan.action === 'retirer') program.disableExercise(plan.exercice!)
+      else if (plan.action === 'reactiver') program.enableExercise(plan.exercice!)
+      else if (plan.action === 'ordre' && plan.ordre) program.setOrder(plan.seance, plan.ordre)
+      else { error.value = 'Modification de programme incomplète.'; return false }
     }
     else if (plan.kind === 'correction-pesee') {
       const ok = plan.vers === null

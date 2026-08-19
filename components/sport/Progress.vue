@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { PROGRAM } from '~/data/sportProgram'
 import type { Session } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
+import { useProgram } from '~/composables/useProgram'
 
 // Vue « Progrès » extraite de la page /sport (chargée à la demande via <LazySportProgress>).
 // L'état est partagé : useWorkout() renvoie les mêmes refs (module-scope).
@@ -22,8 +22,9 @@ function sessionMuscles(s: Session): string[] {
   return seen.slice(0, 4)
 }
 
-const progressSession = ref<string | null>(PROGRAM[0]?.id ?? null)
-const progressSessionObj = computed(() => (progressSession.value ? PROGRAM.find(p => p.id === progressSession.value) ?? null : null))
+const { program: prog } = useProgram()
+const progressSession = ref<string | null>(prog.value[0]?.id ?? null)
+const progressSessionObj = computed(() => (progressSession.value ? prog.value.find(p => p.id === progressSession.value) ?? null : null))
 /**
  * La courbe est en ÉQUIVALENT référence : une séance faite sur une autre machine y
  * est convertie, sinon passer au squat guidé ferait bondir le tracé de 35 % sans
@@ -52,7 +53,7 @@ const progExStats = computed(() => (progressSessionObj.value?.exercises ?? []).m
     <div class="section-label">Touche une séance pour voir la progression de tous ses exercices</div>
     <div class="prog-grid">
       <button
-        v-for="s in PROGRAM" :key="s.id"
+        v-for="s in prog" :key="s.id"
         class="session-card prog-card" :class="{ active: progressSession === s.id }"
         :style="{ '--c': s.color }"
         @click="progressSession = progressSession === s.id ? null : s.id"

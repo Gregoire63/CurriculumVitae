@@ -6,12 +6,16 @@ import { dayBudget, fitInto } from '~/lib/dayBudget'
 import type { SlotState } from '~/lib/dayBudget'
 import { SLOTS_GYM, SLOTS_REST } from '~/data/nutritionProgram'
 import { getAt } from '~/lib/pointer'
-import { checkFieldFix, foodFor, planFor, recipeFor, twinPath } from '~/lib/proposals'
+import { checkFieldFix, foodFor, planFor, programFor, recipeFor, twinPath } from '~/lib/proposals'
 import { weightTrend } from '~/lib/bilan'
 import { carriedComp } from '~/lib/withings'
 import { weightOn } from '~/lib/weight'
 import { ageOn, sessionBurn } from '~/lib/energy'
 import { PROGRAM } from '~/data/sportProgram'
+import type { Session } from '~/data/sportProgram'
+import { mergeProgram, retiredExercises } from '~/lib/program'
+import { restFor } from '~/lib/rest'
+import type { ProgramCustom } from '~/lib/program'
 import { VARIANTS } from '~/data/exerciseVariants'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -264,7 +268,7 @@ const TOOLS = [
         resume: { type: 'string', description: 'Une phrase lisible, ex. « Vendredi midi : Boîte B → Saumon patate douce »' },
         cible: {
           type: 'string',
-          enum: ['semaine', 'semaine-type', 'plat', 'planning-seance', 'recette', 'aliment', 'repas-libre', 'correction', 'autre'],
+          enum: ['semaine', 'semaine-type', 'plat', 'planning-seance', 'recette', 'aliment', 'repas-libre', 'programme', 'correction', 'autre'],
           description: 'Ce qui est touché',
         },
         detail: {
@@ -284,6 +288,13 @@ const TOOLS = [
             '• semaine-type : { seances?: ["s1","s2",null,"s3","s4",null,null], salle?: [7 booléens], teletravail?: [7 booléens] } — lundi en premier, les trois axes sont indépendants',
             '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", sauce?: "<id de sauce>", keeps?: 4, items: [ { food: "<id d\'aliment>", g: 120 } ] } — « items » REMPLACE la liste, envoie-la complète. Lis d\'abord la recette avec l\'outil « recette » : sans ça tu effaces des ingrédients sans le savoir. « steps » est la marche à suivre du batch cooking, « keeps » la conservation en jours — c\'est elle qui décide dans quelle session de cuisine le plat tombe.',
             '• aliment : { id?: "<id existant pour corriger>", nom, cat: "viandes"|"poissons"|"oeufs"|"laitiers"|"feculents"|"legumes"|"fruits"|"grasses"|"aromates"|"complements"|"boissons", kcal, p, g, l, cook?: "6 min vapeur", buy?: "1 c. à café = 5 g", keeps?: 5 } — valeurs POUR 100 g, viandes et féculents crus. Les macros doivent expliquer les calories à 25 % près, sinon c\'est refusé : une étiquette mal recopiée ne fait rien planter, elle fausse les calories pour toujours.',
+            '• programme : { seance: "s1".."s4", action: "modifier"|"ajouter"|"retirer"|"reactiver"|"ordre", … } — tout ce qu\'un coach fait sur un plan. Lis d\'abord l\'outil « programme » : il donne les identifiants, les séries, les reps ET le repos actuels.',
+            '    · modifier : { action: "modifier", seance: "s1", exercice: "<id>", patch: { series?: 5, reps?: "5", repos?: 180, nom?, machine?, muscles?: [...], consignes?: [...] } } — le patch ne touche QUE ce qu\'il mentionne, le reste est conservé. Repos en SECONDES, entre 20 et 900.',
+            '    · ajouter : { action: "ajouter", seance: "s3", nouveau: { nom: "Hip thrust", series: 4, reps: "8-10", repos: 150, machine: "Barre + banc", muscles: ["fessiers"], consignes: ["…"] } } — l\'identifiant est déduit du nom ; donne-le explicitement (id) si tu veux le choisir. Un identifiant déjà pris est REFUSÉ : les séances enregistrées sont indexées dessus, le réutiliser rangerait de vieux records sous un mouvement jamais fait.',
+            '    · retirer : { action: "retirer", seance: "s2", exercice: "<id>" } — le mouvement sort du programme et RESTE dans l\'historique. Rien n\'est supprimé, donc c\'est réversible avec "reactiver".',
+            '    · reactiver : { action: "reactiver", seance: "s2", exercice: "<id>" } — le remet dans la séance.',
+            '    · ordre : { action: "ordre", seance: "s1", ordre: ["<id>", "<id>", …] } — les identifiants doivent tous appartenir à CETTE séance ; ceux que tu omets restent après, dans leur ordre actuel.',
+            '  Une seule action par proposition : Grégoire valide geste par geste, et un refus ne doit pas emporter les quatre autres.',
             '• correction, série : { quoi: "serie", exercice: "<id>", date: "AAAA-MM-JJ", serie: 0, de: { w, r }, vers: { w, r } }',
             '• correction, pesée : { quoi: "pesee", date: "AAAA-MM-JJ", de: 77.4, vers: 76.9 } — « vers: null » supprime la pesée',
             '• correction, champ quelconque : { quoi: "champ", chemin: "/sessions/12/durationMin", de: 50, vers: 65 } — n\'importe quelle valeur SIMPLE de la sauvegarde (nombre, texte, booléen). Le chemin doit exister, on ne crée rien, et on ne remplace jamais un objet ou un tableau entier. Lis-le d\'abord avec l\'outil « champ ».',
@@ -304,7 +315,39 @@ const TOOLS = [
  * calories, une catégorie inventée — se distinguent en quelques lignes, et chacune
  * dit quoi corriger.
  */
-function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnown: (id: string) => boolean, recipeKnown: (id: string) => boolean }): string {
+function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnown: (id: string) => boolean, recipeKnown: (id: string) => boolean, sessionKnown?: (id: string) => boolean, exerciseKnown?: (id: string) => boolean, exercisesOf?: (id: string) => string[] }): string {
+  if (cible === 'programme') {
+    const action = String(d.action ?? d.geste ?? '')
+    const seance = String(d.seance ?? d.session ?? '')
+    if (!['modifier', 'ajouter', 'retirer', 'reactiver', 'ordre'].includes(action)) {
+      return `« action » doit valoir modifier, ajouter, retirer, reactiver ou ordre — pas ${JSON.stringify(action)}.`
+    }
+    if (ctx.sessionKnown && !ctx.sessionKnown(seance)) {
+      return `La séance « ${seance} » n'existe pas. Appelle « programme » : elles s'appellent s1 à s4. On n'ajoute pas de séance, seulement des exercices dans une séance.`
+    }
+    const ex = String(d.exercice ?? d.exercise ?? d.id ?? '')
+    if (action === 'ordre') {
+      const dedans = ctx.exercisesOf?.(seance) ?? []
+      const ordre = asArray(d.ordre ?? d.order ?? d.exercices).filter((v): v is string => typeof v === 'string')
+      const dehors = ordre.filter(id => !dedans.includes(id))
+      if (dehors.length) return `Ces exercices n'appartiennent pas à « ${seance} » : ${dehors.join(', ')}. L'ordre s'applique séance par séance — les citer ne les déplacerait pas. Exercices de cette séance : ${dedans.join(', ')}.`
+      if (!ordre.length) return '« ordre » doit être la liste des identifiants d\'exercices, dans l\'ordre voulu.'
+      return 'Ordre refusé : un identifiant est cité deux fois, ou la liste dépasse 40 entrées.'
+    }
+    if (action === 'ajouter') {
+      const src = (d.nouveau && typeof d.nouveau === 'object' ? d.nouveau : d) as Record<string, unknown>
+      const id = String(src.id ?? '')
+      if (id && ctx.exerciseKnown?.(id)) return `L'identifiant « ${id} » est déjà pris. Les séances enregistrées sont indexées dessus : le réutiliser rangerait de vieux records sous un mouvement jamais fait. Choisis-en un autre, ou modifie l'exercice existant avec action: "modifier".`
+      if (!src.nom && !src.name) return 'Un exercice neuf a besoin d\'un « nom », de « series » (1 à 12) et de « reps » — sans eux la fiche s\'affiche vide et la saisie n\'a plus de lignes.'
+      return 'Ajout refusé : vérifie « series » (1 à 12), « reps » (texte, ex. "8-10") et « repos » (20 à 900 secondes).'
+    }
+    if (ctx.exerciseKnown && ex && !ctx.exerciseKnown(ex)) {
+      return `L'exercice « ${ex} » n'existe pas. Appelle « programme » pour les identifiants exacts.`
+    }
+    if (action === 'modifier') return 'Modification refusée : « patch » doit contenir au moins un champ valide — series (1 à 12), reps (texte), repos (20 à 900 s), nom, machine, muscles ou consignes.'
+    if (action === 'retirer') return `« ${ex} » n'est déjà plus dans « ${seance} ». Un geste qui ne change rien ne doit pas s'archiver comme appliqué.`
+    return `« ${ex} » est déjà actif dans « ${seance} » : il n'y a rien à réactiver.`
+  }
   if (cible === 'repas-libre') {
     const vers = ((d.vers ?? d.repas) ?? {}) as Record<string, unknown>
     const items = asArray(vers.items ?? vers.ingredients ?? vers.composition)
@@ -343,6 +386,21 @@ function refusMessage(cible: string, d: Record<string, unknown>, ctx: { foodKnow
   return 'Aliment refusé : il faut un nom, une catégorie valide (viandes — poissons compris —, oeufs, laitiers, complements, feculents, legumes, fruits, grasses, aromates) et les quatre valeurs POUR 100 g, glucides DISPONIBLES hors fibres.'
 }
 
+/**
+ * Le programme EFFECTIF, celui que l'application affiche.
+ *
+ * Le programme vivait dans le code, donc se rendait sans rien lire — c'était même
+ * une optimisation revendiquée. Il est devenu modifiable : le livré est toujours
+ * dans le code, mais les modifications voyagent dans le miroir. Répondre le livré
+ * serait désormais répondre à côté, et pire que de répondre lentement : je
+ * proposerais des changements sur des séries qui n'existent plus.
+ *
+ * Sans miroir, on retombe sur le livré : c'est le meilleur défaut possible, et il
+ * reste juste tant qu'aucune modification n'a été faite.
+ */
+const progOf = (d: Record<string, unknown> | null | undefined): Session[] =>
+  mergeProgram(PROGRAM, ((d?.programme ?? {}) as ProgramCustom))
+
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   if (name === 'proposer_modification') {
     const resume = String(args.resume ?? '').trim()
@@ -375,20 +433,41 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       && !!versLibre && typeof versLibre === 'object'
       && !!(versLibre.items ?? versLibre.ingredients ?? versLibre.composition ?? versLibre.base)
 
-    if (cible === 'aliment' || cible === 'recette' || libreAvecItems) {
+    if (cible === 'aliment' || cible === 'recette' || cible === 'programme' || libreAvecItems) {
       const m = await readMirror()
-      const nut = ((m?.data as Record<string, unknown>)?.nutrition ?? {}) as Record<string, unknown>
+      const data = (m?.data ?? {}) as Record<string, unknown>
+      const nut = (data.nutrition ?? {}) as Record<string, unknown>
       const recettes = mergeRecipes(
         asArray(nut.userRecipes) as never,
         (nut.recipePatches ?? {}) as never,
         asArray(nut.disabledRecipes) as never,
       )
       const foods = mergeFoods(asArray(nut.userFoods) as never, (nut.foodPatches ?? {}) as never)
-      const ctx = { foodKnown: (id: string) => !!foods[id], recipeKnown: (id: string) => !!recettes[id] }
+      /**
+       * Le programme du miroir, retirés compris.
+       *
+       * `exerciseKnown` doit inclure les mouvements DÉSACTIVÉS, sinon « reactiver »
+       * serait refusé pour la seule raison qui le rendait nécessaire. Et
+       * `exercisesOf` ne rend que les ACTIFS : c'est cette différence qui permet de
+       * distinguer « déjà retiré » de « inconnu ».
+       */
+      const custom = (data.programme ?? {}) as ProgramCustom
+      const sessions = mergeProgram(PROGRAM, custom)
+      const retires = retiredExercises(PROGRAM, custom)
+      const actifsDe = (sid: string) => sessions.find(s => s.id === sid)?.exercises.map(e => e.id) ?? []
+      const ctx = {
+        foodKnown: (id: string) => !!foods[id],
+        recipeKnown: (id: string) => !!recettes[id],
+        sessionKnown: (id: string) => sessions.some(s => s.id === id),
+        exerciseKnown: (id: string) => sessions.some(s => s.exercises.some(e => e.id === id)) || !!retires[id],
+        exercisesOf: actifsDe,
+      }
       const brut = { id: '', at: '', action: cible, summary: resume, patch: detail, status: 'pending' as const }
       const plan = cible === 'aliment'
         ? foodFor(brut, ctx)
-        : (cible === 'recette' ? recipeFor(brut, ctx) : planFor(brut, ctx))
+        : (cible === 'recette'
+            ? recipeFor(brut, ctx)
+            : (cible === 'programme' ? programFor(brut, ctx) : planFor(brut, ctx)))
       if (!plan) throw new Error(refusMessage(cible, detail, ctx))
     }
 
@@ -411,11 +490,16 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
     return { total: all.length, propositions: all.slice(-20).reverse() }
   }
   /**
-   * Le programme est dans le code, pas dans le miroir : il se rend sans rien lire.
+   * Le programme, tel qu'il est AUJOURD'HUI.
    *
-   * Il était traité plus bas, après le `readMirror()` commun — donc payait un
-   * aller-retour vers le stockage pour une réponse qui n'en dépend en rien. C'est
-   * aussi l'outil le plus utile quand le miroir manque encore.
+   * Il se rendait sans lire le miroir, parce qu'il vivait entièrement dans le code.
+   * Il est devenu modifiable, donc il faut le lire : répondre le programme livré
+   * quand un exercice en a été retiré, c'est proposer des séries sur un mouvement
+   * qu'il ne fait plus.
+   *
+   * Le repos figure désormais dans la réponse. Sans lui, je ne pouvais pas proposer
+   * de l'allonger sans d'abord le deviner — et deviner une valeur qu'on va écrire,
+   * c'est exactement ce que ce connecteur refuse de faire ailleurs.
    *
    * Les coefficients sont arrondis à deux décimales. `50/45` donnait
    * « 1.1111111111111112 » : dix-sept chiffres pour une conversion de charge dont le
@@ -423,8 +507,12 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
    */
   if (name === 'programme') {
     const seance = typeof args.seance === 'string' ? args.seance : ''
+    const m = await readMirror()
+    const custom = ((m?.data as Record<string, unknown>)?.programme ?? {}) as ProgramCustom
+    const sessions = mergeProgram(PROGRAM, custom)
+    const retires = retiredExercises(PROGRAM, custom)
     return {
-      seances: PROGRAM.filter(s => !seance || s.id === seance).map(s => ({
+      seances: sessions.filter(s => !seance || s.id === seance).map(s => ({
         id: s.id,
         nom: s.name,
         jour: s.tag,
@@ -434,7 +522,11 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
           nom: e.name,
           series: e.sets,
           reps: e.reps,
+          repos_s: restFor(e),
           muscles: e.muscles,
+          machine: e.machine,
+          ...(e.superset ? { superset: e.superset } : {}),
+          ...(e.bodyweight ? { poids_de_corps: true } : {}),
           machines_de_remplacement: (VARIANTS[e.id] ?? []).map(v => ({
             id: v.id,
             nom: v.name,
@@ -442,6 +534,15 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
           })),
         })),
       })),
+      // Les mouvements retirés du programme, que l'historique référence encore. Sans
+      // eux, une réponse sur « où j'en suis au curl EZ » afficherait un identifiant brut.
+      ...(Object.keys(retires).length
+        ? { retires: Object.values(retires).map(e => ({ id: e.id, nom: e.name })) }
+        : {}),
+      modifie: !!(custom.patches && Object.keys(custom.patches).length)
+        || !!(custom.added && Object.keys(custom.added).length)
+        || !!custom.disabled?.length
+        || !!(custom.order && Object.keys(custom.order).length),
     }
   }
 
@@ -963,7 +1064,7 @@ function bilan(
   const exceptions = (d.planDays ?? {}) as Record<string, string | null>
   const semaine = asArray(d.weekPlan) as (string | null)[]
   const seanceId = Object.hasOwn(exceptions, jour) ? exceptions[jour] : (semaine[dow] ?? null)
-  const seanceDuJour = PROGRAM.find(p => p.id === seanceId) ?? null
+  const seanceDuJour = progOf(d).find(p => p.id === seanceId) ?? null
   const salle = !!seanceDuJour
 
   // La semaine de menus appliquée à cette date : la dernière assignée avant elle.

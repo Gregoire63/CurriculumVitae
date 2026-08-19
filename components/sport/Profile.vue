@@ -8,6 +8,8 @@ import { useSnapshot } from '~/composables/useSnapshot'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { DAY_NAMES } from '~/lib/nutritionStats'
 import { useEnergy } from '~/composables/useEnergy'
+import { useProgram } from '~/composables/useProgram'
+import { fmtRest } from '~/lib/rest'
 
 // Vue « Profil » extraite de /sport (chargée à la demande). État partagé via composables.
 const props = defineProps<{ todayIso: string | null, withingsError?: string | null }>()
@@ -41,6 +43,64 @@ const {
   connected: withingsOn, connect: connectWithings, disconnect: disconnectWithings, entries: weighIns,
 } = useWithings()
 hydrateWithings()
+/**
+ * Le programme modifié, et le chemin du retour.
+ *
+ * Les modifications arrivent surtout d'une conversation, validées d'un tap. Sans
+ * cette section, une mauvaise idée acceptée trop vite ne se défaisait qu'en
+ * redemandant à Claude de proposer l'inverse — c'est-à-dire en dépendant du
+ * connecteur pour réparer ce que le connecteur a fait. Un réglage qu'on ne peut
+ * pas annuler seul n'est pas un réglage, c'est un engagement.
+ *
+ * On ne montre RIEN quand rien n'a bougé : le programme livré n'a pas besoin d'être
+ * annoncé, il est déjà là, en haut de l'accueil.
+ */
+const {
+  restore: restoreProgram, custom: progCustom, exerciseName: progName,
+  resetExercise, enableExercise, disableExercise, sessionById: progSession, setOrder,
+} = useProgram()
+
+const progChanges = computed(() => {
+  const c = progCustom.value
+  const out: { cle: string, texte: string, defaire: () => void }[] = []
+  for (const id of Object.keys(c.patches ?? {})) {
+    const q = c.patches![id]
+    const quoi = [
+      q.sets !== undefined ? `${q.sets} séries` : '',
+      q.reps !== undefined ? `${q.reps} reps` : '',
+      q.rest !== undefined ? `repos ${fmtRest(q.rest)}` : '',
+      q.name !== undefined ? 'nom' : '',
+      q.machine !== undefined ? 'machine' : '',
+      q.cues !== undefined ? 'consignes' : '',
+      q.muscles !== undefined ? 'muscles' : '',
+    ].filter(Boolean).join(', ')
+    out.push({ cle: `p:${id}`, texte: `${progName(id)} — ${quoi}`, defaire: () => resetExercise(id) })
+  }
+  for (const id of c.disabled ?? []) {
+    out.push({ cle: `d:${id}`, texte: `${progName(id)} — retiré du programme`, defaire: () => enableExercise(id) })
+  }
+  for (const [sid, ids] of Object.entries(c.order ?? {})) {
+    if (!ids.length) continue
+    out.push({
+      cle: `o:${sid}`,
+      texte: `${progSession(sid)?.name ?? sid} — ordre changé`,
+      defaire: () => setOrder(sid, []),
+    })
+  }
+  // Défaire un AJOUT, c'est le retirer — pas l'effacer. Si on a déjà chargé dessus,
+  // l'effacer emporterait les séries enregistrées ; le retirer les laisse lisibles.
+  for (const [sid, list] of Object.entries(c.added ?? {})) {
+    for (const e of list) {
+      if ((c.disabled ?? []).includes(e.id)) continue
+      out.push({
+        cle: `a:${e.id}`,
+        texte: `${e.name} — ajouté à ${progSession(sid)?.name ?? sid}`,
+        defaire: () => disableExercise(e.id),
+      })
+    }
+  }
+  return out
+})
 const { soundEnabled, soundVolume, soundType, testSound, SOUND_OPTIONS, vibrationLevel, VIBRATION_OPTIONS, watchNotify, watchStatus, setWatchNotify, testWatch, restore: restoreTimer } = useRestTimer()
 
 // Relais montre : la fin de repos part en notification téléphone même app ouverte,
@@ -115,6 +175,9 @@ async function onImport(ev: Event) {
       restoreWithings(data)
       // Les réglages du minuteur partaient dans l'export sans jamais en revenir.
       restoreTimer(data)
+      // Le programme modifié aussi : sans cette ligne, restaurer une sauvegarde
+      // rendrait au programme livré et effacerait des mois de réglages de séances.
+      restoreProgram(data)
     })
     emit('flash', 'Données importées ✓')
   } catch { emit('flash', 'Fichier invalide') }
@@ -174,6 +237,21 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
         🏋️ salle, 🏠 télétravail — les deux sont indépendants, un mardi peut être les deux.
         Pour corriger un jour en particulier, touche-le dans le calendrier du Journal :
         ça ne change que ce jour-là.
+      </div>
+    </div>
+
+    <!-- Programme modifié : n'apparaît que s'il l'est. Ce n'est pas un éditeur,
+         c'est le chemin du retour — les modifications, elles, arrivent d'une
+         conversation, et il faut pouvoir en défaire une sans redemander. -->
+    <div v-if="progChanges.length" class="card">
+      <div class="section-label mb-8">Mon programme, modifié</div>
+      <div v-for="c in progChanges" :key="c.cle" class="row-between pg-line">
+        <span>{{ c.texte }}</span>
+        <button class="btn" @click="c.defaire()">↺</button>
+      </div>
+      <div class="muted mt-6">
+        ↺ rend la fiche d'origine. Un exercice retiré n'a jamais été supprimé :
+        les séances déjà enregistrées le gardent, avec ses records.
       </div>
     </div>
 

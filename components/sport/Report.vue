@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import { useEnergy } from '~/composables/useEnergy'
+import { useProgram } from '~/composables/useProgram'
 import {
   avgSessionDuration, volumeOf, weeklyStatus, startOfWeek, FATIGUE_LABELS,
   WEEKLY_TARGET_MIN, WEEKLY_TARGET_MAX, SPRINT_SECONDS_MIN, SPEED_PLAN_MAX,
@@ -29,8 +29,7 @@ const { logs, currentWeight, sessionLog, recordsOf, bodyWeightAt, muscleSetsWith
 const { age: ageDe } = useEnergy()
 const { profile } = useProfile()
 
-const RETIRED_NAMES: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères', 'curl-ez': 'Curl barre EZ' }
-const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RETIRED_NAMES[id] ?? id
+const { exercises: exos, exerciseName: exName } = useProgram()
 const fmtVol = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)} t` : `${Math.round(v)} kg`)
 const fmtDate = (iso: string) => (iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : '')
 
@@ -74,7 +73,7 @@ const weakSpots = computed(() => (muscleRange.value === 'week' ? muscleVolume.va
 // ─── Records ─────────────────────────────────────────────────────────────────
 // Charge max, mais aussi 1RM estimé et meilleures reps à la charge record : à charge
 // égale, faire plus de reps est une vraie progression.
-const records = computed(() => ALL_EXERCISES.map((ex) => {
+const records = computed(() => exos.value.map((ex) => {
   const r = recordsOf(ex.id)
   if (!r || !r.charge) return null
   // Exos au poids du corps : la charge saisie inclut le poids de corps → on
@@ -116,7 +115,7 @@ const PACE_ICON: Record<string, string> = { ahead: '🟢', ontrack: '🟢', slow
 const goals = computed(() => {
   const today = props.todayIso
   if (!today) return []
-  return ALL_EXERCISES
+  return exos.value
     .map((ex) => {
       const m = milestoneOf(ex, today)
       return m ? { id: ex.id, name: ex.name, unit: ex.bodyweight ? 'kg (poids de corps compris)' : 'kg', ...m } : null

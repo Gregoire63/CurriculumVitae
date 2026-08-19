@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { PROGRAM, ALL_EXERCISES } from '~/data/sportProgram'
 import { useWorkout } from '~/composables/useWorkout'
 import type { SessionRecord } from '~/composables/useWorkout'
 import { choicesForSlot } from '~/lib/nutritionStats'
 import { useNutrition } from '~/composables/useNutrition'
 import { useTraining } from '~/composables/useTraining'
+import { useProgram } from '~/composables/useProgram'
 import { useWithings } from '~/composables/useWithings'
 import { EFFORT_OPTIONS } from '~/utils/sportStats'
 import { variantName } from '~/data/exerciseVariants'
@@ -37,10 +37,11 @@ const { entries: bodyEntries, suspectAts } = useWithings()
 
 const DOW = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche']
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
-const RETIRED: Record<string, string> = { 'ext-corde': 'Extension triceps corde', 'curl-incline': 'Curl incliné haltères', 'curl-ez': 'Curl barre EZ' }
-const exName = (id: string) => ALL_EXERCISES.find(e => e.id === id)?.name ?? RETIRED[id] ?? id
+// Le programme effectif, retirés compris : une séance de mars doit garder le nom des
+// mouvements qu'on ne fait plus, sinon elle affiche des identifiants bruts.
+const { program: prog, exerciseName: exName } = useProgram()
 const effortIcon = (e?: string) => EFFORT_OPTIONS.find(o => o.value === e)?.icon ?? ''
-const recColor = (r: SessionRecord) => PROGRAM.find(p => p.id === r.sessionId)?.color || '#8b6f5c'
+const recColor = (r: SessionRecord) => prog.value.find(p => p.id === r.sessionId)?.color || '#8b6f5c'
 
 const eatSheet = ref(false)
 

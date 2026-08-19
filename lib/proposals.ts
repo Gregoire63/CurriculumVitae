@@ -2,6 +2,8 @@
 // qui tourne en Node pur sans la résolution de chemins de Nuxt.
 import { getAt, isScalar } from './pointer'
 import { freeMealFrom } from './freeMeal'
+import type { ExercisePatch } from './program'
+import type { Exercise } from '../data/sportProgram'
 import type { FreeMeal } from './freeMeal'
 import type { Scalar } from './pointer'
 
@@ -43,6 +45,17 @@ export type Plan =
   | { kind: 'correction-champ', chemin: string, vers: Scalar }
   | { kind: 'repas-libre', date: string, slot: string, repas: FreeMeal | null }
   | { kind: 'aliment', id: string | null, aliment: FoodSpec }
+  | {
+    kind: 'programme'
+    seance: string
+    /** Cinq gestes, et cinq seulement. Un « autre » ouvrirait la porte à des
+     *  interprétations, et une interprétation qui écrit est une donnée perdue. */
+    action: 'modifier' | 'ajouter' | 'retirer' | 'reactiver' | 'ordre'
+    exercice: string | null
+    patch?: ExercisePatch
+    nouveau?: Exercise
+    ordre?: string[]
+  }
 
 /** Un ingrédient, tel qu'une proposition a le droit de le décrire. Valeurs pour 100 g. */
 export interface FoodSpec {
@@ -85,6 +98,13 @@ export interface RecipeSpec {
 export interface PlanCtx {
   recipeKnown?: (id: string) => boolean
   foodKnown?: (id: string) => boolean
+  /** Les séances du programme EFFECTIF — celui qui inclut déjà les modifications. */
+  sessionKnown?: (id: string) => boolean
+  /** Un exercice du programme effectif, retirés compris : c'est ce qui permet de
+   *  réactiver un mouvement qu'on avait mis de côté. */
+  exerciseKnown?: (id: string) => boolean
+  /** Les exercices ACTIFS d'une séance, pour valider un réordonnancement. */
+  exercisesOf?: (sessionId: string) => string[]
   setAt?: (exId: string, date: string, index: number) => { w: number, r: number } | null
   weightAt?: (date: string) => number | null
   /** L'instantané complet de la sauvegarde, pour vérifier un champ quelconque. */
@@ -175,6 +195,7 @@ export function planFor(p: RawProposal, ctx: PlanCtx = {}): Plan | null {
   if (p.action === 'aliment') return foodFor(p, ctx)
   if (p.action === 'semaine-type') return weekTemplateFor(p)
   if (p.action === 'correction') return fixFor(p, ctx)
+  if (p.action === 'programme') return programFor(p, ctx)
   if (p.action === 'plat') {
     const date = pick(d, ['date', 'jour'])
     const slot = pick(d, ['slot', 'creneau'])
@@ -429,6 +450,162 @@ export function weekTemplateFor(p: RawProposal): Extract<Plan, { kind: 'semaine-
   }
   if (!out.seances && !out.salle && !out.teletravail) return null
   return out
+}
+
+/** Les cinq gestes. Une liste fermée : « autre » ouvrirait la porte à des
+ *  interprétations, et une interprétation qui écrit est une donnée perdue. */
+const PROGRAM_ACTIONS = ['modifier', 'ajouter', 'retirer', 'reactiver', 'ordre'] as const
+
+/** Un identifiant lisible tiré d'un nom : « Développé incliné » → « developpe-incline ». */
+export function slugify(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+}
+
+const strOf = (v: unknown, max: number): string | null =>
+  (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
+
+const listOf = (v: unknown, max: number, len: number): string[] | null => {
+  if (!Array.isArray(v)) return null
+  const out = v.map(x => strOf(x, len)).filter((x): x is string => !!x)
+  return out.slice(0, max)
+}
+
+/**
+ * Les champs d'un exercice, lus depuis un objet quelconque.
+ *
+ * Rien n'est obligatoire ici : c'est un PATCH, et un patch ne touche que ce qu'il
+ * mentionne. Les bornes ne sont pas décoratives — 40 séries ou 2 secondes de repos
+ * passeraient la vérification de type et donneraient un écran de séance inutilisable,
+ * qu'il faudrait corriger à la main sans savoir d'où ça vient.
+ */
+function exerciseFields(raw: Record<string, unknown>): ExercisePatch {
+  const out: ExercisePatch = {}
+  const name = strOf(pick(raw, ['nom', 'name', 'libelle']), 60)
+  if (name) out.name = name
+  const sets = num(pick(raw, ['sets', 'series']), 1, 12)
+  if (sets !== null) out.sets = Math.round(sets)
+  const reps = strOf(pick(raw, ['reps', 'repetitions', 'rep']), 30)
+  if (reps) out.reps = reps
+  // 20 s = le temps de reprendre son souffle ; 900 s = un quart d'heure, au-delà ce
+  // n'est plus une série suivante, c'est une autre séance.
+  const rest = num(pick(raw, ['rest', 'repos', 'pause']), 20, 900)
+  if (rest !== null) out.rest = Math.round(rest)
+  const machine = strOf(pick(raw, ['machine', 'materiel']), 120)
+  if (machine) out.machine = machine
+  const muscles = listOf(pick(raw, ['muscles', 'groupes']), 6, 30)
+  if (muscles?.length) out.muscles = muscles
+  const cues = listOf(pick(raw, ['cues', 'consignes', 'conseils']), 8, 240)
+  if (cues?.length) out.cues = cues
+  const bw = pick(raw, ['bodyweight', 'poids_de_corps'])
+  if (typeof bw === 'boolean') out.bodyweight = bw
+  const ss = pick(raw, ['superset'])
+  if (Array.isArray(ss) && ss.length === 2) {
+    const a = strOf(ss[0], 40), b = strOf(ss[1], 40)
+    if (a && b) out.superset = [a, b]
+  }
+  return out
+}
+
+/**
+ * Le programme d'entraînement modifié depuis une conversation.
+ *
+ * C'était le dernier pan de l'application sans aucune prise à distance, alors que
+ * c'est précisément celui sur lequel un coach intervient : allonger un repos,
+ * passer de 4×8 à 5×5, retirer un mouvement qui fait mal à l'épaule, en glisser un
+ * autre, changer l'ordre pour finir sur les bras.
+ *
+ * Deux refus valent d'être expliqués, parce qu'ils ne sautent pas aux yeux :
+ *
+ *  • un identifiant d'ajout DÉJÀ PRIS est refusé. Réutiliser « dc-barre » pour un
+ *    nouveau mouvement ne créerait pas un doublon visible : les séries enregistrées
+ *    sous cet identifiant se rangeraient sous le nouveau nom, et l'historique
+ *    raconterait une charge qu'on n'a jamais soulevée sur un exercice qu'on n'a
+ *    jamais fait ;
+ *  • réordonner en citant un exercice d'une AUTRE séance est refusé. Il ne bougerait
+ *    pas — l'ordre s'applique séance par séance — et l'on obtiendrait un ordre
+ *    silencieusement différent de celui demandé.
+ */
+export function programFor(p: RawProposal, ctx: PlanCtx): Extract<Plan, { kind: 'programme' }> | null {
+  if (p.action !== 'programme') return null
+  const d = p.patch ?? {}
+  const action = String(pick(d, ['action', 'geste']) ?? '')
+  if (!(PROGRAM_ACTIONS as readonly string[]).includes(action)) return null
+
+  const seance = String(pick(d, ['seance', 'session', 'sessionId']) ?? '')
+  if (!isId(seance)) return null
+  // Ajouter une SÉANCE n'est pas au programme : le calendrier, la semaine type et
+  // l'historique s'appuient sur ces quatre identifiants.
+  const seanceOk = ctx.sessionKnown ? ctx.sessionKnown(seance) : (SESSIONS as readonly string[]).includes(seance)
+  if (!seanceOk) return null
+
+  if (action === 'ordre') {
+    const ordre = pick(d, ['ordre', 'order', 'exercices'])
+    if (!Array.isArray(ordre) || !ordre.length || ordre.length > 40) return null
+    const dedans = ctx.exercisesOf ? new Set(ctx.exercisesOf(seance)) : null
+    const vus = new Set<string>()
+    const out: string[] = []
+    for (const v of ordre) {
+      if (!isId(v) || vus.has(v)) return null
+      if (dedans && !dedans.has(v)) return null
+      vus.add(v)
+      out.push(v)
+    }
+    return { kind: 'programme', seance, action: 'ordre', exercice: null, ordre: out }
+  }
+
+  if (action === 'ajouter') {
+    const brut = pick(d, ['nouveau', 'exercice', 'ex'])
+    const src = (brut && typeof brut === 'object' ? brut : d) as Record<string, unknown>
+    const f = exerciseFields(src)
+    // Un exercice NEUF a besoin du minimum vital : sans nom, séries et reps, la
+    // fiche s'affiche vide et la saisie n'a plus de lignes.
+    if (!f.name || !f.sets || !f.reps) return null
+    const donne = pick(src, ['id'])
+    const id = typeof donne === 'string' && isId(donne) ? donne : slugify(f.name)
+    if (!id || !isId(id)) return null
+    if (ctx.exerciseKnown?.(id)) return null
+    const nouveau: Exercise = {
+      id,
+      name: f.name,
+      sets: f.sets,
+      reps: f.reps,
+      muscles: f.muscles ?? [],
+      cues: f.cues ?? [],
+      machine: f.machine ?? '',
+      ...(f.rest !== undefined ? { rest: f.rest } : {}),
+      ...(f.bodyweight ? { bodyweight: true } : {}),
+      ...(f.superset ? { superset: f.superset } : {}),
+    }
+    return { kind: 'programme', seance, action: 'ajouter', exercice: id, nouveau }
+  }
+
+  const exId = pick(d, ['exercice', 'exercise', 'exerciceId', 'id'])
+  if (!isId(exId)) return null
+  if (ctx.exerciseKnown && !ctx.exerciseKnown(exId)) return null
+  const actifs = ctx.exercisesOf?.(seance)
+
+  if (action === 'modifier') {
+    const brut = pick(d, ['patch', 'vers', 'modifications'])
+    const src = (brut && typeof brut === 'object' ? brut : d) as Record<string, unknown>
+    const patch = exerciseFields(src)
+    if (!Object.keys(patch).length) return null
+    return { kind: 'programme', seance, action: 'modifier', exercice: exId, patch }
+  }
+  if (action === 'retirer') {
+    // Retirer un mouvement déjà retiré s'appliquerait sans rien changer, et
+    // s'archiverait en « appliquée ». Un geste qui ne fait rien ne doit pas
+    // se raconter comme un geste fait.
+    if (actifs && !actifs.includes(exId)) return null
+    return { kind: 'programme', seance, action: 'retirer', exercice: exId }
+  }
+  if (actifs?.includes(exId)) return null
+  return { kind: 'programme', seance, action: 'reactiver', exercice: exId }
 }
 
 /**

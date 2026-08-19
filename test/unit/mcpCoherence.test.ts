@@ -81,6 +81,37 @@ describe('le serveur emprunte les règles, il ne les réécrit pas', () => {
   })
 })
 
+describe('le programme annoncé est celui de l’application', () => {
+  /**
+   * Le programme vivait dans le code : le serveur le rendait tel quel, et c'était
+   * juste. Il est devenu modifiable, et la même ligne est devenue fausse — répondre
+   * les séries livrées quand un exercice en a été retiré, c'est proposer du travail
+   * sur un mouvement qu'il ne fait plus.
+   *
+   * Ce test lit la source parce que c'est la régression la plus silencieuse qui soit :
+   * la réponse reste plausible, elle est simplement périmée.
+   */
+  it('fusionne le livré avec les modifications, plutôt que de le rendre brut', () => {
+    expect(MCP).toContain('mergeProgram(PROGRAM')
+    // Aucun `PROGRAM.find` / `PROGRAM.filter` résiduel : ce sont exactement les deux
+    // formes qui rendraient le programme d'origine sans s'en apercevoir.
+    expect(MCP).not.toMatch(/\bPROGRAM\.(find|filter|flatMap|map|some)\b/)
+  })
+
+  it('expose la cible « programme » à l’écriture', () => {
+    // Une cible absente de l'énumération n'est jamais proposée ; une cible présente
+    // mais non validée au dépôt s'accumule en propositions inapplicables.
+    expect(MCP).toMatch(/enum: \[[^\]]*'programme'/)
+    expect(MCP).toContain('programFor(brut, ctx)')
+  })
+
+  it('rend le repos, sans quoi on ne peut pas proposer de l’allonger', () => {
+    // Deviner une valeur qu'on va écrire est précisément ce que ce connecteur
+    // refuse de faire partout ailleurs.
+    expect(MCP).toContain('repos_s: restFor(e)')
+  })
+})
+
 describe('la chaîne complète, sur ses chiffres réels', () => {
   // Profil réel : 179 cm, né en 1997, pesées de la semaine du 19 août 2026.
   const PESEES = [

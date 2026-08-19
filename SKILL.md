@@ -59,8 +59,8 @@ cible-en une). `etat` existe encore mais `bilan` le contient.
 créneau, conservation), **`recette`** (le contenu RÉEL d'un plat : ingrédients,
 grammages crus ET cuits, préparation, sauce, macros, conservation — indispensable
 avant de modifier quoi que ce soit), `aliments` (les ingrédients : identifiants et macros pour
-100 g), `programme` (séances, exercices, machines de remplacement avec leur
-coefficient), `menus` (ses semaines de menus et à quel lundi elles sont appliquées).
+100 g), `programme` (séances, exercices, séries, reps, **repos**, machines de remplacement
+avec leur coefficient, et les mouvements retirés), `menus` (ses semaines de menus et à quel lundi elles sont appliquées).
 
 **Atteindre n'importe quel champ** — `champ`. Sans argument il rend la carte de la
 sauvegarde : les sections, leur taille, un exemple de chemin. Avec un chemin
@@ -79,7 +79,7 @@ valeur exacte à mettre dans `de`.
 ## Les formes de proposition applicables d'un tap
 
 `plat` · `planning-seance` · `semaine` · `semaine-type` · `recette` · `aliment` ·
-`repas-libre` · `correction`. Chacune est décrite dans le schéma de `proposer_modification` — lis-le.
+`repas-libre` · `programme` · `correction`. Chacune est décrite dans le schéma de `proposer_modification` — lis-le.
 Toute autre forme (`autre`) s'affiche mais devra être faite à la main.
 
 ## Ce qu'il faut savoir de son programme
@@ -282,6 +282,52 @@ trois axes sont indépendants, n'envoie que celui qui change.
 ```
 
 `salle` et `teletravail` prennent sept booléens, lundi en premier.
+
+### « Change mon programme »
+
+Tout ce qu'un coach fait sur un plan : allonger un repos, passer de 4×8 à 5×5,
+retirer un mouvement qui fait mal, en ajouter un, changer l'ordre. **Appelle
+`programme` d'abord** — il donne les identifiants, les séries, les reps et le repos
+actuels. Une action par proposition : il valide geste par geste, et un refus ne doit
+pas emporter les autres.
+
+```json
+{ "resume": "Développé haltères : 4×8-10 → 5×5, repos 2 → 3 min",
+  "cible": "programme",
+  "detail": { "action": "modifier", "seance": "s4", "exercice": "dev-halteres",
+              "patch": { "series": 5, "reps": "5", "repos": 180 } } }
+
+{ "resume": "Ajouter le hip thrust en fin de séance jambes",
+  "cible": "programme",
+  "detail": { "action": "ajouter", "seance": "s3",
+              "nouveau": { "nom": "Hip thrust barre", "series": 4, "reps": "8-10",
+                           "repos": 150, "machine": "Barre + banc",
+                           "muscles": ["fessiers", "ischios"],
+                           "consignes": ["Menton rentré", "Pause 1 s en haut"] } } }
+
+{ "resume": "Retirer les écartés poulie (épaule douloureuse)",
+  "cible": "programme",
+  "detail": { "action": "retirer", "seance": "s4", "exercice": "ecartes" } }
+
+{ "resume": "s4 : finir sur les bras",
+  "cible": "programme",
+  "detail": { "action": "ordre", "seance": "s4",
+              "ordre": ["dev-halteres", "tractions", "curl-21"] } }
+```
+
+Le patch ne touche **que ce qu'il mentionne** : le reste est conservé, et on peut
+revenir à la fiche d'origine. Le repos est en secondes, entre 20 et 900 ; les séries
+entre 1 et 12.
+
+**Retirer ne supprime rien.** Les séances enregistrées sont indexées par identifiant
+d'exercice : le mouvement sort du programme, l'historique le garde avec ses records,
+et `action: "reactiver"` le remet. C'est pour la même raison qu'un identifiant déjà
+pris est refusé à l'ajout — le réutiliser rangerait de vieux records sous un
+mouvement jamais fait.
+
+Un `ordre` ne cite que des exercices de CETTE séance ; ceux qu'on omet restent
+après, dans leur ordre actuel. On n'ajoute pas de séance : il y en a quatre, et le
+calendrier, la semaine type et l'historique s'appuient dessus.
 
 ### « Corrige cette erreur dans mes données »
 

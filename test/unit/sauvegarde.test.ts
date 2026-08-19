@@ -68,6 +68,7 @@ describe('l’aller-retour de sauvegarde', () => {
     const profil = lire('useProfile.ts')
     const withings = lire('useWithings.ts')
     const timer = lire('useRestTimer.ts')
+    const programme = lire('useProgram.ts')
 
     /**
      * L'assemblage de ce composable est-il appelé dans `buildSnapshot` ?
@@ -91,7 +92,7 @@ describe('l’aller-retour de sauvegarde', () => {
 
     const SOURCES: Record<string, string> = {
       'useNutrition.ts': nutrition, 'useWorkout.ts': workout, 'useProfile.ts': profil,
-      'useWithings.ts': withings, 'useRestTimer.ts': timer,
+      'useWithings.ts': withings, 'useRestTimer.ts': timer, 'useProgram.ts': programme,
     }
 
     /**
