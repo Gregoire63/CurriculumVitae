@@ -63,11 +63,22 @@ export function restFromReps(reps: string): number {
 /**
  * Le repos prévu pour un exercice, en secondes.
  *
- * Structurel plutôt que `Exercise` complet : la fonction n'a besoin que de deux
+ * Structurel plutôt que `Exercise` complet : la fonction n'a besoin que de trois
  * champs, et `lib/` doit rester testable sans traîner tout le programme.
+ *
+ * La clause `temps` n'est pas un détail. « 30-40 s » passe dans `restFromReps` comme
+ * s'il s'agissait de 40 répétitions, et ressort à 75 secondes — le repos d'une série
+ * légère, alors qu'on vient de porter lourd sur quarante secondes. Un repos déduit
+ * d'une DURÉE D'EFFORT ne veut rien dire ; on prend deux minutes, c'est-à-dire le
+ * même défaut prudent que pour un « max » sans chiffre.
+ *
+ * Le cas ne devrait jamais se produire — `repos_s` est obligatoire à l'ajout — mais
+ * c'est précisément le genre de garde qu'on est content d'avoir quand une donnée
+ * arrive par un chemin qu'on n'avait pas prévu : un import, une vieille sauvegarde.
  */
-export function restFor(e: Pick<Exercise, 'reps'> & { rest?: number }): number {
-  return typeof e.rest === 'number' && e.rest > 0 ? e.rest : restFromReps(e.reps)
+export function restFor(e: Pick<Exercise, 'reps'> & { rest?: number, mesure?: 'reps' | 'temps' }): number {
+  if (typeof e.rest === 'number' && e.rest > 0) return e.rest
+  return e.mesure === 'temps' ? 120 : restFromReps(e.reps)
 }
 
 /** « 180 » → « 3:00 ». Le format du minuteur, pour que la carte annonce ce qu'il affichera. */

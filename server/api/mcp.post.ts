@@ -15,6 +15,7 @@ import { PROGRAM } from '~/data/sportProgram'
 import type { Exercise, Session } from '~/data/sportProgram'
 import { mergeProgram, retiredExercises } from '~/lib/program'
 import { restFor } from '~/lib/rest'
+import { repsGap } from '~/lib/repsGap'
 import type { ProgramCustom } from '~/lib/program'
 import { VARIANTS } from '~/data/exerciseVariants'
 
@@ -610,6 +611,20 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
      * réordonnancements sur des places qui n'existent pas.
      */
     const sessions = mergeProgram(PROGRAM, custom, avecInactifs)
+    /**
+     * L'écart entre la fiche et le carnet, remonté ICI.
+     *
+     * C'est l'outil qu'on lit avant de proposer un changement de programme : si
+     * l'écart n'y figure pas, il faut un audit pour le voir, et on n'en fait pas.
+     * Il y figure donc, à côté de la valeur qu'il met en cause.
+     */
+    const journal = ((m?.data as Record<string, unknown>)?.logs ?? {}) as Record<string, { sets: { r?: number, warm?: boolean }[] }[]>
+    const ecartDe = (e: { id: string, reps: string, mesure?: 'reps' | 'temps' }) => {
+      // Une série au temps n'a pas de fourchette de reps à confronter.
+      if (e.mesure === 'temps') return null
+      const g = repsGap(e.reps, journal[e.id] ?? [])
+      return g ? { prevu: e.reps, fait_median: g.median, sens: g.sens, seances: g.seances } : null
+    }
     return {
       seances: sessions.filter(s => !seance || s.id === seance).map((s) => {
         let rang = 0
@@ -640,6 +655,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
                 nom: (v as { name: string }).name,
                 coefficient: Math.round(v.ratio * 100) / 100,
               })),
+              ...(ecartDe(e) ? { ecart_reps: ecartDe(e) } : {}),
             }
           }),
         }
@@ -654,7 +670,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
         || !!custom.disabled?.length
         || !!(custom.order && Object.keys(custom.order).length)
         || !!(custom.variants && Object.keys(custom.variants).length),
-      rappel: 'Un exercice « mesure: temps » est hors progression automatique, hors record et hors 1RM. « position » est le rang affiché, les inactifs n\'en ont pas.',
+      rappel: 'Un exercice « mesure: temps » est hors progression automatique, hors record et hors 1RM. « position » est le rang affiché, les inactifs n\'en ont pas. Un « ecart_reps » signale que la fiche et le carnet ne disent pas la même chose : tant qu\'il dure, l\'auto-régulation raisonne sur une cible qu\'il ne vise pas — elle ne conseille jamais de charger, et elle conseille de décharger à chaque « à l\'échec ». Propose-lui de trancher, ne tranche pas seul.',
     }
   }
 

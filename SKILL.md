@@ -354,6 +354,21 @@ seul, le réutiliser rangerait de vieux records sous un exercice jamais fait. Po
 80 % qui autorise l'enregistrement ; il compte normalement dans le volume et les
 records dès qu'il est fait.
 
+#### `ecart_reps` : quand la fiche et le carnet ne disent pas la même chose
+
+L'outil `programme` ajoute `ecart_reps` sur un exercice dont les reps réellement
+faites sortent de la fourchette annoncée, sur au moins trois séances. **Ne le laisse
+jamais passer** : l'auto-régulation lit la FICHE, donc tant que l'écart dure, elle ne
+conseille jamais de charger (la cible n'est jamais atteinte) et elle conseille de
+décharger à chaque « à l'échec » (les reps sont sous le plancher). Aucune des deux
+erreurs ne se voit — on ne remarque pas un conseil qui ne s'affiche pas, et un conseil
+de décharge ressemble à de la prudence.
+
+Signale-le-lui avec les chiffres, et propose. Deux corrections sont possibles et c'est
+à lui de choisir : **aligner la fiche** sur ce qu'il fait, ou **aligner la charge** sur
+ce que la fiche demande. Dis les deux, propose celle qui te paraît juste, et laisse-lui
+le refus.
+
 ### « Corrige cette erreur dans mes données »
 
 C'est la seule chose qui écrase une donnée qu'on ne pourra pas reconstituer. La

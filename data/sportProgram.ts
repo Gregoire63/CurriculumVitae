@@ -169,15 +169,44 @@ export const PROGRAM: Session[] = [
 
 export const ALL_EXERCISES = PROGRAM.flatMap(s => s.exercises)
 
-// Fourchette de reps → borne haute pour la suggestion de progression
+/**
+ * Borne HAUTE de la fourchette — et `null` dès qu'il n'y a pas de FOURCHETTE.
+ *
+ * C'est délibéré, et ça se lit comme un oubli. Le commentaire d'à côté dit qu'une
+ * valeur seule est « ses deux bornes à la fois » ; cette fonction refuse quand même
+ * de rendre 15 pour « 15 », et elle a raison.
+ *
+ * La double progression a besoin de DEUX bornes : on monte la charge en atteignant
+ * le haut, et on retombe au bas de la fourchette au nouveau poids. Avec un nombre
+ * fixe il n'y a pas de bas où retomber — atteindre la cible devient vrai à chaque
+ * séance, et « objectif atteint → +2,5 kg » se déclenche à chaque fois. Vérifié sur
+ * ses données réelles : `curl-21` est un protocole 7+7+7 où les 21 reps sont là par
+ * construction, trois séances sur trois. Rendre une borne haute lui ferait ajouter
+ * du poids indéfiniment, sans que rien ne le retienne.
+ *
+ * Un exercice à nombre fixe progresse donc par le ressenti (« facile » → on monte)
+ * ou par la stagnation, ce qui est le bon comportement pour un accessoire.
+ *
+ * Si un jour on veut qu'un de ces exercices s'auto-régule : lui donner une vraie
+ * fourchette (« 12-15 »), pas contourner cette fonction.
+ */
 export function topOfRange(reps: string): number | null {
   const m = reps.match(/(\d+)\s*-\s*(\d+)/)
   return m ? parseInt(m[2], 10) : null
 }
 
 /**
- * Borne BASSE de la fourchette. « 8-10 » → 8 ; « 15 » → 15 (une valeur seule est
- * ses deux bornes à la fois).
+ * Borne BASSE : « 8-10 » → 8 ; « 15 » → 15, la valeur seule servant de plancher.
+ *
+ * Asymétrique avec `topOfRange`, et c'est voulu — les deux bornes ne servent pas à
+ * la même chose. Le plancher déclenche une DÉCHARGE quand on tombe dessous à
+ * l'échec ; il a du sens sur un nombre fixe. Le plafond déclenche une MONTÉE ; il
+ * n'en a pas (cf. ci-dessus).
+ *
+ * Attention : sur un nombre fixe, ce plancher ne vaut que si la fiche dit vrai. Si
+ * le programme annonce 15 reps et qu'on en fait 8 séance après séance, tout « à
+ * l'échec » déclenche une décharge — ce n'est pas la fonction qui est fautive, c'est
+ * la fiche. `repsGap` (lib/repsGap.ts) est là pour rendre cet écart visible.
  *
  * Elle sert à distinguer les deux situations que le ressenti « à l'échec » ne
  * distingue pas tout seul : arriver à l'échec À 8 reps sur du 8-10, c'est la
