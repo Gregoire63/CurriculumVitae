@@ -255,7 +255,7 @@ const TOOLS = [
     description: 'Lit UNE valeur de la sauvegarde par son chemin (pointeur JSON, ex. « /sessions/12/durationMin »). À appeler AVANT toute correction de champ, pour connaître la valeur exacte à mettre dans « de ». Sans argument, renvoie la carte des sections avec leur taille et un exemple de chemin.',
     inputSchema: {
       type: 'object',
-      properties: { chemin: { type: 'string', description: 'Pointeur JSON, commençant par /' } },
+      properties: { chemin: { type: 'string', description: 'Pointeur JSON, commençant par / — sans argument, rend la carte de la sauvegarde (les sections, leur taille, un exemple de chemin). C\'est le point d\'entrée de « correction / quoi: champ », qui sait remplacer, créer, ajouter à une liste et supprimer.' } },
     },
   },
   {
@@ -305,7 +305,13 @@ const TOOLS = [
             '  « optionnel: true » : le mouvement s\'affiche grisé en fin de séance et ne compte pas dans le seuil des 80 % qui autorise l\'enregistrement, mais compte normalement dans le volume et les records dès qu\'il est fait.',
             '• correction, série : { quoi: "serie", exercice: "<id>", date: "AAAA-MM-JJ", serie: 0, de: { w, r }, vers: { w, r } }',
             '• correction, pesée : { quoi: "pesee", date: "AAAA-MM-JJ", de: 77.4, vers: 76.9 } — « vers: null » supprime la pesée',
-            '• correction, champ quelconque : { quoi: "champ", chemin: "/sessions/12/durationMin", de: 50, vers: 65 } — n\'importe quelle valeur SIMPLE de la sauvegarde (nombre, texte, booléen). Le chemin doit exister, on ne crée rien, et on ne remplace jamais un objet ou un tableau entier. Lis-le d\'abord avec l\'outil « champ ».',
+            '• correction, N\'IMPORTE OÙ dans la sauvegarde : { quoi: "champ", op: "remplacer"|"creer"|"ajouter"|"supprimer", chemin: "/sessions/12/durationMin", … }. C\'est le passe-partout : tout ce que l\'application sait écrire est atteignable par là. Lis le chemin d\'abord avec l\'outil « champ » — sans argument il rend la carte de la sauvegarde, avec un chemin il rend la valeur.',
+            '    · remplacer (défaut) : { chemin, de: 50, vers: 65 } — une valeur SIMPLE contre une autre. « de » obligatoire.',
+            '    · creer : { chemin, vers: … } — une feuille ABSENTE. Le parent doit exister ; on ne fabrique jamais une branche entière. « vers » peut être un objet ou un tableau (400 valeurs, 6 niveaux max), ce qui permet d\'ajouter une clé de jour : /nutrition/extras/2026-08-20.',
+            '    · ajouter : { chemin, vers: … } — à la FIN d\'un tableau existant. Le chemin désigne le tableau, pas une position : /bodyWeight pour une pesée oubliée, /nutrition/baskets pour des courses.',
+            '    · supprimer : { chemin, de: <la valeur exacte qui est là> } — retire une clé ou un élément de tableau. « de » obligatoire et confronté à l\'identique : effacer une entrée sur une description approximative effacerait la voisine.',
+            '  Deux choses seulement restent impossibles, et c\'est délibéré : REMPLACER un objet ou un tableau entier (réécrire d\'un coup une section dont on ne saurait pas dire ce qu\'elle contenait), et créer une branche dont le parent n\'existe pas. Pour changer un objet : descends d\'un cran, ou supprime puis crée.',
+            '  Préfère toujours une cible TYPÉE quand elle existe — « plat », « recette », « programme », « correction/serie », « correction/pesee ». Elles valident la forme, produisent une carte de validation lisible, et passent par les mêmes fonctions que l\'écran. Le passe-partout est là pour ce qu\'aucune ne couvre.',
             'Les corrections portent « de » : la valeur actuellement enregistrée. Si elle ne correspond pas, l\'application REFUSE — c\'est ce qui empêche d\'écraser une donnée qu\'on avait mal lue. Lis-la d\'abord avec « exercice » ou « poids ».',
           ].join('\n'),
         },

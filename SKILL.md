@@ -396,7 +396,7 @@ utile pour une saisie en double ou un chiffre aberrant qui tire les moyennes. Un
 correction de série met à jour l'historique de l'exercice **et** le journal de
 séance : les courbes et le journal ne peuvent pas diverger.
 
-#### Tout le reste de la sauvegarde
+#### Tout le reste de la sauvegarde — quatre gestes, et plus rien de bloqué
 
 `serie` et `pesee` couvrent les deux erreurs fréquentes. Pour n'importe quel autre
 champ — la durée d'une séance, son nom, une note, un réglage du profil — il y a
@@ -405,9 +405,40 @@ champ — la durée d'une séance, son nom, une note, un réglage du profil — 
 ```json
 { "resume": "Séance du 10 août : durée 50 → 65 min",
   "cible": "correction",
-  "detail": { "quoi": "champ", "chemin": "/sessions/12/durationMin",
-              "de": 50, "vers": 65 } }
+  "detail": { "quoi": "champ", "op": "remplacer",
+              "chemin": "/sessions/12/durationMin", "de": 50, "vers": 65 } }
+
+{ "resume": "Pesée du 19 août oubliée : 91,2 kg",
+  "cible": "correction",
+  "detail": { "quoi": "champ", "op": "ajouter", "chemin": "/bodyWeight",
+              "vers": { "date": "2026-08-19", "kg": 91.2 } } }
+
+{ "resume": "Prix du poulet : 9,90 €/kg",
+  "cible": "correction",
+  "detail": { "quoi": "champ", "op": "creer",
+              "chemin": "/nutrition/prices/poulet", "vers": 9.9 } }
+
+{ "resume": "La compote du 19 était saisie deux fois — j'en retire une",
+  "cible": "correction",
+  "detail": { "quoi": "champ", "op": "supprimer",
+              "chemin": "/nutrition/extras/2026-08-19/1",
+              "de": { "id": "b", "label": "Compote", "kcal": 90 } } }
 ```
+
+`remplacer` (défaut) échange une valeur simple ; `creer` pose une feuille absente ;
+`ajouter` pousse à la fin d'un tableau ; `supprimer` retire une clé ou un élément.
+`remplacer` et `supprimer` exigent `de` — la valeur exacte en place, comparée à
+l'identique sur les objets. Effacer une entrée de tableau sur une description
+approximative effacerait la voisine.
+
+**Deux choses restent impossibles, et c'est délibéré** : remplacer un objet ou un
+tableau ENTIER, et créer une branche dont le parent n'existe pas. Pour changer un
+objet, descends d'un cran, ou supprime puis crée.
+
+**Préfère toujours une cible typée quand elle existe** — `plat`, `recette`,
+`programme`, `correction/serie`, `correction/pesee`. Elles valident la forme, donnent
+une carte de validation lisible et passent par les mêmes fonctions que l'écran. Le
+passe-partout est là pour ce qu'aucune ne couvre, pas pour les remplacer.
 
 **Appelle `champ` avant.** Sans le chemin exact et la valeur exacte, la proposition
 est refusée au dépôt — tu recevras l'erreur, pas Grégoire, mais c'est un aller-retour

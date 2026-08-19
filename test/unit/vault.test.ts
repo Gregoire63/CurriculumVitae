@@ -320,7 +320,7 @@ const champ = (patch: Record<string, unknown>) => prop('correction', { quoi: 'ch
 describe('correction d\'un champ quelconque', () => {
   it('accepte une durée de séance corrigée', () => {
     expect(planFor(champ({ chemin: '/sessions/0/durationMin', de: 50, vers: 65 }), CTX_CHAMP))
-      .toEqual({ kind: 'correction-champ', chemin: '/sessions/0/durationMin', vers: 65 })
+      .toEqual({ kind: 'correction-champ', chemin: '/sessions/0/durationMin', op: 'remplacer', vers: 65 })
   })
 
   it('accepte un texte et un booléen, pas seulement des nombres', () => {

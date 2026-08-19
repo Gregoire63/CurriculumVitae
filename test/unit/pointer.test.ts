@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAt, isScalar, parsePointer, setAt } from '../../lib/pointer'
+import { boundedValue, createAt, getAt, isScalar, parsePointer, pushAt, removeAt, setAt } from '../../lib/pointer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Désigner un endroit dans la sauvegarde, et n'y toucher que là.
@@ -100,5 +100,133 @@ describe('écriture par pointeur', () => {
   it('reconnaît ce qui est une valeur simple', () => {
     expect([0, '', false, null, 3.5, 'a'].every(isScalar)).toBe(true)
     expect([{}, [], undefined].some(isScalar)).toBe(false)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Créer, ajouter, supprimer — et ce qu'on continue de refuser.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Ces trois opérations existent parce que sans elles une cinquantaine de gestes que
+// l'application sait faire restaient hors de portée d'une conversation. Elles
+// n'ouvrent pas la porte pour autant : on ne crée jamais un CHEMIN, seulement une
+// feuille, et on ne remplace jamais un objet existant.
+
+const sauvegarde = () => ({
+  profile: { heightCm: 179, sex: 'h' as string | null },
+  bodyWeight: [{ date: '2026-08-17', kg: 91.9 }, { date: '2026-08-18', kg: 91.5 }],
+  nutrition: { extras: { '2026-08-19': [{ id: 'a', kcal: 200 }] }, prices: {} as Record<string, number> },
+})
+
+describe('créer une feuille absente', () => {
+  it('crée là où il n’y a rien', () => {
+    const d = sauvegarde()
+    expect(createAt(d, '/nutrition/prices/avocat', 4.5)).toBe(true)
+    expect(d.nutrition.prices.avocat).toBe(4.5)
+  })
+
+  it('refuse d’écraser ce qui existe déjà', () => {
+    // Confondre créer et remplacer, c'est écraser en croyant ajouter.
+    const d = sauvegarde()
+    expect(createAt(d, '/profile/heightCm', 180)).toBe(false)
+    expect(d.profile.heightCm).toBe(179)
+  })
+
+  it('ne fabrique jamais une branche entière', () => {
+    // Une faute de frappe dans un nom de section créerait un champ que rien ne lit.
+    const d = sauvegarde()
+    expect(createAt(d, '/nutriton/prices/avocat', 4.5)).toBe(false)
+    expect(createAt(d, '/nutrition/inconnu/profond/cle', 1)).toBe(false)
+  })
+
+  it('accepte un objet, dans les bornes', () => {
+    const d = sauvegarde()
+    expect(createAt(d, '/nutrition/extras/2026-08-20', [{ id: 'b', kcal: 150 }])).toBe(true)
+    expect(createAt(d, '/nutrition/prices/trop-profond', { a: { b: { c: { d: { e: { f: { g: 1 } } } } } } })).toBe(false)
+  })
+})
+
+describe('ajouter à un tableau', () => {
+  it('ajoute à la fin', () => {
+    const d = sauvegarde()
+    expect(pushAt(d, '/bodyWeight', { date: '2026-08-19', kg: 91.2 })).toBe(true)
+    expect(d.bodyWeight).toHaveLength(3)
+    expect(d.bodyWeight[2].kg).toBe(91.2)
+  })
+
+  it('refuse ce qui n’est pas un tableau', () => {
+    const d = sauvegarde()
+    expect(pushAt(d, '/profile', { x: 1 })).toBe(false)
+    expect(pushAt(d, '/profile/heightCm', 1)).toBe(false)
+    expect(pushAt(d, '/inexistant', 1)).toBe(false)
+  })
+})
+
+describe('supprimer', () => {
+  it('retire une clé d’objet', () => {
+    const d = sauvegarde()
+    expect(removeAt(d, '/profile/sex')).toBe(true)
+    expect(Object.hasOwn(d.profile, 'sex')).toBe(false)
+  })
+
+  it('retire un élément de tableau, et resserre les rangs', () => {
+    // Écrire `null` à la place laisserait un trou que tout le monde relit ensuite.
+    const d = sauvegarde()
+    expect(removeAt(d, '/bodyWeight/0')).toBe(true)
+    expect(d.bodyWeight).toHaveLength(1)
+    expect(d.bodyWeight[0].date).toBe('2026-08-18')
+  })
+
+  it('refuse ce qui n’existe pas', () => {
+    const d = sauvegarde()
+    expect(removeAt(d, '/profile/inexistant')).toBe(false)
+    expect(removeAt(d, '/bodyWeight/9')).toBe(false)
+    expect(removeAt(d, '')).toBe(false)
+  })
+})
+
+describe('remplacer reste ce qu’il était', () => {
+  it('n’écrase toujours pas un objet ni un tableau', () => {
+    // La seule chose qu'on s'interdit encore, et la plus importante : réécrire d'un
+    // coup une section dont on ne saurait pas dire ce qu'elle contenait.
+    const d = sauvegarde()
+    expect(setAt(d, '/profile', 'x')).toBe(false)
+    expect(setAt(d, '/bodyWeight', 'x')).toBe(false)
+    expect(setAt(d, '/bodyWeight/0', 'x')).toBe(false)
+  })
+
+  it('ne crée toujours rien', () => {
+    const d = sauvegarde()
+    expect(setAt(d, '/profile/poids', 91)).toBe(false)
+  })
+})
+
+describe('les bornes d’une valeur composée', () => {
+  it('acceptent ce qu’on ajoute vraiment', () => {
+    expect(boundedValue({ date: '2026-08-19', kg: 91.2 })).toBe(true)
+    expect(boundedValue([{ id: 'a', kcal: 200, p: 12 }])).toBe(true)
+    expect(boundedValue(null)).toBe(true)
+  })
+
+  it('acceptent une séance oubliée, qui est le plus gros objet légitime', () => {
+    // C'est ce cas qui a fixé les bornes : six exercices de quatre séries.
+    const seance = {
+      at: '2026-08-13T18:30', sessionId: 's3', name: 'Jambes', durationMin: 55,
+      entries: Array.from({ length: 6 }, (_, i) => ({
+        exId: `ex-${i}`,
+        sets: Array.from({ length: 4 }, () => ({ w: 60, r: 8 })),
+      })),
+    }
+    expect(boundedValue(seance)).toBe(true)
+  })
+
+  it('refusent ce qu’on ne relirait pas avant de valider', () => {
+    // Trop profond : sept niveaux.
+    expect(boundedValue({ a: { b: { c: { d: { e: { f: { g: 1 } } } } } } })).toBe(false)
+    // Trop gros : le budget est TOTAL, pas par niveau — sinon cent entrées à chaque
+    // étage feraient un million de nœuds sans jamais dépasser une seule borne.
+    expect(boundedValue(Array.from({ length: 500 }, (_, i) => i))).toBe(false)
+    expect(boundedValue(Array.from({ length: 30 }, () => Array.from({ length: 30 }, (_, i) => i)))).toBe(false)
+    expect(boundedValue(() => 1)).toBe(false)
   })
 })

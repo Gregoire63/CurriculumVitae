@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useVault } from '~/composables/useVault'
 import { detailLines, planFor, weekFor } from '~/lib/proposals'
+import { getAt } from '~/lib/pointer'
 import { checkFreeMeal } from '~/lib/freeMeal'
 import type { RawProposal } from '~/lib/proposals'
 import { useNutrition } from '~/composables/useNutrition'
@@ -216,6 +217,56 @@ function programme(p: RawProposal) {
     note: plan.op === 'retirer'
       ? 'Sort du programme. Les séances déjà enregistrées gardent ce mouvement et ses records — rien n\'est supprimé, et on peut le remettre à sa place.'
       : (plan.op === 'reactiver' && !plan.apres ? 'Revient dans la séance, à sa place d\'origine.' : ''),
+  }
+}
+
+/**
+ * Une écriture générique, rendue lisible.
+ *
+ * Valider « /nutrition/extras/2026-08-19/0 » revient à signer un pointeur JSON. La
+ * phrase de résumé dit l'intention, mais c'est la carte qui doit dire le FAIT — et
+ * pour une suppression, ce qui disparaît, puisque c'est le seul geste qu'on ne
+ * pourra pas défaire d'un tap.
+ *
+ * Le chemin est traduit en mots à partir de la carte de la sauvegarde : « séance
+ * n° 12 · durée » se relit, « /sessions/12/durationMin » se déchiffre.
+ */
+const SECTIONS: Record<string, string> = {
+  logs: 'Historique de charges', bodyWeight: 'Pesées', sessions: 'Séances enregistrées',
+  profile: 'Profil', weekPlan: 'Semaine type', planDays: 'Exceptions de planning',
+  nutrition: 'Nutrition', withingsBody: 'Pesées Withings', restTimer: 'Minuteur de repos',
+  programme: 'Programme',
+}
+const GESTES_CHAMP: Record<string, string> = {
+  remplacer: 'Remplacer', creer: 'Ajouter', ajouter: 'Ajouter à la liste', supprimer: 'Supprimer',
+}
+const enClair = (v: unknown): string => {
+  if (v === undefined) return '—'
+  if (v === null) return 'vide'
+  if (typeof v === 'object') return JSON.stringify(v, null, 1).replace(/\n\s*/g, ' ').slice(0, 240)
+  return String(v)
+}
+function champ(p: RawProposal) {
+  const plan = planFor(p, v.ctx)
+  if (plan?.kind !== 'correction-champ') return null
+  const parts = plan.chemin.split('/').filter(Boolean)
+  const snap = v.ctx.snapshot()
+  return {
+    geste: GESTES_CHAMP[plan.op] ?? plan.op,
+    section: SECTIONS[parts[0]] ?? parts[0],
+    chemin: plan.chemin,
+    reste: parts.slice(1).join(' · '),
+    // Sur un ajout, l'« avant » est la liste entière : la dumper noierait ce qui
+    // change. On dit sa taille, ce qui suffit à situer où l'entrée atterrit.
+    avant: plan.op === 'creer'
+      ? '—'
+      : plan.op === 'ajouter'
+        ? `${(getAt(snap, plan.chemin) as unknown[] | undefined)?.length ?? 0} entrées`
+        : enClair(getAt(snap, plan.chemin)),
+    apres: plan.op === 'supprimer'
+      ? 'supprimé'
+      : plan.op === 'ajouter' ? `+ ${enClair(plan.vers)}` : enClair(plan.vers),
+    danger: plan.op === 'supprimer',
   }
 }
 
@@ -441,6 +492,25 @@ async function doRefuse(p: RawProposal) {
           </ol>
           <p v-if="programme(p)!.note" class="vt-prog-n">{{ programme(p)!.note }}</p>
         </div>
+        <!-- Une écriture générique : le chemin en mots, et ce qui change. -->
+        <div v-if="champ(p)" class="vt-prog" :class="{ danger: champ(p)!.danger }">
+          <div class="vt-prog-h mono">
+            {{ champ(p)!.geste }} · {{ champ(p)!.section }}
+            <b v-if="champ(p)!.reste"> · {{ champ(p)!.reste }}</b>
+          </div>
+          <table class="vt-prog-t">
+            <tr><th /><th class="vt-prog-av">avant</th><th>après</th></tr>
+            <tr>
+              <th>Valeur</th>
+              <td class="vt-prog-av">{{ champ(p)!.avant }}</td>
+              <td><b>{{ champ(p)!.apres }}</b></td>
+            </tr>
+          </table>
+          <p v-if="champ(p)!.danger" class="vt-prog-n">
+            ⚠️ Une suppression ne se défait pas d'un tap. Vérifie la valeur de gauche : c'est
+            exactement ce qui disparaît.
+          </p>
+        </div>
         <button class="vt-p-toggle" @click="showDetail = showDetail === p.id ? null : p.id">
           {{ showDetail === p.id ? '▲ Masquer le détail' : '▼ Voir le détail' }}
         </button>
@@ -449,12 +519,22 @@ async function doRefuse(p: RawProposal) {
             <dt>{{ l.label }}</dt><dd>{{ l.value }}</dd>
           </template>
         </dl>
+        <!--
+          Ce message était le symptôme d'un manque : une cinquantaine de gestes que
+          l'app savait faire et qu'aucune proposition ne pouvait déclencher. Il ne
+          reste plus qu'une raison de le voir — une proposition dont la valeur de
+          départ ne correspond plus, parce qu'on a changé la donnée entre-temps sur le
+          téléphone. Ce n'est pas « à faire à la main », c'est « à reproposer », et le
+          message doit le dire, sinon on refait le travail soi-même pour rien.
+        -->
         <p v-if="!applicable(p)" class="vt-p-manual">
-          ✋ L’app ne sait pas appliquer ça toute seule — fais-le à la main, puis marque-le réglé.
+          ⏳ Cette proposition ne colle plus à tes données — la valeur qu’elle voulait
+          remplacer a changé depuis. Redemande-la à Claude plutôt que de la refaire à la
+          main, il relira la valeur à jour.
         </p>
         <div class="nav-row">
           <button v-if="applicable(p)" class="btn-primary flex-1" @click="doApply(p)">Appliquer</button>
-          <button class="btn flex-1" @click="doRefuse(p)">{{ applicable(p) ? 'Refuser' : 'Marquer réglé' }}</button>
+          <button class="btn flex-1" @click="doRefuse(p)">{{ applicable(p) ? 'Refuser' : 'Écarter' }}</button>
         </div>
       </div>
 

@@ -161,3 +161,42 @@ describe('l’aller-retour de sauvegarde', () => {
     expect(readFileSync('composables/useSnapshot.ts', 'utf8')).toMatch(/timerData\(\)/)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// L'aller-retour se joue DEUX FOIS, et il manquait une moitié.
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Les tests ci-dessus vérifient qu'une clé entre bien dans l'instantané. Ils ne
+// disaient rien du chemin inverse : une correction de champ reconstruit l'instantané,
+// y change une valeur, puis le réinjecte dans les composables — et si l'un d'eux n'est
+// pas réinjecté, la valeur écrite est perdue au `buildSnapshot()` suivant, qui relit
+// un composable resté sur son ancienne donnée.
+//
+// C'est arrivé sur `useRestTimer`, et de la pire façon possible : la proposition
+// s'archivait « appliquée ». Accepté, enregistré, disparu. Le même composable avait
+// déjà eu ce défaut à l'export, ce qui dit assez que la liste écrite à la main n'est
+// pas un mécanisme fiable.
+
+describe('le chemin du RETOUR restaure toutes les sections', () => {
+  const vault = readFileSync('composables/useVault.ts', 'utf8')
+  const snapshot = readFileSync('composables/useSnapshot.ts', 'utf8')
+
+  /** Les composables qui ALIMENTENT l'instantané, lus dans useSnapshot. */
+  const alimentent = [...snapshot.matchAll(/= (use[A-Z]\w+)\(/g)].map(m => m[1])
+
+  it('la fonction de restauration existe, et n’est pas une liste dispersée', () => {
+    expect(vault).toContain('function restoreAll(')
+  })
+
+  it('réinjecte CHAQUE composable qui a alimenté l’instantané', () => {
+    const debut = vault.indexOf('function restoreAll(')
+    const corps = vault.slice(debut, vault.indexOf('\n  }', debut))
+    // Le nom de la variable locale dérive du composable : useRestTimer → restTimer.
+    const manquants = alimentent.filter((c) => {
+      const local = c.replace(/^use/, '')
+      const attendu = local.charAt(0).toLowerCase() + local.slice(1)
+      return !new RegExp(`\\b(${attendu}|${local})\\w*\\.restore`, 'i').test(corps)
+    })
+    expect(manquants, `sections écrites mais jamais relues : ${manquants.join(', ')}`).toEqual([])
+  })
+})

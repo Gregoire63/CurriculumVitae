@@ -1,6 +1,6 @@
 // Import relatif et non par alias : ce module est testé dans le projet « unit »,
 // qui tourne en Node pur sans la résolution de chemins de Nuxt.
-import { getAt, isScalar } from './pointer'
+import { boundedValue, getAt, isScalar } from './pointer'
 import { freeMealFrom } from './freeMeal'
 import type { ExercisePatch, VariantSpec } from './program'
 import { restFor } from './rest'
@@ -43,7 +43,15 @@ export type Plan =
   | { kind: 'semaine-type', seances?: (string | null)[], salle?: boolean[], teletravail?: boolean[] }
   | { kind: 'correction-serie', exercice: string, date: string, index: number, vers: { w: number, r: number } }
   | { kind: 'correction-pesee', date: string, vers: number | null }
-  | { kind: 'correction-champ', chemin: string, vers: Scalar }
+  | {
+    kind: 'correction-champ'
+    chemin: string
+    /** Quatre gestes. `remplacer` était le seul, et c'est ce qui laissait une
+     *  cinquantaine d'actions hors de portée d'une conversation. */
+    op: 'remplacer' | 'creer' | 'ajouter' | 'supprimer'
+    /** Absent sur `supprimer`. Composé autorisé sur `creer` et `ajouter`. */
+    vers?: unknown
+  }
   | { kind: 'repas-libre', date: string, slot: string, repas: FreeMeal | null }
   | { kind: 'aliment', id: string | null, aliment: FoodSpec }
   | {
@@ -754,6 +762,31 @@ export function programFor(p: RawProposal, ctx: PlanCtx): Extract<Plan, { kind: 
   return { kind: 'programme', seance, op: 'reactiver', exercice: exId, ...(apres ? { apres } : {}) }
 }
 
+/** Les quatre gestes possibles sur un champ. Fermé, comme partout ailleurs. */
+export const FIELD_OPS = ['remplacer', 'creer', 'ajouter', 'supprimer'] as const
+
+/** Le pointeur du parent, ou `null` si le chemin est déjà à la racine. */
+export function parentPointer(chemin: string): string | null {
+  const i = chemin.lastIndexOf('/')
+  return i <= 0 ? null : chemin.slice(0, i)
+}
+
+/**
+ * La valeur en place est-elle bien celle qu'on croit ?
+ *
+ * Tolérance nombre/texte pour les scalaires — le connecteur relit souvent « 50 » là
+ * où la sauvegarde porte 50, et refuser là-dessus n'apprend rien à personne. Pour un
+ * objet ou un tableau, on compare la forme sérialisée : c'est plus strict, et c'est
+ * voulu. Supprimer une entrée d'un tableau sur la foi d'une description approximative
+ * effacerait la voisine.
+ */
+export function sameValue(actuel: unknown, de: unknown): boolean {
+  if (de === undefined) return false
+  if (isScalar(actuel) && isScalar(de)) return actuel === de || String(actuel) === String(de)
+  try { return JSON.stringify(actuel) === JSON.stringify(de) }
+  catch { return false }
+}
+
 /**
  * Une correction de donnée — et la garde qui la rend acceptable.
  *
@@ -789,27 +822,60 @@ export function fixFor(p: RawProposal, ctx: PlanCtx): Plan | null {
   }
 
   if (quoi === 'champ') {
-    // Le passe-partout : n'importe quel champ SIMPLE de la sauvegarde, désigné par
-    // un pointeur JSON. Il existe parce que figer une liste de champs modifiables
-    // condamnait à revenir en ajouter un à chaque besoin — et à laisser en attente
-    // celui qu'on n'avait pas prévu, comme la durée d'une séance.
-    //
-    // Ce qu'il ne dispense PAS de faire : le chemin doit exister, la valeur en
-    // place doit être celle qu'on croit remplacer, et on n'écrit qu'un scalaire.
-    // Un objet entier réécrit à partir d'une phrase reste hors de portée.
+    /**
+     * Le passe-partout : n'importe quel endroit de la sauvegarde, désigné par un
+     * pointeur JSON, et QUATRE gestes.
+     *
+     * Il n'en avait qu'un — remplacer une valeur simple déjà présente — et cette
+     * limite condamnait une cinquantaine d'actions que l'application sait faire :
+     * ajouter une pesée oubliée, retirer un extra saisi deux fois, effacer une
+     * exception de planning, rendre sa fiche d'origine à un exercice. Chacune
+     * s'affichait « à faire à la main », c'est-à-dire renvoyait le travail à
+     * quelqu'un pendant qu'une machine regardait.
+     *
+     * Ce qui NE change pas, et qui portait déjà toute la sécurité : on ne crée
+     * jamais un chemin, seulement une feuille ; on ne remplace jamais un objet ou un
+     * tableau existant ; et remplacer ou supprimer exige de citer la valeur en place.
+     */
     const chemin = pick(d, ['chemin', 'path'])
-    const de = pick(d, ['de', 'avant'])
-    const vers = pick(d, ['vers', 'apres'])
-    if (typeof chemin !== 'string' || !isScalar(vers) || !isScalar(de)) return null
+    if (typeof chemin !== 'string') return null
     const snap = ctx.snapshot?.()
     if (!snap) return null
+
+    const brut = String(pick(d, ['op', 'geste']) ?? 'remplacer')
+    const op = (FIELD_OPS as readonly string[]).includes(brut) ? brut as 'remplacer' | 'creer' | 'ajouter' | 'supprimer' : null
+    if (!op) return null
+
+    const de = pick(d, ['de', 'avant'])
+    const vers = pick(d, ['vers', 'apres'])
     const current = getAt(snap, chemin)
-    if (current === undefined || !isScalar(current)) return null
-    // Comparaison souple sur les nombres écrits en texte : « 50 » et 50 désignent
-    // la même durée, et refuser pour ça n'aiderait personne.
-    const same = current === de || (typeof current === 'number' && Number(de) === current)
-    if (!same) return null
-    return { kind: 'correction-champ', chemin, vers }
+
+    if (op === 'creer') {
+      // Créer là où il y a déjà quelque chose, ce serait écraser en croyant ajouter.
+      if (current !== undefined) return null
+      if (vers === undefined || !boundedValue(vers)) return null
+      // Le PARENT doit exister : une faute de frappe dans un nom de section ne doit
+      // pas fabriquer une branche fantôme que rien ne lit.
+      if (getAt(snap, parentPointer(chemin) ?? '') === undefined && parentPointer(chemin) !== null) return null
+      return { kind: 'correction-champ', chemin, op, vers }
+    }
+
+    if (op === 'ajouter') {
+      if (!Array.isArray(current)) return null
+      if (vers === undefined || !boundedValue(vers)) return null
+      return { kind: 'correction-champ', chemin, op, vers }
+    }
+
+    // Remplacer et supprimer touchent à quelque chose qui existe : il faut prouver
+    // qu'on sait quoi. Le miroir peut avoir des heures de retard.
+    if (current === undefined) return null
+    if (!sameValue(current, de)) return null
+
+    if (op === 'supprimer') return { kind: 'correction-champ', chemin, op }
+    // Remplacer reste réservé aux valeurs simples, des deux côtés : réécrire d'un
+    // coup une section dont on ne saurait pas dire ce qu'elle contenait, non.
+    if (!isScalar(current) || !isScalar(vers)) return null
+    return { kind: 'correction-champ', chemin, op, vers }
   }
 
   if (quoi === 'pesee') {
@@ -866,24 +932,59 @@ export function twinPath(chemin: string, d: Record<string, unknown>): string | n
  */
 export function checkFieldFix(detail: Record<string, unknown>, data: Record<string, unknown>): void {
   const chemin = typeof detail.chemin === 'string' ? detail.chemin : ''
-  if (!chemin) throw new Error('« chemin » est obligatoire pour une correction de champ (ex. « /sessions/12/durationMin »).')
+  if (!chemin) throw new Error('« chemin » est obligatoire (ex. « /sessions/12/durationMin »). Appelle l\'outil « champ » sans argument pour la carte de la sauvegarde.')
+
+  const brut = String(detail.op ?? detail.geste ?? 'remplacer')
+  if (!(FIELD_OPS as readonly string[]).includes(brut)) {
+    throw new Error(`« op » doit valoir remplacer, creer, ajouter ou supprimer — pas ${JSON.stringify(brut)}.`)
+  }
+  const op = brut as typeof FIELD_OPS[number]
   const actuel = getAt(data, chemin)
-  if (actuel === undefined) throw new Error(`Aucune valeur à « ${chemin} ». Vérifie le chemin avec l'outil « champ ».`)
+
+  if (op === 'creer') {
+    if (actuel !== undefined) {
+      throw new Error(`Il y a déjà quelque chose à « ${chemin} » : ${JSON.stringify(actuel)}. Créer écraserait — utilise op: "remplacer" avec « de ».`)
+    }
+    const parent = parentPointer(chemin)
+    if (parent !== null && getAt(data, parent) === undefined) {
+      throw new Error(`Le parent « ${parent} » n'existe pas. On ne crée qu'une feuille, jamais une branche entière : une faute de frappe dans un nom de section fabriquerait un champ que rien ne lit.`)
+    }
+    if (detail.vers === undefined) throw new Error('« vers » est obligatoire pour créer.')
+    if (!boundedValue(detail.vers)) throw new Error('« vers » est trop gros ou trop imbriqué : au maximum 400 valeurs et 6 niveaux. C\'est la taille d\'une séance complète — au-delà, personne ne relit avant de valider.')
+    return
+  }
+
+  if (op === 'ajouter') {
+    if (!Array.isArray(actuel)) {
+      throw new Error(`« ${chemin} » n'est pas une liste${actuel === undefined ? ' (rien à cet endroit)' : ''} : « ajouter » ajoute à la fin d'un tableau. Vérifie le chemin avec « champ ».`)
+    }
+    if (detail.vers === undefined) throw new Error('« vers » est obligatoire pour ajouter.')
+    if (!boundedValue(detail.vers)) throw new Error('« vers » est trop gros ou trop imbriqué : au maximum 400 valeurs et 6 niveaux.')
+    return
+  }
+
+  // Remplacer et supprimer : il faut prouver qu'on sait ce qu'on touche.
+  if (actuel === undefined) throw new Error(`Aucune valeur à « ${chemin} ». Vérifie le chemin avec l'outil « champ » — ou utilise op: "creer" si tu veux l'ajouter.`)
   const double = twinPath(chemin, data)
   if (double) throw new Error(`« ${chemin} » est une copie que l'application n'affiche pas : la corriger ne changerait rien à l'écran. Corrige ${double}.`)
-  if (actuel !== null && typeof actuel === 'object') {
-    throw new Error(`« ${chemin} » désigne ${Array.isArray(actuel) ? 'une liste' : 'un objet'} : on ne remplace que des valeurs simples. Descends d'un cran.`)
+
+  // Le refus STRUCTUREL passe avant la confrontation de « de » : sur un objet, il
+  // vaut quelle que soit la valeur annoncée, et « de ne correspond pas » enverrait
+  // chercher au mauvais endroit.
+  if (op === 'remplacer' && actuel !== null && typeof actuel === 'object') {
+    throw new Error(`« ${chemin} » désigne ${Array.isArray(actuel) ? 'une liste' : 'un objet'} : on ne REMPLACE que des valeurs simples — réécrire d'un coup une section dont on ne saurait pas dire ce qu'elle contenait, non. Descends d'un cran, ou supprime puis crée.`)
   }
+
+  const de = detail.de
+  if (de === undefined) throw new Error(`« de » est obligatoire : la valeur actuellement enregistrée est ${JSON.stringify(actuel)}.`)
+  if (!sameValue(actuel, de)) {
+    throw new Error(`« de » ne correspond pas : ${JSON.stringify(chemin)} vaut ${JSON.stringify(actuel)}, pas ${JSON.stringify(de)}. Relis-le avec « champ », puis repropose.`)
+  }
+  if (op === 'supprimer') return
+
   const vers = detail.vers
   if (vers !== null && ['object', 'undefined', 'function'].includes(typeof vers)) {
     throw new Error('« vers » doit être une valeur simple : nombre, texte, booléen ou null.')
-  }
-  // Tolérance nombre/texte : le connecteur relit souvent « 50 » là où la sauvegarde
-  // porte 50. C'est la même valeur, et refuser là-dessus n'apprend rien à personne.
-  const de = detail.de
-  if (de === undefined) throw new Error(`« de » est obligatoire : la valeur actuellement enregistrée est ${JSON.stringify(actuel)}.`)
-  if (de !== actuel && String(de) !== String(actuel)) {
-    throw new Error(`« de » ne correspond pas : ${JSON.stringify(chemin)} vaut ${JSON.stringify(actuel)}, pas ${JSON.stringify(de)}. Relis-le avec « champ », puis repropose.`)
   }
 }
 

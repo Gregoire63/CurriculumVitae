@@ -7,9 +7,10 @@ import { useTraining } from '~/composables/useTraining'
 import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import { useProgram } from '~/composables/useProgram'
+import { useRestTimer } from '~/composables/useRestTimer'
 import { useWithings } from '~/composables/useWithings'
 import { useSnapshot } from '~/composables/useSnapshot'
-import { setAt as setPointer } from '~/lib/pointer'
+import { createAt, pushAt, removeAt, setAt as setPointer } from '~/lib/pointer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Le côté téléphone du coffre.
@@ -59,6 +60,7 @@ export function useVault() {
   const workout = useWorkout()
   const profileStore = useProfile()
   const program = useProgram()
+  const restTimer = useRestTimer()
   const withings = useWithings()
   const { buildSnapshot } = useSnapshot()
 
@@ -167,6 +169,29 @@ export function useVault() {
   }
 
   /**
+   * Réinjecter l'instantané modifié dans TOUS les composables.
+   *
+   * La liste était écrite à la main au milieu de la branche « correction de champ »,
+   * et il en manquait un : `useRestTimer`. Conséquence, corriger `/restTimer/volume`
+   * écrivait bien la valeur dans l'instantané, marquait la proposition « appliquée »,
+   * et la perdait au prochain `buildSnapshot()` — qui relit le composable, resté sur
+   * son ancienne valeur. Accepté, archivé, disparu : le pire des trois états, et
+   * exactement le bug qu'on avait déjà eu sur ces mêmes réglages à l'export.
+   *
+   * Une fonction plutôt qu'une liste en ligne, pour qu'il n'y ait qu'UN endroit à
+   * compléter le jour où une section s'ajoute — et un test qui compare cette liste
+   * aux sections réellement présentes dans l'instantané.
+   */
+  function restoreAll(snap: Record<string, unknown>) {
+    workout.restoreData(snap)
+    profileStore.restore(snap as never)
+    nutrition.restore({ nutrition: snap.nutrition } as never)
+    withings.restore(snap as never)
+    program.restore(snap)
+    restTimer.restore(snap)
+  }
+
+  /**
    * Applique une proposition — et seulement si sa forme est reconnue.
    *
    * `planFor` rend `null` pour tout ce qui sort des deux gestes fermés ; on refuse
@@ -216,15 +241,29 @@ export function useVault() {
       // sur leur ancienne valeur en mémoire, et l'écran continuerait d'afficher
       // ce qu'on vient de corriger.
       const snap = buildSnapshot()
-      if (!setPointer(snap, plan.chemin, plan.vers)) {
-        error.value = 'Ce champ n\'existe plus, ou n\'est pas modifiable.'
+      /**
+       * Le même chemin pour les quatre gestes : instantané → modification →
+       * restauration complète.
+       *
+       * Écrire dans localStorage directement laisserait les composables sur leur
+       * ancienne valeur en mémoire, et l'écran continuerait d'afficher ce qu'on vient
+       * de corriger. C'est aussi ce qui fait que chaque composable revalide ce qu'on
+       * lui rend : une écriture générique ne court-circuite personne.
+       */
+      const fait = plan.op === 'creer'
+        ? createAt(snap, plan.chemin, plan.vers)
+        : plan.op === 'ajouter'
+          ? pushAt(snap, plan.chemin, plan.vers)
+          : plan.op === 'supprimer'
+            ? removeAt(snap, plan.chemin)
+            : setPointer(snap, plan.chemin, plan.vers as never)
+      if (!fait) {
+        error.value = plan.op === 'creer'
+          ? 'Cet emplacement existe déjà, ou son parent n\'existe pas.'
+          : 'Ce champ n\'existe plus, ou n\'est pas modifiable.'
         return false
       }
-      workout.restoreData(snap)
-      profileStore.restore(snap as never)
-      nutrition.restore({ nutrition: snap.nutrition } as never)
-      withings.restore(snap as never)
-      program.restore(snap)
+      restoreAll(snap)
     }
     else if (plan.kind === 'programme') {
       // Mêmes fonctions que l'écran d'édition. « retirer » DÉSACTIVE : les séances
@@ -278,6 +317,6 @@ export function useVault() {
 
   return {
     state, pending, recent, mirrorAt, busy, error, pendingCount,
-    hydrate, refresh, register, login, logout, loadPending, push, apply, resolve, applicable, ctx,
+    hydrate, refresh, register, login, logout, loadPending, push, apply, resolve, applicable, ctx, restoreAll,
   }
 }
