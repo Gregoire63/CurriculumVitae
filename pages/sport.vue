@@ -7,6 +7,7 @@ import type { SessionRecord } from '~/composables/useWorkout'
 import { useRestTimer } from '~/composables/useRestTimer'
 import { useProfile } from '~/composables/useProfile'
 import { useWithings } from '~/composables/useWithings'
+import { useFitbit } from '~/composables/useFitbit'
 import { usePhotos } from '~/composables/usePhotos'
 import { useVault } from '~/composables/useVault'
 import { useProgram } from '~/composables/useProgram'
@@ -906,6 +907,7 @@ function restoreDraft() {
 async function adoptWithings() {
   if (!import.meta.client) return
   const w = useWithings()
+  const fitbit = useFitbit()
   w.hydrate()
 
   // Ancien flux, quand le tour se faisait entièrement dans le même navigateur.
@@ -922,6 +924,14 @@ async function adoptWithings() {
   if (await w.claimPending()) {
     view.value = 'profil'
     showFlash('⚖️ Balance connectée')
+    return
+  }
+  // Une seule marque à la fois est en cours de connexion : on ne teste la seconde
+  // que si la première n'avait rien en attente.
+  if (await fitbit.claimPending()) {
+    view.value = 'profil'
+    showFlash('⌚ Fitbit connecté')
+    await fitbit.sync()
   }
 }
 

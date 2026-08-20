@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { ACCESS_TTL, signToken, verifyToken } from '../../utils/vault'
+import { OWNER_SUB } from '../auth/_auth'
 
 /**
  * L'échange du code contre un jeton d'accès.
@@ -45,7 +46,7 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    access_token: signToken({ sub: 'gregoire', scope: 'suivi' }, ACCESS_TTL, Date.now()),
+    access_token: signToken({ sub: OWNER_SUB, scope: 'suivi' }, ACCESS_TTL, Date.now()),
     token_type: 'Bearer',
     expires_in: ACCESS_TTL,
     scope: 'suivi',

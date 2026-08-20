@@ -1,4 +1,4 @@
-import { session } from '../auth/_auth'
+import { OWNER_SUB, session } from '../auth/_auth'
 import { CODE_TTL, signToken } from '../../utils/vault'
 
 /**
@@ -38,7 +38,7 @@ export default defineEventHandler((event) => {
   // Le code n'est fabriqué QUE si la session est déjà valide : la page ne doit
   // jamais porter un code exploitable avant que l'utilisateur se soit authentifié.
   const code = signedIn
-    ? signToken({ sub: 'gregoire', scope: 'code', challenge, redirectUri }, CODE_TTL, Date.now())
+    ? signToken({ sub: OWNER_SUB, scope: 'code', challenge, redirectUri }, CODE_TTL, Date.now())
     : ''
 
   setHeader(event, 'content-type', 'text/html; charset=utf-8')

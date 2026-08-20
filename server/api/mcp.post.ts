@@ -15,6 +15,7 @@ import { PROGRAM } from '~/data/sportProgram'
 import type { Exercise, Session } from '~/data/sportProgram'
 import { mergeProgram, retiredExercises } from '~/lib/program'
 import { restFor } from '~/lib/rest'
+import { ownerName } from './auth/_auth'
 import { repsGap } from '~/lib/repsGap'
 import type { ProgramCustom } from '~/lib/program'
 import { VARIANTS } from '~/data/exerciseVariants'
@@ -79,7 +80,7 @@ export default defineEventHandler(async (event) => {
           protocolVersion: SUPPORTED.includes(asked) ? asked : PROTOCOL_FALLBACK,
           capabilities: { tools: { listChanged: false } },
           serverInfo: { name: 'suivi-seances', version: '1.0.0' },
-          instructions: INSTRUCTIONS,
+          instructions: await instructions(),
         })
       }
       case 'notifications/initialized':
@@ -112,7 +113,15 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-const INSTRUCTIONS = `Suivi d'entraînement et de nutrition de Grégoire (recomposition : perdre du gras, garder le muscle).
+/**
+ * Ce que le connecteur dit de lui-même à Claude.
+ *
+ * Le prénom y était en dur : quelqu'un qui héberge ce code voyait son assistant
+ * parler des séances de quelqu'un d'autre. Il vient maintenant de la configuration —
+ * une seule variable, `NUXT_OWNER_NAME`, et un texte qui reste juste quand elle est
+ * absente.
+ */
+const instructions = async () => `Suivi d'entraînement et de nutrition de ${await ownerName()} (recomposition : perdre du gras, garder le muscle).
 Les données sont un MIROIR poussé par son téléphone ; elles peuvent avoir quelques heures de retard, l'outil « etat » donne la date.
 Tu ne peux rien modifier directement : « proposer_modification » dépose une proposition qu'il valide dans l'application.
 Réponds en français, en t'appuyant sur ses chiffres réels plutôt que sur des généralités.`
@@ -265,7 +274,7 @@ const TOOLS = [
   },
   {
     name: 'proposer_modification',
-    description: 'Dépose une proposition de modification. N\'écrit RIEN : Grégoire la voit à l\'ouverture de l\'application et décide. Décris précisément ce qui change.',
+    description: 'Dépose une proposition de modification. N\'écrit RIEN : elle s\'affiche à l\'ouverture de l\'application, et c\'est lui qui décide. Décris précisément ce qui change.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -292,7 +301,7 @@ const TOOLS = [
             '• semaine-type : { seances?: ["s1","s2",null,"s3","s4",null,null], salle?: [7 booléens], teletravail?: [7 booléens] } — lundi en premier, les trois axes sont indépendants',
             '• recette : { id?: "<id existant pour modifier>", nom, kind: "pdj"|"boite"|"diner"|"collation"|"sauce", batch?: true, steps?: "…", sauce?: "<id de sauce>", keeps?: 4, items: [ { food: "<id d\'aliment>", g: 120 } ] } — « items » REMPLACE la liste, envoie-la complète. Lis d\'abord la recette avec l\'outil « recette » : sans ça tu effaces des ingrédients sans le savoir. « steps » est la marche à suivre du batch cooking, « keeps » la conservation en jours — c\'est elle qui décide dans quelle session de cuisine le plat tombe.',
             '• aliment : { id?: "<id existant pour corriger>", nom, cat: "viandes"|"poissons"|"oeufs"|"laitiers"|"feculents"|"legumes"|"fruits"|"grasses"|"aromates"|"complements"|"boissons", kcal, p, g, l, cook?: "6 min vapeur", buy?: "1 c. à café = 5 g", keeps?: 5 } — valeurs POUR 100 g, viandes et féculents crus. Les macros doivent expliquer les calories à 25 % près, sinon c\'est refusé : une étiquette mal recopiée ne fait rien planter, elle fausse les calories pour toujours.',
-            '• programme : { seance: "s1".."s4", op: "ajouter"|"modifier"|"retirer"|"reactiver"|"reordonner", … } — tout ce qu\'un coach fait sur un plan. LIS D\'ABORD l\'outil « programme » : il donne les identifiants, les séries, les reps, le repos, la mesure, les positions et les machines de remplacement ACTUELS. Une seule op par proposition — Grégoire valide geste par geste, et un refus ne doit pas emporter les autres.',
+            '• programme : { seance: "s1".."s4", op: "ajouter"|"modifier"|"retirer"|"reactiver"|"reordonner", … } — tout ce qu\'un coach fait sur un plan. LIS D\'ABORD l\'outil « programme » : il donne les identifiants, les séries, les reps, le repos, la mesure, les positions et les machines de remplacement ACTUELS. Une seule op par proposition — il valide geste par geste, et un refus ne doit pas emporter les autres.',
             '    · ajouter : { op: "ajouter", seance: "s2", id: "farmer-walk", nom: "Farmer\'s walk", series: 3, reps: "30-40 s", mesure: "temps", repos_s: 90, muscles: ["avant-bras","abdos"], machine: "Haltères lourds ou trap bar", optionnel?: true, apres?: "curl-marteau", machines_de_remplacement?: [{ id, nom, coefficient }] }',
             '      « repos_s » est OBLIGATOIRE, en secondes (20 à 900) : il n\'y a pas de défaut, le déduire des reps donnerait 40 secondes sur « 30-40 s », c\'est-à-dire un repos calculé sur une durée d\'effort. « id » est déduit du nom si tu ne le donnes pas ; un identifiant DÉJÀ PRIS — même dans une autre séance, même sur un exercice retiré — est REFUSÉ : l\'historique de charges est indexé sur l\'identifiant seul, le réutiliser rangerait de vieux records sous un mouvement jamais fait. « apres » insère juste après cet exercice actif ; absent, l\'exercice va en fin de séance ; invalide, c\'est un refus et non un repli silencieux.',
             '    · modifier : { op: "modifier", seance: "s1", exercice: "squat", series?: 3, de_series: 2, reps?: "6-8", de_reps: "8-10", repos_s?: 150, de_repos_s: 120, nom?, mesure?, machine?, optionnel?, muscles?: [...], machines_de_remplacement?: [...] } — ne change QUE les champs envoyés.',
@@ -493,14 +502,14 @@ const progOf = (d: Record<string, unknown> | null | undefined): Session[] =>
 async function callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   if (name === 'proposer_modification') {
     const resume = String(args.resume ?? '').trim()
-    if (!resume) throw new Error('« resume » est obligatoire : c\'est la phrase que Grégoire lira avant de valider.')
+    if (!resume) throw new Error('« resume » est obligatoire : c\'est la phrase qu\'il lira avant de valider.')
     const detail = (args.detail ?? {}) as Record<string, unknown>
     /**
      * Un aliment ou une recette vérifiés AVANT le dépôt.
      *
      * Même raisonnement que pour les corrections de champ : l'application refusera
      * de toute façon une proposition qu'elle ne sait pas lire, mais elle le fera
-     * dans la boîte de réception, et c'est Grégoire qui paiera l'aller-retour. Le
+     * dans la boîte de réception, et c'est lui qui paiera l'aller-retour. Le
      * serveur a le miroir sous la main, donc la bibliothèque : il peut trancher ici.
      *
      * Le contrôle est le MÊME code que celui de l'application — `foodFor` et

@@ -53,10 +53,30 @@ export default defineNuxtConfig({
     },
 
     runtimeConfig: {
+        /**
+         * À QUI appartient cette instance.
+         *
+         * Le nom apparaissait en dur à six endroits : la fenêtre de passkey du
+         * système, l'identifiant WebAuthn, le `sub` des jetons, et les instructions
+         * que le connecteur envoie à Claude. Quelqu'un qui héberge ce code se
+         * retrouvait donc à s'authentifier sous mon nom, et à voir son assistant
+         * parler de mes séances.
+         *
+         * Une seule variable, `NUXT_OWNER_NAME`, et un défaut neutre : un fork qui
+         * ne la renseigne pas fonctionne, il est simplement anonyme.
+         */
+        ownerName: 'Moi',
         // Withings : renseigné par NUXT_WITHINGS_CLIENT_ID / NUXT_WITHINGS_CLIENT_SECRET.
         // Volontairement HORS de `public` — le secret ne doit jamais partir dans le bundle
         // client. Tous les échanges de jetons passent par server/api/withings/.
         withings: {
+            clientId: '',
+            clientSecret: '',
+        },
+        // Fitbit : NUXT_FITBIT_CLIENT_ID / NUXT_FITBIT_CLIENT_SECRET. Vide = le
+        // fournisseur ne s'affiche pas dans le profil, plutôt que d'y proposer un
+        // bouton qui mènerait à une erreur.
+        fitbit: {
             clientId: '',
             clientSecret: '',
         },
@@ -288,4 +308,4 @@ export default defineNuxtConfig({
             },
         },
     },
-})
+})

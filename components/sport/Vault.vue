@@ -287,12 +287,23 @@ const indice = computed(() => {
   return `${tape} caractères des deux côtés : la longueur correspond.`
 })
 
+const nom = ref('')
 async function doRegister() {
-  if (await v.register(bootstrap.value.trim())) {
+  if (await v.register(bootstrap.value.trim(), nom.value.trim())) {
     bootstrap.value = ''
     emit('flash', 'Passkey enregistré ✓')
     await v.push(props.snapshot, true)
   }
+}
+/** Renommer après coup : le nom se corrige sans redéployer ni retoucher au passkey. */
+const renommage = ref(false)
+const nouveauNom = ref('')
+async function doRename() {
+  if (await v.rename(nouveauNom.value.trim())) {
+    renommage.value = false
+    emit('flash', 'Nom mis à jour ✓')
+  }
+  else emit('flash', v.error.value ?? 'Échec')
 }
 async function doLogin() {
   if (await v.login()) emit('flash', 'Déverrouillé ✓')
@@ -316,6 +327,26 @@ async function doRefuse(p: RawProposal) {
       <span class="muted" :class="{ 'export-warn': statut !== 'ouvert' }">
         {{ statut === 'ouvert' ? 'Déverrouillé' : statut === 'verrouille' ? 'Verrouillé' : 'Aucun passkey' }}
       </span>
+    </div>
+
+    <!-- À qui appartient cette instance. Visible une fois déverrouillé seulement :
+         sur une page publique, ce serait donner un nom à un inconnu. -->
+    <div v-if="statut === 'ouvert'" class="vt-owner">
+      <template v-if="!renommage">
+        <span class="muted">Instance de <b>{{ v.state.value.ownerName || 'Moi' }}</b></span>
+        <button class="vt-p-toggle" @click="nouveauNom = v.state.value.ownerName || ''; renommage = true">renommer</button>
+      </template>
+      <template v-else>
+        <input v-model="nouveauNom" class="note-input" type="text" placeholder="Ton prénom" maxlength="40">
+        <div class="nav-row mt-6">
+          <button class="btn-primary flex-1" :disabled="v.busy.value" @click="doRename">Enregistrer</button>
+          <button class="btn flex-1" @click="renommage = false">Annuler</button>
+        </div>
+        <p class="muted vt-txt">
+          Ce nom apparaît dans la fenêtre de passkey de ton téléphone et dans ce que le
+          connecteur dit à Claude. Vide, l'instance redevient anonyme.
+        </p>
+      </template>
     </div>
 
     <!-- Ce qui manque côté serveur, dit avant qu'on cherche ailleurs -->
@@ -349,6 +380,10 @@ async function doRefuse(p: RawProposal) {
         ⚠️ <b>NUXT_VAULT_BOOTSTRAP</b> n’est pas configuré côté serveur. Ajoute-le dans Netlify avant.
       </div>
       <template v-else>
+        <!-- Le prénom est demandé ICI, et pas dans une variable d'hébergement : c'est
+             le moment où l'on déclare que cette instance est la sienne, et la fenêtre
+             du système va l'afficher dans la seconde qui suit. -->
+        <input v-model="nom" class="note-input mt-6" type="text" placeholder="Ton prénom (facultatif)" autocomplete="given-name" maxlength="40">
         <input v-model="bootstrap" class="note-input mt-6" type="password" placeholder="Code de démarrage" autocomplete="off">
         <p v-if="indice" class="muted vt-hint mono">{{ indice }}</p>
         <button class="btn-primary vt-go mt-6" :disabled="v.busy.value || !bootstrap.trim()" @click="doRegister">

@@ -1,5 +1,5 @@
 import { generateAuthenticationOptions, generateRegistrationOptions } from '@simplewebauthn/server'
-import { RP_NAME, rpId, session } from './_auth'
+import { OWNER_SUB, ownerNameSync, rpId, session } from './_auth'
 import { CHALLENGE_TTL, readCredential, signToken } from '../../utils/vault'
 
 /**
@@ -16,7 +16,7 @@ import { CHALLENGE_TTL, readCredential, signToken } from '../../utils/vault'
  * l'appelant le porte sans pouvoir le forger.
  */
 export default defineEventHandler(async (event) => {
-  const { mode } = await readBody<{ mode?: 'register' | 'login' }>(event) ?? {}
+  const { mode, nom } = await readBody<{ mode?: 'register' | 'login', nom?: string }>(event) ?? {}
   const cred = await readCredential()
   const id = rpId(event)
 
@@ -24,11 +24,15 @@ export default defineEventHandler(async (event) => {
     // Un seul passkey. Une fois posé, l'enregistrement est CLOS : sans cela,
     // n'importe qui passant sur le portfolio pourrait s'en créer un.
     if (cred) throw createError({ statusCode: 409, statusMessage: 'Un passkey est déjà enregistré' })
+    // Le nom voyage AVEC la demande de défi : la fenêtre du système l'affiche au
+    // moment même où l'on pose le passkey, et il n'existe encore nulle part —
+    // c'est précisément l'instant où on le déclare.
+    const qui = String(nom ?? '').trim().slice(0, 40) || ownerNameSync()
     const options = await generateRegistrationOptions({
-      rpName: RP_NAME,
+      rpName: `Suivi séances — ${qui}`,
       rpID: id,
-      userID: new TextEncoder().encode('gregoire'),
-      userName: 'gregoire',
+      userID: new TextEncoder().encode(OWNER_SUB),
+      userName: qui,
       attestationType: 'none',
       authenticatorSelection: {
         residentKey: 'preferred',

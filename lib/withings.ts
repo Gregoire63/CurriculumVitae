@@ -32,7 +32,9 @@ export interface BodyEntry {
   boneMass?: number // kg
   leanMass?: number // kg
   heartRate?: number
-  source: 'withings' | 'manual'
+  /** D'où vient la pesée. Ouvert aux marques que l'instance a configurées — la
+   *  provenance se relit des mois plus tard, quand un chiffre surprend. */
+  source: 'withings' | 'manual' | 'fitbit' | 'garmin'
   /** Pesée trop éloignée de la tendance : probablement quelqu'un d'autre. Écartée des stats. */
   suspect?: boolean
   /** « C'est bien moi » : lève la quarantaine définitivement. */

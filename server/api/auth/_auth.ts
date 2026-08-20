@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { SESSION_COOKIE, SESSION_TTL, verifyToken } from '../../utils/vault'
+import { SESSION_COOKIE, SESSION_TTL, readCredential, verifyToken } from '../../utils/vault'
 
 // Ce qui identifie « le site » aux yeux d'un passkey.
 //
@@ -18,7 +18,42 @@ export function origin(event: H3Event): string {
   return getRequestURL(event).origin
 }
 
-export const RP_NAME = 'Suivi séances — Grégoire'
+/**
+ * Le nom affiché par le système au moment de poser ou d'utiliser un passkey, et
+ * l'identifiant sous lequel les jetons sont signés.
+ *
+ * Ils étaient écrits en dur avec mon prénom. Quelqu'un qui héberge ce code voyait
+ * donc « Suivi séances — Grégoire » dans la fenêtre de son propre téléphone, et
+ * signait ses jetons sous `sub: 'gregoire'`. Rien ne cassait — `sub` n'est lu nulle
+ * part, seul le `scope` autorise — mais c'est le genre de détail qui dit à celui qui
+ * fork que le code n'était pas écrit pour lui.
+ *
+ * `NUXT_OWNER_NAME` côté Netlify, « Moi » à défaut : un fork sans configuration
+ * fonctionne, il est simplement anonyme.
+ */
+const propre = (v: unknown): string => String(v ?? '').trim().slice(0, 40)
+
+/**
+ * Le nom du propriétaire, dans l'ordre où on le cherche.
+ *
+ * Le coffre d'abord : c'est celui que la personne a tapé en posant son passkey, donc
+ * le seul qu'elle ait choisi. La variable d'environnement ensuite, pour qui préfère
+ * tout décrire dans sa configuration. « Moi » enfin — une instance sans nom
+ * fonctionne, elle est simplement anonyme, et ça vaut mieux que d'afficher le prénom
+ * de celui qui a écrit le code.
+ */
+export async function ownerName(): Promise<string> {
+  const cred = await readCredential().catch(() => null)
+  return propre(cred?.ownerName) || propre(useRuntimeConfig().ownerName) || 'Moi'
+}
+
+/** Le nom sans lire le coffre : pour l'inscription, où le passkey n'existe pas encore. */
+export const ownerNameSync = (): string => propre(useRuntimeConfig().ownerName) || 'Moi'
+
+export const RP_NAME = async () => `Suivi séances — ${await ownerName()}`
+/** L'identifiant du sujet dans les jetons. Une constante suffit : il n'y a qu'un
+ *  compte par instance, et rien ne lit cette valeur — c'est le `scope` qui autorise. */
+export const OWNER_SUB = 'owner'
 
 /** La session du téléphone, ou `null`. Aucune requête protégée ne s'en passe. */
 export function session(event: H3Event, nowMs = Date.now()) {

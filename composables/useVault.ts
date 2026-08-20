@@ -35,9 +35,11 @@ export interface VaultState {
   connected: boolean
   registered: boolean
   bootstrapReady: boolean
+  /** À qui appartient cette instance. Vide = anonyme, ce qui est un état valable. */
+  ownerName: string
 }
 
-const state = ref<VaultState>({ connected: false, registered: false, bootstrapReady: false })
+const state = ref<VaultState>({ connected: false, registered: false, bootstrapReady: false, ownerName: '' })
 const pending = ref<RawProposal[]>([])
 const recent = ref<RawProposal[]>([])
 const mirrorAt = ref<string | null>(null)
@@ -102,13 +104,33 @@ export function useVault() {
     catch { /* hors ligne : le coffre est un confort, pas une dépendance */ }
   }
 
-  /** Le tout premier passkey, protégé par le code de démarrage. */
-  async function register(bootstrap: string): Promise<boolean> {
+  /**
+   * Le tout premier passkey, protégé par le code de démarrage — et à qui appartient
+   * cette instance.
+   *
+   * Le nom part DEUX fois, et ce n'est pas une redondance : avec la demande de défi,
+   * pour que la fenêtre du système affiche le bon nom au moment où l'on approche son
+   * doigt ; puis avec l'enregistrement, pour qu'il soit conservé. Le premier est
+   * cosmétique et immédiat, le second est la donnée.
+   */
+  async function register(bootstrap: string, nom = ''): Promise<boolean> {
     busy.value = true; error.value = null
     try {
-      const options = await $fetch('/api/auth/challenge', { method: 'POST', body: { mode: 'register' } })
+      const options = await $fetch('/api/auth/challenge', { method: 'POST', body: { mode: 'register', nom } })
       const response = await startRegistration({ optionsJSON: options as never })
-      await $fetch('/api/auth/register', { method: 'POST', body: { bootstrap, response } })
+      await $fetch('/api/auth/register', { method: 'POST', body: { bootstrap, nom, response } })
+      await refresh()
+      return true
+    }
+    catch (e) { error.value = message(e); return false }
+    finally { busy.value = false }
+  }
+
+  /** Corriger le nom après coup, sans redéployer ni retoucher au passkey. */
+  async function rename(nom: string): Promise<boolean> {
+    busy.value = true; error.value = null
+    try {
+      await $fetch('/api/auth/name', { method: 'POST', body: { nom } })
       await refresh()
       return true
     }
@@ -317,6 +339,6 @@ export function useVault() {
 
   return {
     state, pending, recent, mirrorAt, busy, error, pendingCount,
-    hydrate, refresh, register, login, logout, loadPending, push, apply, resolve, applicable, ctx, restoreAll,
+    hydrate, refresh, register, rename, login, logout, loadPending, push, apply, resolve, applicable, ctx, restoreAll,
   }
 }

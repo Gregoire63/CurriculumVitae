@@ -37,6 +37,6 @@ export default defineEventHandler(async (event) => {
 
   await writeCredential({ ...cred, counter: verification.authenticationInfo.newCounter })
   deleteCookie(event, 'gr-challenge', { path: '/' })
-  setSession(event, signToken({ sub: 'gregoire', scope: 'app' }, SESSION_TTL, Date.now()))
+  setSession(event, signToken({ sub: OWNER_SUB, scope: 'app' }, SESSION_TTL, Date.now()))
   return { ok: true }
 })

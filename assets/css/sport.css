@@ -342,6 +342,9 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .vt-prog-t th { text-align: left; font-weight: 400; color: var(--text-muted); padding: 3px 0; font-size: 11.5px; }
 .vt-prog-t td { text-align: right; padding: 3px 0; }
 .vt-prog-av { color: var(--text-muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+/* À qui appartient l'instance : une ligne, pas une carte — c'est une information
+   de contexte, pas un réglage qu'on vient chercher. */
+.vt-owner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; padding-bottom: 8px; border-bottom: 1px dotted var(--bg-accent); margin-bottom: 4px; }
 .vt-prog.danger { border-color: #e6c3b0; background: #f6ece1; }
 .vt-prog-o { margin: 0; padding-left: 20px; font-size: 12.5px; line-height: 1.6; }
 /* ─── Exercice facultatif ─────────────────────────────────────────────────── */
@@ -351,6 +354,21 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .ex-opt { opacity: 0.72; }
 .ex-opt:hover, .ex-opt:focus-within { opacity: 1; }
 .ex-opt-tag { margin-left: 7px; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); border: 1px solid var(--bg-accent); border-radius: 6px; padding: 1px 5px; vertical-align: middle; white-space: nowrap; }
+/* ─── Sources de poids et de pas ──────────────────────────────────────────── */
+/* La saisie à la main d'abord, la marque ensuite : c'est l'ordre d'importance réel,
+   et l'inverse de ce que faisait l'écran avant. */
+.src-manual { display: flex; flex-direction: column; gap: 12px; }
+.src-field { display: flex; flex-direction: column; gap: 5px; }
+.src-lab { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+.src-row { display: flex; gap: 8px; align-items: center; }
+.src-row input { flex: 1; width: auto; text-align: left; padding-inline: 12px; }
+.src-cur { font-size: 11.5px; line-height: 1.45; }
+.src-provider { margin-top: 14px; padding-top: 12px; border-top: 1px dotted var(--bg-accent); display: flex; flex-direction: column; gap: 6px; }
+.src-provider p { margin: 0; }
+.src-more { margin-top: 12px; }
+.src-more summary { cursor: pointer; font-size: 12px; }
+.src-off { font-size: 12px; line-height: 1.5; padding: 6px 0; border-bottom: 1px dotted var(--bg-accent); }
+.src-off:last-child { border-bottom: none; }
 .pg-line { font-size: 12.5px; line-height: 1.4; padding: 5px 0; border-bottom: 1px dotted var(--bg-accent); gap: 10px; }
 .pg-line:last-of-type { border-bottom: none; }
 .vt-prog-n { font-size: 11.5px; line-height: 1.45; color: var(--text-muted); margin: 6px 0 0; }

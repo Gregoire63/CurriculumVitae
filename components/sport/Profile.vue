@@ -38,10 +38,9 @@ const { profile, weekPlan, planDays, setHeight, setSex, setBirthYear, resetPlan,
 const { exportData: nutritionData, restore: restoreNutrition, week, setWeekDay, resetWeek, hydrate: hydrateNutrition } = useNutrition()
 hydrateNutrition()
 // Les pesées Withings partent dans la même sauvegarde : c'est le même suivi.
-const {
-  snapshot: withingsData, restore: restoreWithings, hydrate: hydrateWithings,
-  connected: withingsOn, connect: connectWithings, disconnect: disconnectWithings, entries: weighIns,
-} = useWithings()
+// La connexion et les pesées sont passées dans SportSources ; il ne reste ici que
+// ce qui touche à la SAUVEGARDE, qui est la responsabilité de cet écran.
+const { snapshot: withingsData, restore: restoreWithings, hydrate: hydrateWithings } = useWithings()
 hydrateWithings()
 /**
  * Le programme modifié, et le chemin du retour.
@@ -284,32 +283,10 @@ function onYear(ev: Event) { setBirthYear(parseInt((ev.target as HTMLInputElemen
     <!-- Appareils : la balance se branche ici, avec la montre. C'est un réglage
          d'appareil, pas une donnée de suivi — le Rapport affiche les mesures et
          renvoie vers cet écran quand rien n'est connecté. -->
-    <div class="card">
-      <div class="row-between mb-8">
-        <div class="section-label">Balance Withings</div>
-        <span class="muted" :class="{ 'export-warn': !withingsOn }">{{ withingsOn ? 'Connectée' : 'Non connectée' }}</span>
-      </div>
-      <p v-if="props.withingsError" class="muted export-warn">
-        ⚠️ La dernière tentative a échoué ({{ props.withingsError }}). Réessaie : le code
-        d'autorisation n'est valable que quelques secondes.
-      </p>
-      <div v-if="!withingsOn" class="muted">
-        Une seule autorisation, puis l'appli récupère chaque pesée toute seule : poids,
-        masse grasse, muscle, eau, os — et les pas si l'appli Withings est reliée à
-        Samsung Health (Profil → Apps). Les jetons restent sur ce téléphone.
-      </div>
-      <div v-else class="muted">
-        {{ weighIns.length }} pesée(s) récupérée(s). Les mesures et les statistiques sont
-        dans <b>Rapport</b>.
-      </div>
-      <div class="nav-row mt-6">
-        <button v-if="!withingsOn" class="btn-primary flex-1" @click="connectWithings()">⚖️ Connecter la balance</button>
-        <button v-else class="btn flex-1" @click="disconnectWithings()">Déconnecter</button>
-      </div>
-      <div v-if="withingsOn" class="muted mt-6">
-        Se déconnecter ne supprime rien : les pesées déjà récupérées sont à toi, elles restent.
-      </div>
-    </div>
+        <!-- D'où viennent le poids et les pas. La saisie à la main y est en premier :
+         c'est le seul mode qui marche sans aucun objet connecté, et il était enterré
+         au fond de la carte Withings, là où personne ne le trouvait. -->
+    <SportSources :today-iso="props.todayIso" :withings-error="props.withingsError" @flash="emit('flash', $event)" />
 
     <!-- Le coffre : miroir des données et boîte de réception des propositions -->
     <SportVault :snapshot="buildSnapshot" @flash="emit('flash', $event)" />

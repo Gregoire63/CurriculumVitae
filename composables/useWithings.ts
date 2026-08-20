@@ -109,6 +109,29 @@ export function useWithings() {
     for (const [date, kg] of byDay) setBodyWeightAt(date, kg)
   }
 
+  /**
+   * Adopter des pesées venues d'AILLEURS — une autre marque, un import.
+   *
+   * Le stockage des pesées n'a jamais rien eu de propre à Withings : `BodyEntry`
+   * porte sa provenance, la fusion dédoublonne par horodatage, la quarantaine écarte
+   * les pesées aberrantes, et le miroir alimente le module séances. Tout cela vaut
+   * pour n'importe quelle source.
+   *
+   * Une deuxième marque écrit donc ICI plutôt que de se construire son propre
+   * historique à côté — sans quoi on aurait deux séries du même poids, la courbe
+   * choisirait l'une, le métabolisme de base l'autre, et l'écart se découvrirait des
+   * semaines plus tard. C'est exactement le bug qu'`absorbLegacy` répare juste
+   * au-dessus, et il ne faut pas le refaire une marque à la fois.
+   */
+  function adopt(nouvelles: BodyEntry[]): number {
+    if (!nouvelles?.length) return 0
+    const avant = entries.value.length
+    entries.value = mergeEntries(entries.value, nouvelles)
+    write(BODY_KEY, entries.value)
+    mirror()
+    return entries.value.length - avant
+  }
+
   const connected = computed(() => !!tokens.value?.accessToken)
   /**
    * Withings a refusé le refresh_token : plus rien ne passera tant qu'on n'aura pas
@@ -462,7 +485,7 @@ export function useWithings() {
   return {
     hydrate, connected, tokens, connect, disconnect, adoptFromQuery, claimPending, needsReconnect,
     entries, activity, latest, bodyComp, syncing, syncError, lastSync,
-    sync, syncAndPush, autoSync, pushToJournal, addManual, removeEntry, confirmEntry,
+    sync, syncAndPush, autoSync, pushToJournal, addManual, adopt, removeEntry, confirmEntry,
     suspects, suspectAts, mirror,
     weightSeries, slope, comp, weightAt,
     snapshot, restore,

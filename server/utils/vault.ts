@@ -190,7 +190,24 @@ export async function takeHandover(nonce: string, nowMs: number): Promise<Record
 }
 
 // ─── Passkey enregistré ──────────────────────────────────────────────────────
-export interface StoredCredential { id: string, publicKey: string, counter: number, at: string }
+export interface StoredCredential {
+  id: string
+  publicKey: string
+  counter: number
+  at: string
+  /**
+   * Le prénom du propriétaire, saisi au moment de poser le passkey.
+   *
+   * Ici, et pas dans une variable d'environnement, parce que c'est une donnée
+   * d'INSTANCE et non de déploiement : celui qui installe l'application n'a alors
+   * rien à configurer sur son hébergement pour que son propre prénom s'affiche, et
+   * il peut le corriger sans redéployer. La variable reste acceptée en repli, pour
+   * les instances qui préfèrent tout décrire dans leur configuration.
+   *
+   * Facultatif : une instance posée avant ce champ continue de fonctionner.
+   */
+  ownerName?: string
+}
 
 /** Un enregistrement vide vaut « aucun passkey » : c'est ce qu'écrit la remise à
  *  zéro, faute d'opération de suppression dans le stockage. */
