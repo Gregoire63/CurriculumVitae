@@ -2683,10 +2683,6 @@ export const SLOTS_REST: Slot[] = [
 // ce qu'il faut cuisiner quand la semaine change — et c'est précisément ce qui
 // change toutes les semaines.
 
-// Deux choses seulement, depuis que le shaker est passé à 17 h : il se prépare au
-// bureau et ne voyage plus. Si l'une des deux manque, la journée se décale — et un
-// déjeuner improvisé après une séance, c'est ~300 kcal de plus.
-export const GYM_BAG: string[] = ['La boîte du midi', 'La banane']
 
 // Références nutritionnelles pour un homme adulte (ANSES 2016-2021 / VNR européennes).
 // Ce sont des repères de population, pas des cibles individuelles : seule une prise de

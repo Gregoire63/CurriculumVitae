@@ -134,6 +134,11 @@ export const PROGRAM: Session[] = [
       { id: 'face-pull', name: 'Face pull', sets: 3, reps: '15', rest: 75, muscles: ['epaules-ar', 'dos'], cues: ['Poulie à hauteur du visage, corde', 'Tire vers le front en écartant', 'Rotation externe en fin de mouvement'], machine: '' },
       { id: 'oiseau', name: 'Oiseau (reverse fly)', sets: 3, reps: '15', rest: 75, muscles: ['epaules-ar'], cues: ['Buste penché à ~90°, dos plat', 'Écarte les bras en serrant les omoplates', "Léger et strict, aucun élan — monte jusqu'à l'horizontale"], machine: 'Haltères, poulies croisées ou pec deck inversé' },
       { id: 'curl-marteau', name: 'Curl marteau (hammer)', sets: 3, reps: '10-12', rest: 90, muscles: ['biceps', 'avant-bras'], cues: ['Prise NEUTRE (paumes qui se font face), poignets verrouillés', "Travaille le brachial (sous le biceps) + le long chef → l'épaisseur du bras", 'Contrôle la descente 2-3 s, aucun élan'], machine: 'Haltères, ou corde à la poulie basse' },
+      // La poigne lâche avant les ischios au soulevé de terre roumain : elle devient
+      // le facteur limitant d'un mouvement qui ne travaille pas la poigne. On la
+      // travaille donc à part, et EN FIN de séance — une poigne fatiguée avant un
+      // tirage lourd dégraderait le tirage, ce qui reviendrait à déplacer le problème.
+      { id: 'suspension', name: 'Suspension à la barre', sets: 3, reps: '30-45 s', rest: 90, mesure: 'temps', bodyweight: true, muscles: ['avant-bras', 'abdos'], cues: ['Suspension passive : épaules relâchées, bras tendus', 'Serre la barre, respire, tiens', 'Compte les secondes — la progression se joue sur la durée, puis sur le lest'], machine: 'Barre de traction — sangles INTERDITES, c\'est la poigne qu\'on travaille' },
     ],
   },
   {
@@ -148,7 +153,11 @@ export const PROGRAM: Session[] = [
       { id: 'fentes', name: 'Fentes marchées', sets: 2, reps: '10/j', rest: 150, muscles: ['quadris', 'fessiers'], cues: ['Grand pas, genou arrière frôle le sol', 'Buste droit', 'Haltères le long du corps'], machine: 'Ou presse unilatérale' },
       { id: 'leg-curl', name: 'Leg curl (ischios)', sets: 3, reps: '10-12', rest: 90, muscles: ['ischios'], cues: ['Contrôle la descente (2-3 s)', 'Amplitude complète, sans à-coup', 'Bassin plaqué au banc, pas de coup de rein'], machine: 'Machine leg curl allongé ou assis' },
       { id: 'mollets', name: 'Mollets debout', sets: 3, reps: '12-15', rest: 75, muscles: ['mollets'], cues: ['Amplitude complète, pause en bas', 'Monte sur la pointe max', 'Pas de rebond'], machine: 'Machine debout ou à la presse' },
-      { id: 'releves', name: 'Relevés de jambes suspendu', sets: 3, reps: '12', rest: 60, muscles: ['abdos'], cues: ['Enroule le bassin, pas juste les jambes', 'Contrôle la descente', "Lest chevilles quand c'est facile"], machine: '' },
+      // Suspendu à une barre : c'est un mouvement au poids de corps, et la fiche ne le
+      // disait pas. Les séries s'enregistraient donc à 0 kg — volume nul, record nul,
+      // depuis le début. Les séries DÉJÀ enregistrées gardent leur 0 : les réécrire
+      // serait inventer un poids qu'on n'a pas mesuré ce jour-là.
+      { id: 'releves', name: 'Relevés de jambes suspendu', sets: 3, reps: '12', rest: 60, muscles: ['abdos'], cues: ['Enroule le bassin, pas juste les jambes', 'Contrôle la descente', 'Tape seulement le LEST : rien si tu es à vide, le poids des lests de chevilles sinon'], machine: 'Barre de traction ou chaise romaine', bodyweight: true },
     ],
   },
   {
@@ -160,9 +169,14 @@ export const PROGRAM: Session[] = [
     exercises: [
       { id: 'dev-halteres', name: 'Développé couché haltères', sets: 4, reps: '8-10', rest: 120, muscles: ['pecs', 'epaules-av', 'triceps'], cues: ["Amplitude plus grande qu'à la barre", "Descends jusqu'à l'étirement", 'Trajectoire en léger arc de cercle'], machine: '' },
       { id: 'ecartes', name: 'Écartés à la poulie', sets: 3, reps: '12-15', rest: 75, muscles: ['pecs'], cues: ['Léger arrondi des coudes, fixe', 'Croise légèrement les mains devant', 'Tension continue, pas de repos en haut'], machine: 'Ou au pec deck' },
-      { id: 'tractions', name: 'Tractions (+ tenues)', sets: 4, reps: 'max', rest: 150, muscles: ['dos', 'biceps'], cues: ['Note le nombre de reps à chaque série — objectif : battre ton total', 'Charge préremplie avec ton poids de corps ; ajoute du lest par-dessus dès que tu passes 10-12 reps propres', 'Finis chaque série par 1-2 tractions TENUES : menton au-dessus de la barre, tiens 5-10 s', 'Descente lente et contrôlée (2-3 s) — le négatif fait grossir le dos'], machine: 'Barre de traction — assistance élastique/machine si besoin', bodyweight: true },
+      // Les tenues étaient une consigne au milieu des tractions : un travail qui se
+      // compte en secondes, noté nulle part, donc invisible dans les courbes. Elles
+      // deviennent une ligne à elles, en secondes — c'est le même mouvement, ce n'est
+      // pas la même unité, et on ne peut pas enregistrer les deux sur une seule fiche.
+      { id: 'tractions', name: 'Tractions', sets: 4, reps: 'max', rest: 150, muscles: ['dos', 'biceps'], cues: ['Note le nombre de reps à chaque série — objectif : battre ton total', 'Tape seulement le LEST : ton poids du jour est ajouté tout seul', 'Ajoute du lest dès que tu passes 10-12 reps propres', 'Descente lente et contrôlée (2-3 s) — le négatif fait grossir le dos'], machine: 'Barre de traction — assistance élastique/machine si besoin', bodyweight: true },
       { id: 'ss-bras', name: 'Superset triceps : pushdown + extension', sets: 3, reps: '12+12', rest: 120, muscles: ['triceps'], cues: ['12 pushdowns à la corde (poulie haute)', 'Puis SANS repos, 12 extensions au-dessus de la tête (corde, poulie basse)', 'Repos seulement après les deux exos, puis on recommence', 'Deux angles : chef latéral (pushdown) + longue portion (overhead) = triceps complet'], machine: "Poulie corde — haute pour le pushdown, basse pour l'overhead", superset: ['Pushdown', 'Overhead'] },
       { id: 'curl-21', name: 'Curl 21 (méthode 7-7-7)', sets: 3, reps: '7+7+7 (21)', rest: 90, muscles: ['biceps'], cues: ['7 reps sur la moitié basse (bas → milieu)', '7 reps sur la moitié haute (milieu → haut)', '7 reps en amplitude complète', "Charge légère, aucun élan — c'est la brûlure qui fait le boulot"], machine: 'Barre EZ, haltères ou poulie basse' },
+      { id: 'tractions-tenue', name: 'Tenue menton au-dessus de la barre', sets: 2, reps: '10-20 s', rest: 90, mesure: 'temps', bodyweight: true, optionnel: true, muscles: ['dos', 'biceps'], cues: ['Menton franchement au-dessus de la barre, épaules basses', 'Tiens jusqu\'à ne plus pouvoir tenir la position — pas jusqu\'à ce que ce soit dur', 'Compte les secondes, pas les répétitions'], machine: 'Barre de traction' },
     ],
   },
 ]

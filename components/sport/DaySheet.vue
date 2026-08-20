@@ -6,6 +6,7 @@ import { choicesForSlot } from '~/lib/nutritionStats'
 import { useNutrition } from '~/composables/useNutrition'
 import { useTraining } from '~/composables/useTraining'
 import { useProgram } from '~/composables/useProgram'
+import { setText } from '~/lib/setText'
 import { useWithings } from '~/composables/useWithings'
 import { EFFORT_OPTIONS } from '~/utils/sportStats'
 import { variantName } from '~/data/exerciseVariants'
@@ -29,7 +30,7 @@ import { useDayPlan } from '~/composables/useDayPlan'
 const props = defineProps<{ iso: string, todayIso: string | null }>()
 const emit = defineEmits<{ close: [], edit: [rec: SessionRecord] }>()
 
-const { sessionLog } = useWorkout()
+const { sessionLog, bodyWeightAt } = useWorkout()
 const { dayFor, setOverride, dayPlanFor, stepsFor, eatenSlots, library, stock, pickedFor, setPicked, freeMealFor } = useNutrition()
 const { burnOn, energyOn } = useEnergy()
 const { viewOf } = useDayPlan()
@@ -39,7 +40,11 @@ const DOW = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Diman
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 // Le programme effectif, retirés compris : une séance de mars doit garder le nom des
 // mouvements qu'on ne fait plus, sinon elle affiche des identifiants bruts.
-const { program: prog, exerciseName: exName } = useProgram()
+const { program: prog, exerciseName: exName, exerciseById } = useProgram()
+/** Une série se lit avec l'unité de SON exercice : « 40 s » pour une suspension,
+ *  « +10×8 » pour des dips lestés. « 91.5×40 » disait quarante répétitions. */
+const setLine = (exId: string, sets: { w?: number, r?: number, w2?: number, r2?: number }[], iso: string) =>
+  sets.map(x => setText(x, exerciseById(exId) ?? {}, bodyWeightAt(iso))).join(' · ')
 const effortIcon = (e?: string) => EFFORT_OPTIONS.find(o => o.value === e)?.icon ?? ''
 const recColor = (r: SessionRecord) => prog.value.find(p => p.id === r.sessionId)?.color || '#8b6f5c'
 
@@ -203,7 +208,7 @@ function openLibre() {
               <template v-for="e in s.entries" :key="e.exId">
                 <span class="ds-s-line">
                   {{ exName(e.exId) }} <span v-if="effortIcon(e.effort)">{{ effortIcon(e.effort) }}</span>
-                  <span class="mono muted">{{ e.sets.map(x => `${x.w}×${x.r}`).join(' · ') }}</span>
+                  <span class="mono muted">{{ setLine(e.exId, e.sets, s.at.slice(0, 10)) }}</span>
                 </span>
                 <span v-if="e.variant" class="ds-s-exnote">🔁 {{ variantName(e.exId, e.variant, '') }}</span>
                 <span v-if="e.note" class="ds-s-exnote">💬 {{ e.note }}</span>

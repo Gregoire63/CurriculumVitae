@@ -347,31 +347,6 @@ describe('la semaine type pilote tout', () => {
   })
 })
 
-describe('sac de sport', () => {
-  it('coche, décoche et compte, sans mélanger les jours', async () => {
-    const n = await load()
-    expect(n.isPacked('2026-08-10', 'La banane')).toBe(false)
-    n.togglePacked('2026-08-10', 'La banane')
-    expect(n.isPacked('2026-08-10', 'La banane')).toBe(true)
-    expect(n.packedCount('2026-08-10')).toBe(1)
-    // Un autre jour n'hérite de rien : la liste se refait chaque matin.
-    expect(n.isPacked('2026-08-11', 'La banane')).toBe(false)
-    n.togglePacked('2026-08-10', 'La banane')
-    expect(n.isPacked('2026-08-10', 'La banane')).toBe(false)
-    expect(n.packedCount('2026-08-10')).toBe(0)
-  })
-
-  it('survit à un rechargement', async () => {
-    // La liste se consulte deux ou trois fois entre la cuisine et la porte. Une case
-    // qui se décoche au rechargement ne servirait à rien.
-    const n = await load()
-    n.togglePacked('2026-08-10', 'La boîte du midi')
-    vi.resetModules()
-    const again = await load()
-    expect(again.isPacked('2026-08-10', 'La boîte du midi')).toBe(true)
-  })
-})
-
 describe('confirmation de l\'ajustement du soir', () => {
   const SIG = 'p:riz-basmati:250'
 
@@ -421,30 +396,30 @@ describe('confirmation de l\'ajustement du soir', () => {
 })
 
 describe('sauvegarde complète', () => {
-  it('emporte le sac et les confirmations d\'ajustement', async () => {
+  it('emporte les confirmations d\'ajustement', async () => {
     // Régression déjà vue : une nouvelle clé de stockage ajoutée sans être branchée
     // sur l'export, et la restauration sur un autre appareil la perd en silence.
     const n = await load()
-    n.togglePacked('2026-08-10', 'La banane')
     n.setAdjustApplied('2026-08-10', 'p:riz-basmati:250')
     const snap = n.exportData()
-    expect(snap.bag['2026-08-10']).toContain('La banane')
     expect(snap.adjustOk['2026-08-10']).toBe('p:riz-basmati:250')
 
     localStorage.clear()
     vi.resetModules()
     const fresh = await load()
-    expect(fresh.isPacked('2026-08-10', 'La banane')).toBe(false)
+    expect(fresh.isAdjustApplied('2026-08-10', 'p:riz-basmati:250')).toBe(false)
     fresh.restore({ nutrition: snap })
-    expect(fresh.isPacked('2026-08-10', 'La banane')).toBe(true)
     expect(fresh.isAdjustApplied('2026-08-10', 'p:riz-basmati:250')).toBe(true)
   })
 
   it('un fichier de sauvegarde ancien passe sans erreur', async () => {
-    // Tout est optionnel côté restauration : une sauvegarde faite avant que le sac
-    // et l'ajustement existent ne doit pas faire échouer l'import.
+    // Tout est optionnel côté restauration : une sauvegarde faite avant que
+    // l'ajustement existe ne doit pas faire échouer l'import. Une sauvegarde qui
+    // porte encore le sac de sport, retiré depuis, ne doit pas échouer non plus —
+    // les clés inconnues sont simplement ignorées.
     const n = await load()
     expect(() => n.restore({ nutrition: { prices: {} } })).not.toThrow()
+    expect(() => n.restore({ nutrition: { bag: { '2026-08-10': ['La banane'] } } })).not.toThrow()
     expect(() => n.restore({})).not.toThrow()
   })
 })

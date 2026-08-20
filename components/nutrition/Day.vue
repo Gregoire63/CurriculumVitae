@@ -9,7 +9,6 @@ import {
   DAY_NAMES, STATUS_LABELS, adjustRemaining, adjustSignature, applySteps, buildDay, choicesForSlot, dayIntake, dayStatus, dowIndex, extraFromRecipe, fiberIntake, fiberVerdict,
   isDayPlayed, macroSplit, quickExtra, roundMacros, sessionsOn, sumMacros,
 } from '~/lib/nutritionStats'
-import { GYM_BAG } from '~/data/nutritionProgram'
 import { useEnergy } from '~/composables/useEnergy'
 import { useDayPlan } from '~/composables/useDayPlan'
 
@@ -28,7 +27,7 @@ const props = withDefaults(defineProps<{ todayIso: string, past?: boolean }>(), 
 
 const {
   dayPlanFor, dayFor, stepsFor, isEaten, toggleEaten, eatenSlots, pickedFor, setPicked, stock,
-  extrasFor, addExtra, removeExtra, prepMode, library, isPacked, togglePacked, packedCount,
+  extrasFor, addExtra, removeExtra, prepMode, library,
   freeMealFor,
   isAdjustApplied, setAdjustApplied, clearAdjustApplied,
 } = useNutrition()
@@ -79,10 +78,6 @@ const status = computed<DayStatus>(() => vue.value.status)
 // ─── Sac de sport ───────────────────────────────────────────────────────────
 // Visible seulement tant que la séance est à venir : une fois qu'elle est
 // enregistrée, la liste n'a plus rien à dire et n'occuperait que le haut de l'écran.
-// On compte les éléments cochés en repartant de GYM_BAG, pas du stockage : si la
-// liste change un jour, une case cochée pour un objet disparu ne doit pas compter.
-const showBag = computed(() => !props.past && status.value === 'pending')
-const bagPacked = computed(() => GYM_BAG.filter(item => isPacked(props.todayIso, item)).length)
 
 // ─── Énergie du jour ─────────────────────────────────────────────────────────
 // La chaîne complète — âge, métabolisme, dépense, cible — vient du socle partagé.
@@ -264,29 +259,6 @@ const foodName = (id: string) => library.value.foods[id]?.name ?? id
     </div>
 
 
-
-    <!-- Le sac de sport. Trois secondes le matin ; une boîte oubliée, c'est un
-         déjeuner improvisé après la séance, soit ~300 kcal de plus. -->
-    <div v-if="showBag" class="card nu-bag" :class="{ full: bagPacked === GYM_BAG.length }">
-      <div class="row-between">
-        <div class="section-label">Dans le sac</div>
-        <span class="nu-bag-count mono">{{ bagPacked }}/{{ GYM_BAG.length }}</span>
-      </div>
-      <ul class="nu-bag-list">
-        <li v-for="item in GYM_BAG" :key="item">
-          <button
-            type="button" class="nu-bag-item" :class="{ on: isPacked(todayIso, item) }"
-            :aria-pressed="isPacked(todayIso, item)" @click="togglePacked(todayIso, item)"
-          >
-            <span class="nu-bag-box" aria-hidden="true" />
-            <span>{{ item }}</span>
-          </button>
-        </li>
-      </ul>
-      <p v-if="bagPacked < GYM_BAG.length" class="nu-bag-note">
-        Le shaker n'y est plus : la whey se prend à 17 h, au bureau.
-      </p>
-    </div>
 
     <div v-if="todaySessions.length" class="card nu-sessions">
       <div v-for="(s, i) in todaySessions" :key="i" class="nu-session">

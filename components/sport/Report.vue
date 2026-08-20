@@ -4,6 +4,8 @@ import { useWorkout } from '~/composables/useWorkout'
 import { useProfile } from '~/composables/useProfile'
 import { useEnergy } from '~/composables/useEnergy'
 import { useProgram } from '~/composables/useProgram'
+import { secText } from '~/lib/setText'
+import { isTimed } from '~/lib/program'
 import {
   avgSessionDuration, volumeOf, weeklyStatus, startOfWeek, FATIGUE_LABELS,
   WEEKLY_TARGET_MIN, WEEKLY_TARGET_MAX, SPRINT_SECONDS_MIN, SPEED_PLAN_MAX,
@@ -80,7 +82,7 @@ const records = computed(() => exos.value.map((ex) => {
   // affiche le LEST réellement ajouté, seul indicateur qui progresse vraiment.
   const bw = ex.bodyweight ? bodyWeightAt(r.chargeDate) : null
   const lest = bw !== null ? Math.round((r.charge - bw) * 10) / 10 : null
-  return { id: ex.id, name: ex.name, ...r, lest }
+  return { id: ex.id, name: ex.name, ...r, lest, timed: isTimed(ex) }
 }).filter((r): r is NonNullable<typeof r> => r !== null).sort((a, b) => b.charge - a.charge))
 
 // ─── Fatigue & récupération ──────────────────────────────────────────────────
@@ -220,7 +222,7 @@ const hasData = computed(() => totalSessions.value > 0 || latestWeight.value !==
             <div class="rec-vals">
               <span class="mono rec-val">{{ r.charge }} kg</span>
               <span v-if="r.lest !== null" class="rec-sub muted">dont {{ r.lest > 0 ? '+' + r.lest + ' kg de lest' : 'poids du corps' }}</span>
-              <span v-if="r.reps > 1" class="rec-sub muted">{{ r.reps }} reps à cette charge</span>
+              <span v-if="r.reps > 1" class="rec-sub muted">{{ r.timed ? secText(r.reps) + ' tenues' : r.reps + ' reps' }} à cette charge</span>
               <span v-if="r.e1rm" class="rec-sub muted">1RM estimé {{ r.e1rm }} kg</span>
             </div>
           </div>

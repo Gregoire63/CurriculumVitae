@@ -206,6 +206,14 @@
 .sets { display: flex; flex-direction: column; gap: 8px; width: fit-content; max-width: 100%; margin-inline: auto; }
 .setrow { display: flex; gap: 8px; align-items: center; }
 .setrow-head { padding-bottom: 0; margin-bottom: -2px; }
+/* Le champ « lest » et le total qu'il produit. Le total est SOUS le champ et non à
+   côté : la ligne est déjà pleine, et c'est une confirmation qu'on lit du coin de
+   l'œil, pas une donnée qu'on cherche. La largeur reprend celle des autres champs
+   (68 px, comme `input[type=number]` et `.col-head`) — la cellule n'est qu'un
+   support de positionnement, elle ne doit rien changer à l'alignement. */
+.lest-cell { position: relative; display: inline-block; flex-shrink: 0; width: 68px; }
+.lest-total { position: absolute; left: 0; right: 0; bottom: -13px; text-align: center; font-size: 10px; color: var(--text-muted); pointer-events: none; }
+.setrow:has(.lest-cell) { margin-bottom: 11px; }
 .setrow-head .times { visibility: hidden; }
 .col-head { width: 68px; text-align: center; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
 .setrow.done .set-label { color: #3f7a4f; }

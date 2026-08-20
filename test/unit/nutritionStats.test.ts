@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, GYM_BAG, KEEPS_DEFAULT, MICRO_REFS,
+  CAT_ORDER, CYCLE, CYCLE_LENGTH, FOOD_BY_ID, KEEPS_DEFAULT, MICRO_REFS,
   RATIO_LUNCH_GYM, RATIO_REST,
   KEEPS_FRESH, RECIPE_BY_ID, STARCHY_IDS, SLOTS_GYM, SLOTS_REST,
 } from '../../data/nutritionProgram'
@@ -1441,14 +1441,6 @@ describe('les courses de la semaine', () => {
     expect(avec['banane']).toBe(4 * 120)
   })
 
-  it('le sac de sport ne contient que ce qui doit vraiment voyager', () => {
-    // Régression : le shaker en est sorti quand la whey est passée à 17 h, au bureau.
-    // Une liste qui mentionne un objet resté sur le plan de travail perd sa raison
-    // d'être — on cesse de la lire.
-    expect(GYM_BAG.some(i => /shaker/i.test(i))).toBe(false)
-    expect(GYM_BAG.length).toBe(2)
-    for (const item of GYM_BAG) expect(item.trim()).not.toBe('')
-  })
 
   it('achète moins de féculents quand les séances sautent', () => {
     expect(weekGrams(A(), NO_GYM)['riz-basmati']).toBeLessThan(weekGrams(A(), GYM_WEEK)['riz-basmati'])

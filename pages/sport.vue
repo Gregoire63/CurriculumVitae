@@ -11,6 +11,7 @@ import { usePhotos } from '~/composables/usePhotos'
 import { useVault } from '~/composables/useVault'
 import { useProgram } from '~/composables/useProgram'
 import { isTimed } from '~/lib/program'
+import { setText } from '~/lib/setText'
 import { useSnapshot } from '~/composables/useSnapshot'
 import { WARMUP_REST, fmtRest, restFor } from '~/lib/rest'
 import { warmupLoad, EFFORT_OPTIONS, isEffort, isoOf, shiftIso } from '~/utils/sportStats'
@@ -459,14 +460,14 @@ function rebase(e: Exercise, valeur: number | null | undefined, dateSeance: stri
   if (valeur == null) return ''
   if (!e.bodyweight) return String(valeur)
   const alors = bodyWeightAt(dateSeance)
-  const maintenant = latestWeight.value
+  const maintenant = seanceWeight.value
   if (alors === null || maintenant === null) return String(valeur)
   const lest = valeur - alors
   return String(Math.round((maintenant + lest) * 10) / 10)
 }
 
 function prefillRows(e: Exercise, variant?: string): DraftRow[] {
-  const bw = latestWeight.value ?? 0 // poids de corps mesuré, pour les exos au poids du corps
+  const bw = seanceWeight.value ?? 0 // poids de corps DU JOUR, pour les exos au poids du corps
   const last = lastOn(e.id, variant)
   let rows: DraftRow[]
   if (last && last.sets.length) {
@@ -545,7 +546,7 @@ function editSession(rec: SessionRecord) {
   for (const k of Object.keys(draftNote)) delete draftNote[k]
   for (const k of Object.keys(draftVariant)) delete draftVariant[k]
   sessionNote.value = rec.note ?? ''
-  const bw = latestWeight.value ?? 0
+  const bw = seanceWeight.value ?? 0
   for (const e of s.exercises) {
     const entry = rec.entries.find(en => en.exId === e.id)
     if (entry && isEffort(entry.effort)) draftEffort[e.id] = entry.effort
@@ -749,6 +750,70 @@ const latestWeight = computed(() => {
   }
   return best?.kg ?? null
 })
+/**
+ * Le poids de corps DU JOUR de la séance — pas la dernière pesée connue.
+ *
+ * La nuance compte dès qu'on a sauté une pesée : la dernière connue peut dater de
+ * trois jours, et c'est elle qui servait à préremplir les dips. Trois jours, ce
+ * n'est pas grand-chose sur la balance, mais le chiffre enregistré devient un
+ * mélange de deux dates dont on ne peut plus rien déduire.
+ *
+ * On retombe sur la dernière pesée quand le jour n'en a pas : mieux vaut un poids
+ * approché et daté qu'un champ vide qu'on remplira au jugé.
+ */
+const seanceIso = computed(() => editingRecord.value?.at.slice(0, 10) ?? todayISO.value ?? null)
+const seanceWeight = computed(() => (seanceIso.value ? bodyWeightAt(seanceIso.value) : null) ?? latestWeight.value)
+
+/**
+ * Le LEST, c'est-à-dire la seule part de la charge qui soit une décision.
+ *
+ * L'écran demandait le TOTAL : à 91,5 kg de poids de corps, ajouter dix kilos aux
+ * dips voulait dire taper 101,5. On faisait donc une addition, en salle, entre deux
+ * séries — et une addition faite là se fait un jour de travers.
+ *
+ * Le stockage, lui, garde le total. Records, courbes, conversions de machine et
+ * `rebase` raisonnent dessus depuis le premier jour ; changer l'unité en base
+ * réécrirait tout l'historique pour une commodité de saisie. On convertit donc à
+ * l'entrée et à la sortie du champ, et nulle part ailleurs.
+ */
+function lestOf(w: string): string {
+  const bw = seanceWeight.value
+  if (bw === null || w === '') return w
+  const total = Number(w)
+  if (!Number.isFinite(total)) return ''
+  const lest = Math.round((total - bw) * 10) / 10
+  return lest === 0 ? '' : String(lest)
+}
+function setLest(row: { w: string }, v: string) {
+  const bw = seanceWeight.value
+  if (bw === null) { row.w = v; return }
+  if (v.trim() === '') { row.w = String(bw); return }
+  const lest = Number(v)
+  row.w = Number.isFinite(lest) ? String(Math.round((bw + lest) * 10) / 10) : ''
+}
+/** Le total réellement enregistré, affiché sous le champ : c'est lui qui fera foi. */
+function totalOf(w: string): string {
+  const n = Number(w)
+  return Number.isFinite(n) && n > 0 ? `${Math.round(n * 10) / 10} kg` : ''
+}
+
+/**
+ * Ce qu'on a fait la dernière fois, en une expression.
+ *
+ * C'était la charge maximale, en kilos — juste sur un développé, absurde sur une
+ * suspension à la barre, où le maximum de kilos est le poids de corps et ne bouge
+ * jamais. On rend donc la meilleure SÉRIE selon l'unité de l'exercice : la plus
+ * longue quand il se compte en secondes, la plus lourde sinon.
+ */
+function derniere(e: Exercise): string {
+  const last = lastPerf(e.id)
+  const sets = (last?.sets ?? []).filter(s => !s.warm)
+  if (!sets.length) return ''
+  const cle = isTimed(e) ? (s: { r?: number }) => s.r ?? 0 : (s: { w?: number }) => s.w ?? 0
+  const best = sets.reduce((a, b) => (cle(b) > cle(a) ? b : a))
+  return setText(best, e, bodyWeightAt(last!.date))
+}
+
 const p2 = (n: number) => String(n).padStart(2, '0')
 
 // ─────────── Sauvegarde automatique du brouillon ───────────
@@ -1116,7 +1181,7 @@ onUnmounted(() => {
             <button class="exhead" @click="openEx = openEx === e.id ? null : e.id">
               <div>
                 <div class="ex-name">{{ idx + 1 }}. {{ e.name }}<span v-if="e.optionnel" class="ex-opt-tag">facultatif</span></div>
-                <div class="muted mt-2">{{ e.sets }} × {{ e.reps }}<template v-if="lastPerf(e.id)"> · dernière : {{ Math.max(...lastPerf(e.id)!.sets.map(s => s.w)) }} kg</template></div>
+                <div class="muted mt-2">{{ e.sets }} × {{ e.reps }}<template v-if="derniere(e)"> · dernière : {{ derniere(e) }}</template></div>
               </div>
               <div class="set-counter mono" :class="{ complete: draft[e.id] && workCount(e.id) > 0 && doneCount(e.id) === workCount(e.id) }">{{ doneCount(e.id) }}/{{ workCount(e.id) || e.sets }}</div>
             </button>
@@ -1128,7 +1193,12 @@ onUnmounted(() => {
           </div>
           <div v-if="openEx === e.id" class="ex-body">
             <LazySportExerciseMove :ex-id="e.id"><LazySportMuscleMap :muscles="e.muscles" /></LazySportExerciseMove>
-            <div v-if="e.bodyweight" class="hint-pill bw">🧍 Charge = ton poids de corps<template v-if="latestWeight"> ({{ latestWeight }} kg)</template> + lest. Préremplie — ajuste si tu ajoutes du poids.</div>
+            <div v-if="e.bodyweight" class="hint-pill bw">
+              🧍 Tape seulement le <strong>lest</strong> — vide si tu es à vide.
+              <template v-if="seanceWeight">Ton poids du jour ({{ seanceWeight }} kg) est ajouté tout seul&nbsp;;</template>
+              <template v-else>Aucune pesée pour ce jour : le total sera ce que tu tapes&nbsp;;</template>
+              c'est le total qui est enregistré, il s'affiche sous le champ.
+            </div>
             <div v-if="overloadHint(e)" class="hint-pill" :class="overloadHint(e)!.cls">{{ overloadHint(e)!.text }}</div>
             <div v-if="previousNote(e.id)" class="hint-pill note">💬 La dernière fois : {{ previousNote(e.id) }}</div>
             <div v-if="isDumbbell(e)" class="hint-pill db">🏋️ Note le poids <strong>total des 2 haltères</strong> (ex. 2 × 20 kg → 40 kg), pas un seul.</div>
@@ -1191,7 +1261,7 @@ onUnmounted(() => {
                 <div class="ss-head" aria-hidden="true">
                   <span class="ss-move-label"></span>
                   <span class="col-head mono">kg</span>
-                  <span class="times">×</span>
+                  <span class="times">{{ isTimed(e) ? '·' : '×' }}</span>
                   <span class="col-head mono">{{ isTimed(e) ? 'sec' : 'reps' }}</span>
                 </div>
                 <div v-for="(s, i) in draft[e.id]" :key="i" class="ss-set" :class="{ done: s.done }">
@@ -1203,13 +1273,13 @@ onUnmounted(() => {
                   <div class="ss-move">
                     <span class="ss-move-label">{{ e.superset[0] }}</span>
                     <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
-                    <span class="times">×</span>
+                    <span class="times">{{ isTimed(e) ? '·' : '×' }}</span>
                     <input v-model="s.r" type="number" inputmode="numeric" :placeholder="isTimed(e) ? 'sec' : 'reps'">
                   </div>
                   <div class="ss-move">
                     <span class="ss-move-label">{{ e.superset[1] }}</span>
                     <input v-model="s.w2" type="number" inputmode="decimal" placeholder="kg">
-                    <span class="times">×</span>
+                    <span class="times">{{ isTimed(e) ? '·' : '×' }}</span>
                     <input v-model="s.r2" type="number" inputmode="numeric" :placeholder="isTimed(e) ? 'sec' : 'reps'">
                   </div>
                 </div>
@@ -1218,14 +1288,24 @@ onUnmounted(() => {
               <template v-else>
                 <div class="setrow setrow-head" aria-hidden="true">
                   <span class="set-label"></span>
-                  <span class="col-head mono">kg</span>
-                  <span class="times">×</span>
+                  <span class="col-head mono">{{ e.bodyweight ? 'lest' : 'kg' }}</span>
+                  <span class="times">{{ isTimed(e) ? '·' : '×' }}</span>
                   <span class="col-head mono">{{ isTimed(e) ? 'sec' : 'reps' }}</span>
                 </div>
                 <div v-for="(s, i) in draft[e.id]" :key="i" class="setrow" :class="{ done: s.done, warm: s.warm }">
                   <button class="set-label mono" :class="{ warm: s.warm }" :title="s.warm ? 'Échauffement (non compté) — clic pour repasser en série' : 'Clic pour marquer en échauffement'" @click="s.warm = !s.warm">{{ setLabel(draft[e.id], i) }}</button>
-                  <input v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
-                  <span class="times">×</span>
+                  <!-- Au poids de corps, le champ porte le LEST et le total s'affiche
+                       dessous : c'est lui qui sera enregistré, il ne doit pas être
+                       une surprise au moment de valider. -->
+                  <span v-if="e.bodyweight" class="lest-cell">
+                    <input
+                      :value="lestOf(s.w)" type="number" inputmode="decimal" placeholder="0"
+                      @input="setLest(s, ($event.target as HTMLInputElement).value)"
+                    >
+                    <span v-if="totalOf(s.w)" class="lest-total mono">{{ totalOf(s.w) }}</span>
+                  </span>
+                  <input v-else v-model="s.w" type="number" inputmode="decimal" placeholder="kg">
+                  <span class="times">{{ isTimed(e) ? '·' : '×' }}</span>
                   <input v-model="s.r" type="number" inputmode="numeric" :placeholder="isTimed(e) ? 'sec' : 'reps'">
                   <button class="check" :class="{ ok: s.done }" @click="toggleSet(s, e)">{{ s.done ? '✓' : '○' }}</button>
                   <button v-if="draft[e.id].length > 1" class="rm" aria-label="Retirer la série" @click="removeSet(e.id, i)">×</button>

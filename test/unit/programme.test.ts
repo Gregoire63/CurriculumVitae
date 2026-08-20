@@ -395,11 +395,41 @@ describe('le geste proposé se rejoue vraiment sur le programme', () => {
 // chose dont on est sûr jusqu'au jour où un champ prend la valeur `false` quelque part.
 
 describe('le programme livré traverse la migration sans bouger', () => {
-  it('aucun exercice livré n’est mesuré au temps ni facultatif', () => {
+  /**
+   * Le programme livré a maintenant des séries au temps — la suspension à la barre,
+   * la tenue menton au-dessus. Ce qui doit rester vrai, ce n'est plus « aucune »,
+   * c'est que chacune soit COHÉRENTE : une fiche en secondes doit le déclarer, et
+   * réciproquement. Sans quoi « 30-45 s » se lit 45 répétitions.
+   */
+  it('toute fiche qui compte en secondes le déclare, et l’inverse', () => {
     for (const s of PROGRAM) {
       for (const e of s.exercises) {
-        expect(isTimed(e), e.id).toBe(false)
-        expect(!!e.optionnel, e.id).toBe(false)
+        const ditSecondes = /\d\s*s\b|sec/.test(e.reps)
+        expect(isTimed(e), `${e.id} : reps « ${e.reps} »`).toBe(ditSecondes)
+      }
+    }
+  })
+
+  /**
+   * Un exercice FACULTATIF descend en fin de bloc à la fusion. Écrit ailleurs dans
+   * le tableau, l'ordre livré et l'ordre affiché divergeraient en silence — et c'est
+   * l'ordre affiché qui compte, puisque c'est celui qu'on fait.
+   */
+  it('les facultatifs sont déjà écrits en fin de séance', () => {
+    for (const s of PROGRAM) {
+      const ids = s.exercises.map(e => !!e.optionnel)
+      const premierFacultatif = ids.indexOf(true)
+      if (premierFacultatif < 0) continue
+      expect(ids.slice(premierFacultatif).every(Boolean), s.id).toBe(true)
+    }
+  })
+
+  it('une série au temps est toujours au poids de corps ou chargée explicitement', () => {
+    // Un « 30-45 s » sans poids de corps ni machine serait une durée sans charge :
+    // rien à enregistrer dans la colonne des kilos, et une courbe plate à vie.
+    for (const s of PROGRAM) {
+      for (const e of s.exercises) {
+        if (isTimed(e)) expect(!!e.bodyweight || !!e.machine, e.id).toBe(true)
       }
     }
   })
