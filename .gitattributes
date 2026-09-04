@@ -1,0 +1,24 @@
+# Fins de ligne normalisées à l'enregistrement.
+#
+# Sans ce fichier, un éditeur qui sauvegarde en CRLF fait apparaître TOUT le
+# fichier comme modifié : 563 lignes « changées » dans PortfolioHero.vue sans
+# qu'un caractère visible ait bougé. Le vrai changement se noie dedans, et une
+# revue devient impossible. Trente-neuf fichiers du dépôt étaient dans cet état.
+#
+# `text=auto` : git détecte le texte et le stocke en LF ; `eol=lf` : il le rend
+# aussi en LF dans la copie de travail. Windows n'en souffre pas — plus aucun
+# éditeur sérieux n'exige CRLF.
+* text=auto eol=lf
+
+# Binaires : aucune conversion, sous peine de les corrompre.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.avif binary
+*.ico  binary
+*.pdf  binary
+*.mp4  binary
+*.woff  binary
+*.woff2 binary

@@ -5,11 +5,12 @@
 [build]
   # `nuxt build` et NON `nuxt generate`.
   #
-  # `generate` prérend tout le site en fichiers statiques : il n'y a alors aucun
-  # serveur, et server/api/withings/* n'existe tout simplement pas — d'où le 404
-  # sur /api/withings/authorize. Avec `build`, Nitro détecte Netlify et déploie
-  # ces routes en fonctions, sur le même domaine. Les pages listées dans
-  # nitro.prerender restent prérendues : on ne perd rien du statique.
+  # Depuis le départ de /sport le site n'a plus aucune route serveur : « / » est
+  # prérendue et tout le reste est statique. `build` reste néanmoins la commande —
+  # Nitro produit le même statique, et la fonction Netlify qu'il déploie en plus ne
+  # sert plus que de repli. Passer à `generate` est possible, mais c'est un
+  # changement de mode de déploiement : à faire pour lui-même, pas au détour d'un
+  # ménage.
   command = "npm run build"
   publish = "dist/"
 
@@ -25,6 +26,25 @@
 # ============================================================
 # REDIRECTS
 # ============================================================
+
+# /sport a déménagé. L'application vit maintenant dans son propre dépôt
+# (damn-claude) et sur son propre domaine. On garde les anciennes adresses
+# vivantes : c'est depuis /sport que la PWA a été installée sur le téléphone, et
+# un raccourci d'écran d'accueil ne se met pas à jour tout seul.
+#
+# Ces règles sont AVANT la normalisation www : une entrée sur www.…/sport part
+# ainsi directement au bon endroit, sans rebond intermédiaire.
+[[redirects]]
+  from = "/sport"
+  to   = "https://damnclaude.gregoire-raturat.fr/"
+  status = 301
+  force  = true
+
+[[redirects]]
+  from = "/sport/*"
+  to   = "https://damnclaude.gregoire-raturat.fr/:splat"
+  status = 301
+  force  = true
 
 # Forcer HTTPS + www → non-www
 [[redirects]]
@@ -88,7 +108,7 @@
     Permissions-Policy           = "camera=(), microphone=(), geolocation=(), payment=()"
 
     # CSP — adapte les domaines si tu ajoutes des services tiers
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://www.googletagmanager.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://formsubmit.co https://api.netlify.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https: blob:; connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://stats.g.doubleclick.net https://www.googletagmanager.com; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://api.netlify.com;"
 
     # HSTS (HTTPS strict — active uniquement si ton domaine est 100% HTTPS)
     Strict-Transport-Security    = "max-age=31536000; includeSubDomains; preload"

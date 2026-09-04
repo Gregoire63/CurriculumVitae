@@ -5,7 +5,6 @@ export default defineNuxtConfig({
     modules: [
       '@vueuse/nuxt',
       '@vueuse/motion',
-      '@nuxt/icon',
       '@pinia/nuxt',
       '@nuxt/fonts',
       '@nuxt/image',
@@ -14,9 +13,6 @@ export default defineNuxtConfig({
       '@nuxtjs/robots',
     ],
     css: ['~/assets/css/main.css'],
-    // Écran de chargement des routes SPA (ssr:false, ex. /sport) : HTML statique
-    // affiché instantanément, spinner animé sur le compositeur (insensible au gel JS).
-    spaLoadingTemplate: 'spa-loading-template.html',
     gtag: {
         id: 'G-ZEHQTGC6EE',
         initMode: 'manual',
@@ -25,7 +21,6 @@ export default defineNuxtConfig({
             cookie_flags: 'SameSite=None;Secure',
         },
     },
-    imports: { dirs: ['./composables/*/*.{ts,js}'] },
     devtools: { enabled: true },
     pinia: {
         storesDirs: ['./stores/**', './custom-folder/stores/**'],
@@ -52,22 +47,6 @@ export default defineNuxtConfig({
         },
     },
 
-    runtimeConfig: {
-        // Withings : renseigné par NUXT_WITHINGS_CLIENT_ID / NUXT_WITHINGS_CLIENT_SECRET.
-        // Volontairement HORS de `public` — le secret ne doit jamais partir dans le bundle
-        // client. Tous les échanges de jetons passent par server/api/withings/.
-        withings: {
-            clientId: '',
-            clientSecret: '',
-        },
-        public: {
-            siteUrl: 'https://gregoire-raturat.fr',
-            // Charge des données de démo dans /sport UNIQUEMENT en local/test.
-            // Activé automatiquement en `nuxt dev` ; en prod, mettre
-            // NUXT_PUBLIC_SEED_TEST_DATA=true pour l'activer (sinon: jamais).
-            seedTestData: false,
-        },
-    },
     // Configuration des images
     //
     // `ipxStatic` et non `ipx` : les variantes sont fabriquées au BUILD et déposées
@@ -233,13 +212,6 @@ export default defineNuxtConfig({
             '/': {
                 prerender: true
             },
-            // /sport : appli privée pilotée par localStorage (aucun intérêt SSR) →
-            // rendu 100 % client (SPA) avec écran de chargement natif Nuxt. Évite le
-            // « gel » d'hydratation : plus de reconciliation d'un gros HTML SSR.
-            '/sport': {
-                ssr: false,
-                headers: { 'X-Robots-Tag': 'noindex' },
-            },
             // Headers de sécurité pour toutes les routes
             '/**': {
                 headers: {
@@ -262,11 +234,6 @@ export default defineNuxtConfig({
             sourcemap: false,
         },
         css: {
-            preprocessorOptions: {
-                scss: {
-                    additionalData: '@use "~/assets/scss/variables.scss" as *;',
-                },
-            },
             postcss: {
                 plugins: [
                     {
@@ -288,4 +255,4 @@ export default defineNuxtConfig({
             },
         },
     },
-})
+})

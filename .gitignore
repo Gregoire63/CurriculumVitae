@@ -32,5 +32,6 @@ lerna-debug.log*
 
 # Netlify
 .netlify
-# Coffre local (miroir, propositions et passkey en développement)
-.data/vault/
+
+# Corbeille du ménage : dossier temporaire, à supprimer une fois le commit passé
+_to_delete/

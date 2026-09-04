@@ -1,96 +1,73 @@
-# Nuxt3 Starter Simple
+# gregoire-raturat.fr
 
-A simple and clean Vue 3 starter project with TypeScript, Pinia, Vue Router, TailwindCSS, and Vite.
+Portfolio de Grégoire Raturat, développeur full-stack à Lyon.
+Nuxt 4, déployé sur Netlify à l'adresse <https://gregoire-raturat.fr>.
 
-This setup includes:
-
-- **Nuxt 3**: A vuejs framework for building modern web applications.
-- **Vue 3**: A progressive JavaScript framework for building user interfaces.
-- **Pinia**: State management for Vue.js with auto imports from `@pinia/nuxt`.
-- **Vue Router**: Router for single-page applications.
-- **Vite**: A next-generation frontend build tool.
-- **TailwindCSS**: A utility-first CSS framework.
-- **Prettier & ESLint**: Code formatting and linting for maintaining clean and consistent code.
-- **Husky & lint-staged**: Git hooks and automated formatting/linting before commits.
-
-
----
-
-## Features
-
-- 🚀 **Fast Development** with Vite.
-- 🔧 **Code Quality** with ESLint, Prettier, and TypeScript.
-- 💅 **TailwindCSS** for modern styling.
-- 🔒 **Pinia** for state management.
-- 🔄 **Vue Router** for managing views.
-- ⚙️ **Husky & lint-staged** for automated code formatting and linting.
-
----
-
-## Installation
-
-### 1. Clone this repository:
+## Démarrer
 
 ```bash
-git clone https://github.com/yourusername/nuxt3-starter-simple.git
-cd nuxt3-starter-simple
+nvm use          # Node 22.12 (cf. .nvmrc)
+npm install
+npm run dev      # http://localhost:3000
 ```
-
-### 2. Install dependencies:
 
 ```bash
-pnpm install
+npm run build    # build Nitro (Netlify) — « / » est prérendue
+npm run preview  # sert le build local
 ```
 
-### 3. Run the development server:
+## Ce qu'il y a dans le dépôt
 
-```bash
-pnpm dev
-```
+Une seule page. `pages/index.vue` empile les sections, chacune dans son composant
+`components/Portfolio*.vue` : héro, études de cas, autres projets, parcours,
+formation, compétences, contact.
 
-This project uses **ESLint** and **Prettier** for linting and formatting. It enforces consistent code style and helps avoid errors.
+Tout sauf le héro et la navigation est monté en `Lazy…` avec `hydrate-on-visible`
+(ou `hydrate-when` pour les modales). Les sections sont rendues côté serveur comme
+les autres — c'est l'hydratation qui attend d'être utile. Une page de 7 sections
+qui s'hydratent toutes au chargement paie l'intégralité de son JavaScript avant
+que le visiteur ait fait défiler quoi que ce soit.
 
-- **Lint**:
+`stores/portfolio.ts` (Pinia) tient l'état partagé : langue FR/EN, section active,
+modales, progression du défilement. Le contenu des sections y vit aussi — projets,
+expériences, compétences — plutôt que dans les templates : c'est ce qui rend la
+version anglaise possible sans dupliquer le balisage.
 
-    ```bash
-    pnpm lint
-    ```
+`components/CustomCursor.vue` remplace le curseur système, d'où le
+`cursor: none !important` global dans `app.vue`.
 
-- **Format**:
-    ```bash
-    pnpm format
-    ```
+## Détails qui se remarquent quand on y touche
 
-## 🐶 Husky & Lint-staged
+**Le formulaire de contact passe par Netlify Forms** (`data-netlify="true"`), pas
+par un service tiers. Il n'est détecté qu'à partir du HTML **déployé** : il faut
+donc que « / » reste prérendue, sinon le formulaire disparaît côté Netlify sans
+que rien ne casse à l'écran. `public/contact.html` est la page de confirmation.
 
-Husky and lint-staged are set up to ensure that any staged files are linted and formatted before they are committed. This ensures that the code in the repository is always clean and follows the defined standards.
+**Les images passent par `ipxStatic`**, pas `ipx` : les variantes sont fabriquées
+au build et servies comme des fichiers statiques. `ipx` embarquait sharp et
+libvips dans le bundle serveur — 38 Mo sur 48 — pour une photo de 20 Ko déjà en
+WebP.
 
-## 🔧 Configuration
+**Les polices sont en `display: optional`**, imposé jusque dans un petit plugin
+PostCSS de `nuxt.config.ts` qui réécrit les `swap` que `@nuxt/fonts` génère. Pas
+de saut de texte au chargement ; une police qui arrive trop tard est simplement
+ignorée pour cette visite.
 
-- ESLint configuration is in `eslint.config.js`
-- Prettier configuration is in `prettier.config.js`
-- Nuxt configuration is in `nuxt.config.ts`
-- Tailwind configuration is in `tailwind.config.js`
+**`useSEO()`** (dans `composables/`) produit les meta, l'Open Graph, le canonical
+et le JSON-LD. L'URL du site y est écrite en dur — il n'y a pas de
+`runtimeConfig` à renseigner, et rien à configurer pour lancer le projet.
 
-## 📚 Learning Resources
+## L'application de suivi a déménagé
 
-- [Nuxt 3 Documentation](https://nuxt.com/docs/getting-started/introduction)
-- [Vue 3 Documentation](https://v3.vuejs.org/)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [VueUse Documentation](https://vueuse.org/)
+Ce dépôt a longtemps hébergé, sous `/sport`, une application de suivi
+d'entraînement et de nutrition. Elle vit désormais dans son propre dépôt
+(`damn-claude`) et sur son propre domaine.
 
-## 📄 License
+`netlify.toml` redirige `/sport` et `/sport/*` en 301, et `public/sport-sw.js`
+est conservé, vidé : c'est ce qui désinstalle le service worker resté sur les
+appareils où la PWA avait été ajoutée à l'écran d'accueil. Les deux sont là pour
+les anciens raccourcis, pas pour le site.
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+## Licence
 
-## 🤝 Contributing
-
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](link-to-your-issues-page).
-
-## 🙏 Acknowledgements
-
-- [Nuxt.js team](https://nuxt.com/) for the amazing framework
-- [Tailwind CSS team](https://tailwindcss.com/) for the utility-first CSS framework
-- [VueUse team](https://vueuse.org/) for the collection of Vue Composition Utilities
-
-Happy coding! 🎉
+MIT — voir [LICENSE](LICENSE).
