@@ -16,15 +16,42 @@ const DISHRANK_WEB_URL = 'https://dishrank.fr'
 interface CaseStudy {
     id: string
     status: string
-    statusKind: 'live' | 'study'
+    statusKind: 'live' | 'study' | 'oss'
     meta: string
     title: string
     tagline: string
     summary: string
     tech: string[]
     hasStoreBadges?: boolean
+    // Liens affichés sous le résumé quand il n'y a pas de badges de stores
+    links?: Array<{ label: string; url: string; track: string }>
     screenshots?: Array<{ src: string; alt: string }>
 }
+
+// Toutes les captures sont au format téléphone 440×952 ; les dimensions réservent la place avant chargement
+const SHOT_WIDTH = 440
+const SHOT_HEIGHT = 952
+
+const BABYNAMED_SHOTS_FR = [
+    { src: '/projects/babynamed/choisir-a-deux.webp', alt: 'babyNamed — choisir un prénom à deux' },
+    { src: '/projects/babynamed/catalogue.webp', alt: 'babyNamed — catalogue de prénoms' },
+    { src: '/projects/babynamed/fiche-prenom.webp', alt: 'babyNamed — fiche du prénom Louise' },
+]
+const BABYNAMED_SHOTS_EN = [
+    { src: '/projects/babynamed/choisir-a-deux.webp', alt: 'babyNamed — choosing a name together' },
+    { src: '/projects/babynamed/catalogue.webp', alt: 'babyNamed — name catalogue' },
+    { src: '/projects/babynamed/fiche-prenom.webp', alt: 'babyNamed — page for the name Louise' },
+]
+const DAMNCLAUDE_SHOTS_FR = [
+    { src: '/projects/damnclaude/accueil.webp', alt: 'Damn Claude — tableau de bord du jour' },
+    { src: '/projects/damnclaude/seance.webp', alt: 'Damn Claude — séance en cours' },
+    { src: '/projects/damnclaude/propositions.webp', alt: 'Damn Claude — propositions de Claude à valider' },
+]
+const DAMNCLAUDE_SHOTS_EN = [
+    { src: '/projects/damnclaude/accueil.webp', alt: 'Damn Claude — today dashboard' },
+    { src: '/projects/damnclaude/seance.webp', alt: 'Damn Claude — workout in progress' },
+    { src: '/projects/damnclaude/propositions.webp', alt: 'Damn Claude — suggestions from Claude awaiting approval' },
+]
 
 const content = computed<{ label: string; title: string; description: string; cases: CaseStudy[] }>(() =>
     lang.isFrench
@@ -51,6 +78,19 @@ const content = computed<{ label: string; title: string; description: string; ca
                       ],
                   },
                   {
+                      id: 'babynamed',
+                      status: 'En production',
+                      statusKind: 'live',
+                      meta: '2026 · Développé en solo',
+                      title: 'babyNamed',
+                      tagline: 'Choisir le prénom de bébé à deux, à l’aveugle',
+                      summary:
+                          'Chacun trie les prénoms de son côté, sans voir les réponses de l’autre, et l’application ne montre que ceux que tout le monde aime. Derrière, 21 197 prénoms issus des naissances INSEE, enrichis de leur sens et de leur origine via Wikidata et le Wiktionnaire. Disponible en huit langues, avec connexion sans mot de passe et paiement intégré ; une coquille Expo prépare les versions iOS et Android.',
+                      tech: ['Nuxt', 'Cloudflare D1', 'Python', 'Expo'],
+                      links: [{ label: 'babynamed.fr', url: 'https://babynamed.fr', track: 'babynamed_web' }],
+                      screenshots: BABYNAMED_SHOTS_FR,
+                  },
+                  {
                       id: 'inbox',
                       status: 'En production',
                       statusKind: 'live',
@@ -60,6 +100,19 @@ const content = computed<{ label: string; title: string; description: string; ca
                       summary:
                           "Une messagerie qui regroupe WhatsApp, Instagram, Messenger et email au même endroit, construite sur Chatwoot. Des brouillons de réponse sont proposés à l'artiste, qui garde la main : chaque message est relu et validé avant envoi. Utilisée en production par des tatoueurs.",
                       tech: ['Chatwoot', 'Node.js', 'PostgreSQL', 'API Claude'],
+                  },
+                  {
+                      id: 'damnclaude',
+                      status: 'Open source',
+                      statusKind: 'oss',
+                      meta: '2026 · Projet personnel',
+                      title: 'Damn Claude',
+                      tagline: 'Un carnet de sport et de nutrition que Claude sait lire',
+                      summary:
+                          'Programme et séances, minuteur de repos, repas, recettes et courses, poids suivi avec une balance connectée : tout vit sur le téléphone, qui reste la source de vérité. Un serveur MCP laisse Claude consulter ces données et proposer des ajustements, acceptés ou refusés un par un : rien ne s’écrit sans validation. Open source, couvert par plus de 1 400 tests, chacun peut héberger sa propre instance.',
+                      tech: ['Nuxt 4', 'TypeScript', 'MCP', 'Passkeys'],
+                      links: [{ label: 'Code source', url: 'https://github.com/Gregoire63/damn-claude', track: 'damnclaude_github' }],
+                      screenshots: DAMNCLAUDE_SHOTS_FR,
                   },
               ],
           }
@@ -86,6 +139,19 @@ const content = computed<{ label: string; title: string; description: string; ca
                       ],
                   },
                   {
+                      id: 'babynamed',
+                      status: 'Live in production',
+                      statusKind: 'live',
+                      meta: '2026 · Built solo',
+                      title: 'babyNamed',
+                      tagline: 'Pick a baby name together, blind',
+                      summary:
+                          'Each partner sorts names on their own without seeing the other’s answers, and the app only shows the names everyone likes. Behind it: 21,197 first names from French INSEE birth data, enriched with meaning and origin from Wikidata and Wiktionary. Available in eight languages, with passwordless sign-in and built-in payments; an Expo shell is getting the iOS and Android versions ready.',
+                      tech: ['Nuxt', 'Cloudflare D1', 'Python', 'Expo'],
+                      links: [{ label: 'babynamed.fr', url: 'https://babynamed.fr', track: 'babynamed_web' }],
+                      screenshots: BABYNAMED_SHOTS_EN,
+                  },
+                  {
                       id: 'inbox',
                       status: 'Live in production',
                       statusKind: 'live',
@@ -95,6 +161,19 @@ const content = computed<{ label: string; title: string; description: string; ca
                       summary:
                           'A messaging tool that brings WhatsApp, Instagram, Messenger and email together in one place, built on Chatwoot. Draft replies are suggested to the artist, who stays in control: every message is reviewed and approved before it goes out. Used in production by tattoo artists.',
                       tech: ['Chatwoot', 'Node.js', 'PostgreSQL', 'Claude API'],
+                  },
+                  {
+                      id: 'damnclaude',
+                      status: 'Open source',
+                      statusKind: 'oss',
+                      meta: '2026 · Personal project',
+                      title: 'Damn Claude',
+                      tagline: 'A training and nutrition log that Claude can read',
+                      summary:
+                          'Programmes and sessions, rest timer, meals, recipes and shopping lists, weight tracked with a connected scale: everything lives on the phone, which stays the source of truth. An MCP server lets Claude read that data and suggest adjustments, accepted or rejected one by one: nothing is written without approval. Open source, covered by 1,400+ tests, and anyone can host their own instance.',
+                      tech: ['Nuxt 4', 'TypeScript', 'MCP', 'Passkeys'],
+                      links: [{ label: 'Source code', url: 'https://github.com/Gregoire63/damn-claude', track: 'damnclaude_github' }],
+                      screenshots: DAMNCLAUDE_SHOTS_EN,
                   },
               ],
           },
@@ -237,15 +316,39 @@ const trackOutbound = (label: string) => {
                             </a>
                         </div>
 
-                        <!-- Screenshots (DishRank) -->
+                        <!-- Liens (projets sans badges de stores) -->
+                        <div v-else-if="cs.links" class="store-badges">
+                            <a
+                                v-for="link in cs.links"
+                                :key="link.url"
+                                :href="link.url"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="web-link"
+                                @click="trackOutbound(link.track)"
+                            >
+                                {{ link.label }}
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path
+                                        d="M7 17L17 7M17 7H7M17 7V17"
+                                        stroke="currentColor"
+                                        stroke-width="2"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                    />
+                                </svg>
+                            </a>
+                        </div>
+
+                        <!-- Captures d'écran -->
                         <div v-if="cs.screenshots" class="case-shots">
                             <img
                                 v-for="shot in cs.screenshots"
                                 :key="shot.src"
                                 :src="shot.src"
                                 :alt="shot.alt"
-                                width="440"
-                                height="921"
+                                :width="SHOT_WIDTH"
+                                :height="SHOT_HEIGHT"
                                 loading="lazy"
                                 class="case-shot"
                             />
@@ -361,6 +464,12 @@ const trackOutbound = (label: string) => {
     color: #854d0e;
     background: #fef9c3;
     border: 1px solid #fde047;
+}
+
+.case-status.oss {
+    color: var(--accent-strong);
+    background: var(--accent-tertiary);
+    border: 1px solid var(--accent-secondary);
 }
 
 .case-date {

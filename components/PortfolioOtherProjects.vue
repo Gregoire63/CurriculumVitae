@@ -16,44 +16,6 @@ const { gtag } = useGtag()
 // On ne référence que des images .webp déjà présentes pour garder le site léger.
 const projects = computed<Project[]>(() => [
     {
-        name: 'Damn Claude',
-        summary: lang.isFrench
-            ? 'PWA de suivi sport et nutrition, synchronisée avec Withings, avec un serveur MCP qui laisse Claude proposer des ajustements.'
-            : 'Training and nutrition PWA synced with Withings, with an MCP server that lets Claude suggest adjustments.',
-        description: lang.isFrench
-            ? "Application PWA de suivi d'entraînement et de nutrition : programme et séances, repas, recettes et menus, synchronisation du poids via Withings, connexion par passkey (WebAuthn). Un serveur MCP expose les données à Claude, qui propose des modifications validées ensuite dans l'application."
-            : 'Training and nutrition tracking PWA: programme and sessions, meals, recipes and menus, weight sync via Withings, passkey (WebAuthn) login. An MCP server exposes the data to Claude, which suggests changes that are then approved in the app.',
-        year: '2026',
-        type: lang.isFrench ? 'Projet personnel' : 'Personal project',
-        url: 'https://damnclaude.gregoire-raturat.fr',
-        techno: [
-            { name: 'Nuxt', url: 'https://nuxt.com/' },
-            { name: 'MCP', url: 'https://modelcontextprotocol.io/' },
-            { name: 'WebAuthn', url: 'https://webauthn.guide/' },
-        ],
-        path: '/projects/damnclaude',
-        color: '139, 111, 92',
-    },
-    {
-        name: 'BabyName',
-        summary: lang.isFrench
-            ? "Aide au choix d'un prénom : 19 600 prénoms issus de l'INSEE, enrichis via Wikidata et le Wiktionnaire."
-            : 'First-name picker: 19,600 names from INSEE data, enriched from Wikidata and Wiktionary.',
-        description: lang.isFrench
-            ? "Aide au choix d'un prénom : pipeline Python sur les naissances INSEE 2023-2025, enrichies via Wikidata et le Wiktionnaire (19 600 prénoms, regroupement phonétique, niveau de confiance par signification, 17 pays). Enrichissement assisté par Claude avec relecture contradictoire."
-            : 'First-name picker: Python pipeline over INSEE births 2023-2025, enriched from Wikidata and Wiktionary (19,600 names, phonetic grouping, confidence level per meaning, 17 countries). Claude-assisted enrichment with adversarial review.',
-        year: '2026',
-        type: lang.isFrench ? 'Projet personnel' : 'Personal project',
-        url: 'https://github.com/Gregoire63/BabyName',
-        techno: [
-            { name: 'Python', url: 'https://www.python.org/' },
-            { name: 'TypeScript', url: 'https://www.typescriptlang.org/' },
-            { name: 'Claude', url: 'https://www.anthropic.com/claude' },
-        ],
-        path: '/projects/babyname',
-        color: '201, 178, 153',
-    },
-    {
         name: 'ETF PEA',
         description: lang.isFrench
             ? "Application web pour suivre et analyser les ETF éligibles au PEA : dashboards, comparaison de fonds et suivi de portefeuille d'investissement."

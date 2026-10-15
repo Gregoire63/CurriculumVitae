@@ -148,7 +148,7 @@ const handleNavigate = (section: SectionName) => {
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-item">
-                        <div class="stat-number">4</div>
+                        <div class="stat-number">5</div>
                         <div class="stat-label">{{ store.isFrench ? 'Apps en production' : 'Apps in production' }}</div>
                     </div>
                 </div>

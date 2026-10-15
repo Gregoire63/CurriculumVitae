@@ -123,15 +123,33 @@ const socialLinks = [
 </template>
 
 <style scoped>
+/* Brun profond de la palette, de la même famille que la section Compétences,
+   à la place d'un noir uni qui tranchait avec les tons chauds du site. */
 .portfolio-footer {
+    --footer-heading: #dccbb1;
     position: relative;
     width: 100%;
-    background: linear-gradient(135deg, var(--text-primary) 0%, #2a2826 100%);
+    overflow: hidden;
+    background:
+        radial-gradient(ellipse at 12% 0%, rgba(229, 219, 200, 0.14) 0%, transparent 55%),
+        linear-gradient(180deg, #5c4a3e 0%, #45372e 100%);
     color: var(--bg-primary);
     padding: var(--space-xl) var(--space-lg) var(--space-lg);
 }
 
+/* Même grain que la section Compétences */
+.portfolio-footer::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.05;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
 .footer-container {
+    position: relative;
+    z-index: 1;
     max-width: 1400px;
     margin: 0 auto;
 }
@@ -142,7 +160,7 @@ const socialLinks = [
     grid-template-columns: 2fr repeat(3, 1fr);
     gap: var(--space-xl);
     padding-bottom: var(--space-xl);
-    border-bottom: 1px solid rgba(254, 252, 248, 0.1);
+    border-bottom: 1px solid rgba(254, 252, 248, 0.14);
     margin-bottom: var(--space-lg);
 }
 
@@ -156,7 +174,7 @@ const socialLinks = [
 .footer-logo {
     width: 50px;
     height: 45px;
-    fill: var(--accent-primary);
+    fill: var(--accent-secondary);
     flex-shrink: 0;
     transition: fill 0.3s ease;
 }
@@ -196,7 +214,7 @@ const socialLinks = [
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    color: var(--accent-primary);
+    color: var(--footer-heading);
     font-weight: 700;
     margin: 0;
 }
@@ -257,8 +275,8 @@ const socialLinks = [
 
 @media (prefers-reduced-motion: no-preference) {
     .social-icon:hover {
-        background: var(--accent-primary);
-        color: var(--bg-primary);
+        background: var(--bg-primary);
+        color: var(--accent-strong);
         transform: translateY(-4px) scale(1.05);
     }
 }
@@ -276,7 +294,7 @@ const socialLinks = [
 .made-with {
     font-family: var(--font-mono);
     font-size: 0.875rem;
-    color: var(--bg-secondary);
+    color: rgba(245, 240, 232, 0.8);
     margin: 0;
 }
 

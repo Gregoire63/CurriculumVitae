@@ -20,10 +20,10 @@
 
 ## Réalisations
 - [DishRank](https://dishrank.fr) : application de notation de plats publiée sur l'App Store, Google Play et le web (React Native / Expo, Next.js, Supabase, TypeScript), 5 langues.
+- [babyNamed](https://babynamed.fr) : application pour choisir le prénom de bébé à deux, à l'aveugle. 21 197 prénoms issus des naissances INSEE, enrichis via Wikidata et le Wiktionnaire, huit langues (Nuxt, Cloudflare Workers et D1, Stripe, coquille Expo pour iOS et Android).
 - Messagerie omnicanale : boîte de réception unifiée en production pour tatoueurs, construite sur Chatwoot (WhatsApp, Instagram, Messenger, email), brouillons de réponse générés par l'API Claude et validés par l'artiste.
 - [ETF PEA](https://etf.gregoire-raturat.fr) : application web de suivi et d'analyse des ETF éligibles au PEA (Next.js).
-- [Damn Claude](https://damnclaude.gregoire-raturat.fr) : PWA de suivi d'entraînement et de nutrition (Nuxt), synchronisation Withings, passkeys, serveur MCP pour Claude.
-- [BabyName](https://github.com/Gregoire63/BabyName) : aide au choix d'un prénom, pipeline Python sur les données INSEE / Wikidata / Wiktionnaire, enrichissement assisté par Claude.
+- [Damn Claude](https://github.com/Gregoire63/damn-claude) : suivi d'entraînement et de nutrition open source et local-first (Nuxt 4), balance Withings, passkeys, serveur MCP qui laisse Claude proposer des ajustements validés un par un.
 
 ## Compétences
 - Frontend : Vue.js 3 / Nuxt, React / Next.js, TypeScript, Vuetify, Tailwind CSS, Pinia, Vite, PWA offline-first
