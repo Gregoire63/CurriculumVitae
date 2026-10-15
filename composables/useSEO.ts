@@ -145,7 +145,7 @@ export const useSEO = (options: SEOOptions = {}) => {
             name: config.author,
             jobTitle: 'Développeur Full-Stack',
             url: config.baseUrl,
-            image: `${SITE_URL}/photoCV.webp`,
+            image: `${SITE_URL}/photoCV2.webp`,
             sameAs: [config.github, config.linkedin, config.malt],
             worksFor: {
                 '@type': 'Organization',

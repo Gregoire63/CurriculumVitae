@@ -82,7 +82,7 @@ const handleNavigate = (section: SectionName) => {
             <!-- Photo Profile -->
             <div ref="photoRef" class="hero-photo">
                 <div class="photo-frame">
-                    <NuxtImg src="/photoCV.webp" alt="Grégoire Raturat" class="profile-image" loading="eager" fetchpriority="high" sizes="sm:200px md:300px lg:400px" format="webp" quality="80" />
+                    <NuxtImg src="/photoCV2.webp" alt="Grégoire Raturat" class="profile-image" loading="eager" fetchpriority="high" sizes="sm:200px md:300px lg:400px" format="webp" quality="80" />
                     <div class="photo-overlay"></div>
                 </div>
             </div>
