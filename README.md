@@ -33,10 +33,42 @@ modales, progression du défilement. Le contenu des sections y vit aussi — pro
 expériences, compétences — plutôt que dans les templates : c'est ce qui rend la
 version anglaise possible sans dupliquer le balisage.
 
-`components/CustomCursor.vue` remplace le curseur système, d'où le
-`cursor: none !important` global dans `app.vue`.
+`components/CustomCursor.vue` remplace le curseur système, mais seulement sur
+grand écran, à la souris, sans préférence « animations réduites ». Il pose alors
+la classe `has-custom-cursor` sur `<html>`, et c'est elle seule qui masque le
+curseur système (`app.vue`). Partout ailleurs, le curseur normal reste visible.
+
+## Le CV PDF
+
+`public/cv/CV_Gregoire_Raturat.pdf` (FR) et `CV_Gregoire_Raturat_EN.pdf` (EN) ne sont
+pas édités à la main : ils sont générés depuis `cv-source/fr.html` et
+`cv-source/en.html` (mise en page commune dans `cv-source/cv.css`) par Chrome
+headless.
+
+```bash
+scripts/build-cv.sh      # régénère les deux PDF (Chrome + réseau pour les polices)
+scripts/build-cv.sh og   # régénère l'image de partage public/og-image.jpg / .webp
+```
+
+Le contenu du CV vit donc à deux endroits : les composants `PortfolioCv.vue` /
+`PortfolioSkills.vue` pour le site, et `cv-source/` pour le PDF. Une expérience qui
+change se met à jour dans les deux. Le bouton « Télécharger le CV » sert le PDF de
+la langue courante.
 
 ## Détails qui se remarquent quand on y touche
+
+**Les sections hydratées en différé passent par `useLang()`**, pas par
+`store.isFrench`. « / » est prérendue en français ; une section qui s'hydrate
+alors que le visiteur est déjà en anglais doit d'abord se rendre en français,
+puis basculer après son montage. Sinon Vue hydrate un DOM qui ne correspond pas,
+et en production il ne corrige que les textes : les `alt`, `href`, `placeholder`
+restaient en français. Les composants hydratés tout de suite (héros, navigation)
+et les fenêtres montées à l'ouverture (menu, modales) gardent `store.isFrench`.
+
+**Google Analytics attend le consentement.** `components/CookieConsent.vue`
+affiche le bandeau à la première visite et ne charge gtag qu'après « Accepter ».
+Le choix est gardé 6 mois (`portfolio-consent` dans le localStorage) ; le lien
+« Gestion des cookies » du pied de page rouvre le bandeau.
 
 **Le formulaire de contact passe par Netlify Forms** (`data-netlify="true"`), pas
 par un service tiers. Il n'est détecté qu'à partir du HTML **déployé** : il faut

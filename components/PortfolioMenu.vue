@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import type { SectionName } from '~/stores/portfolio'
 import { usePreferredReducedMotion } from '@vueuse/core'
-import { usePortfolioStore, type SectionName } from '~/stores/portfolio'
+import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 const preferredMotion = usePreferredReducedMotion()
@@ -18,6 +19,11 @@ const handleNavigate = (section: SectionName) => {
     store.navigateToSection(section)
 }
 
+// Échap ferme le menu
+useEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && store.isMenuOpen) store.setMenuOpen(false)
+})
+
 const openPrivacyPolicy = () => {
     store.setPrivacyPolicyOpen(true)
     store.setMenuOpen(false)
@@ -27,13 +33,23 @@ const openPrivacyPolicy = () => {
 <template>
     <Transition name="menu">
         <div v-if="store.isMenuOpen" class="menu-overlay" @click="store.setMenuOpen(false)">
-            <div class="menu-panel" @click.stop>
+            <div
+                class="menu-panel"
+                role="dialog"
+                aria-modal="true"
+                :aria-label="store.isFrench ? 'Menu principal' : 'Main menu'"
+                @click.stop
+            >
                 <!-- Menu Header -->
                 <div class="menu-header">
                     <div class="menu-logo">
                         <span class="logo-initial">GR</span>
                     </div>
-                    <button class="menu-close" aria-label="Close menu" @click="store.setMenuOpen(false)">
+                    <button
+                        class="menu-close"
+                        :aria-label="store.isFrench ? 'Fermer le menu' : 'Close menu'"
+                        @click="store.setMenuOpen(false)"
+                    >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                             <path
                                 d="M18 6L6 18M6 6L18 18"

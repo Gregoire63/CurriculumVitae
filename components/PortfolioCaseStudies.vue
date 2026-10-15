@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, ref } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
 
-const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
 const preferredMotion = usePreferredReducedMotion()
 // usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
 const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
 const { gtag } = useGtag()
 
-// TODO(Grégoire) : remplacer par les liens directs App Store / Google Play de DishRank
-const DISHRANK_APP_STORE_URL = 'https://dishrank.fr'
-const DISHRANK_PLAY_STORE_URL = 'https://dishrank.fr'
+const DISHRANK_APP_STORE_URL = 'https://apps.apple.com/fr/app/dishrank/id6761752556'
+const DISHRANK_PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.dishrank.app'
 const DISHRANK_WEB_URL = 'https://dishrank.fr'
 
 interface CaseStudy {
@@ -28,7 +27,7 @@ interface CaseStudy {
 }
 
 const content = computed<{ label: string; title: string; description: string; cases: CaseStudy[] }>(() =>
-    store.isFrench
+    lang.isFrench
         ? {
               label: 'Sélection',
               title: 'Réalisations',
@@ -197,8 +196,8 @@ const trackOutbound = (label: string) => {
                                     />
                                 </svg>
                                 <span class="store-text">
-                                    <small>{{ store.isFrench ? 'Télécharger dans' : 'Download on the' }}</small>
-                                    <strong>{{ store.isFrench ? "l'App Store" : 'App Store' }}</strong>
+                                    <small>{{ lang.isFrench ? 'Télécharger dans' : 'Download on the' }}</small>
+                                    <strong>{{ lang.isFrench ? "l'App Store" : 'App Store' }}</strong>
                                 </span>
                             </a>
                             <a
@@ -214,7 +213,7 @@ const trackOutbound = (label: string) => {
                                     />
                                 </svg>
                                 <span class="store-text">
-                                    <small>{{ store.isFrench ? 'Disponible sur' : 'Get it on' }}</small>
+                                    <small>{{ lang.isFrench ? 'Disponible sur' : 'Get it on' }}</small>
                                     <strong>Google Play</strong>
                                 </span>
                             </a>

@@ -3,6 +3,8 @@ import { defineStore } from 'pinia'
 export interface Project {
     name: string
     description: string
+    // Version courte pour la liste « Autres projets » ; la modale affiche `description`
+    summary?: string
     year: string
     type: string
     url?: string
@@ -31,40 +33,52 @@ export type Section = {
     label: string
 }
 
+export type Language = 'fr' | 'en'
+
+// Langue du HTML prérendu. Les sections hydratées en différé s'y alignent (cf. composables/useLang.ts).
+export const DEFAULT_LANGUAGE: Language = 'fr'
+
+// Libellés des sections, partagés par le store et par les composants qui doivent
+// choisir eux-mêmes leur langue de rendu (pied de page hydraté en différé).
+export function buildSections(fr: boolean): Section[] {
+    return [
+        { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
+        { id: 'cases', number: '02', label: fr ? 'Réalisations' : 'Selected work' },
+        { id: 'projects', number: '03', label: fr ? 'Projets' : 'Projects' },
+        { id: 'cv', number: '04', label: fr ? 'Parcours' : 'Career' },
+        { id: 'about', number: '05', label: fr ? 'Formation' : 'Education' },
+        { id: 'skills', number: '06', label: fr ? 'Compétences' : 'Skills' },
+        { id: 'contact', number: '07', label: 'Contact' },
+    ]
+}
+
 interface PortfolioState {
     currentSection: SectionName
     isMenuOpen: boolean
-    language: 'fr' | 'en'
+    language: Language
     scrollProgress: number
     activeProject: Project | null
     isScrollLocked: boolean
     isPrivacyPolicyOpen: boolean
+    isConsentOpen: boolean
 }
 
 export const usePortfolioStore = defineStore('portfolio', {
     state: (): PortfolioState => ({
         currentSection: 'hero',
         isMenuOpen: false,
-        language: 'fr',
+        language: DEFAULT_LANGUAGE,
         scrollProgress: 0,
         activeProject: null,
         isScrollLocked: false,
         isPrivacyPolicyOpen: false,
+        isConsentOpen: false,
     }),
 
     getters: {
         isFrench: (state) => state.language === 'fr',
-        sections(state):Section[]{
-            const fr = state.language === 'fr'
-            return [
-                { id: 'hero', number: '01', label: fr ? 'Accueil' : 'Home' },
-                { id: 'cases', number: '02', label: fr ? 'Réalisations' : 'Selected work' },
-                { id: 'projects', number: '03', label: fr ? 'Projets' : 'Projects' },
-                { id: 'cv', number: '04', label: fr ? 'Parcours' : 'Career' },
-                { id: 'about', number: '05', label: fr ? 'Formation' : 'Education' },
-                { id: 'skills', number: '06', label: fr ? 'Compétences' : 'Skills' },
-                { id: 'contact', number: '07', label: 'Contact' },
-            ]
+        sections(state): Section[] {
+            return buildSections(state.language === 'fr')
         },
         // Barre de navigation desktop (le menu plein écran liste tout).
         // « Projets » pointe vers les études de cas et chapeaute toute la zone projets.
@@ -112,7 +126,7 @@ export const usePortfolioStore = defineStore('portfolio', {
             }
         },
 
-        setLanguage(lang: 'fr' | 'en') {
+        setLanguage(lang: Language) {
             this.language = lang
             if (import.meta.client) {
                 localStorage.setItem('portfolio-lang', lang)
@@ -201,6 +215,9 @@ export const usePortfolioStore = defineStore('portfolio', {
                     block: 'start',
                 })
             }, 300)
+        },
+        setConsentOpen(isOpen: boolean) {
+            this.isConsentOpen = isOpen
         },
         setPrivacyPolicyOpen(isOpen: boolean) {
             this.isPrivacyPolicyOpen = isOpen

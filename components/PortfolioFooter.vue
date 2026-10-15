@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { usePortfolioStore } from '~/stores/portfolio'
+import { buildSections, usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
+const sections = computed(() => buildSections(lang.isFrench))
 
 const currentYear = new Date().getFullYear()
 
@@ -43,45 +46,53 @@ const socialLinks = [
                     </svg>
                     <div class="footer-text">
                         <h3 class="footer-name">Grégoire Raturat</h3>
-                        <p class="footer-tagline">{{ store.isFrench ? 'Développeur Full-Stack' : 'Full-Stack Developer' }}</p>
+                        <p class="footer-tagline">{{ lang.isFrench ? 'Développeur Full-Stack' : 'Full-Stack Developer' }}</p>
                     </div>
                 </div>
 
                 <!-- Quick links -->
                 <div class="footer-links">
                     <h4 class="footer-heading">
-                        {{ store.isFrench ? 'Navigation' : 'Navigation' }}
+                        {{ lang.isFrench ? 'Navigation' : 'Navigation' }}
                     </h4>
                     <nav class="footer-nav">
-                        <button
-                            v-for="section in store.sections"
+                        <a
+                            v-for="section in sections"
                             :key="section.id"
-                            @click="store.navigateToSection(section.id)"
+                            :href="`#${section.id}`"
+                            @click.prevent="store.navigateToSection(section.id)"
                         >
                             {{ section.label }}
-                        </button>
+                        </a>
                     </nav>
                 </div>
 
                 <!-- Legal -->
                 <div class="footer-links">
-                    <h4 class="footer-heading">{{ store.isFrench ? 'Légal' : 'Legal' }}</h4>
+                    <h4 class="footer-heading">{{ lang.isFrench ? 'Légal' : 'Legal' }}</h4>
                     <nav class="footer-nav">
                         <button @click="store.setPrivacyPolicyOpen(true)">
-                            {{ store.isFrench ? 'Politique de confidentialité' : 'Privacy Policy' }}
+                            {{ lang.isFrench ? 'Politique de confidentialité' : 'Privacy Policy' }}
                         </button>
                         <button @click="store.setPrivacyPolicyOpen(true)">
-                            {{ store.isFrench ? 'Mentions légales' : 'Legal Notice' }}
+                            {{ lang.isFrench ? 'Mentions légales' : 'Legal Notice' }}
                         </button>
-                        <a href="/cv/CV_Gregoire_Raturat.pdf" target="_blank">
-                            {{ store.isFrench ? 'Télécharger CV' : 'Download Resume' }}
+                        <button @click="store.setConsentOpen(true)">
+                            {{ lang.isFrench ? 'Gestion des cookies' : 'Cookie settings' }}
+                        </button>
+                        <a
+                            :href="lang.isFrench ? '/cv/CV_Gregoire_Raturat.pdf' : '/cv/CV_Gregoire_Raturat_EN.pdf'"
+                            target="_blank"
+                            rel="noopener"
+                        >
+                            {{ lang.isFrench ? 'Télécharger le CV' : 'Download resume' }}
                         </a>
                     </nav>
                 </div>
 
                 <!-- Social -->
                 <div class="footer-links">
-                    <h4 class="footer-heading">{{ store.isFrench ? 'Suivez-moi' : 'Follow me' }}</h4>
+                    <h4 class="footer-heading">{{ lang.isFrench ? 'Suivez-moi' : 'Follow me' }}</h4>
                     <div class="footer-social">
                         <a
                             v-for="social in socialLinks"
@@ -104,7 +115,7 @@ const socialLinks = [
             <div class="footer-bottom">
                 <p class="copyright">
                     © {{ currentYear }} Grégoire Raturat.
-                    {{ store.isFrench ? 'Tous droits réservés.' : 'All rights reserved.' }}
+                    {{ lang.isFrench ? 'Tous droits réservés.' : 'All rights reserved.' }}
                 </p>
             </div>
         </div>

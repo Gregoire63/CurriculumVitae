@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { usePortfolioStore, type SectionName } from '~/stores/portfolio'
+import type { SectionName } from '~/stores/portfolio'
+import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 
@@ -19,7 +19,12 @@ const isActive = (id: SectionName) => {
     <nav class="portfolio-nav" :class="{ scrolled: store.scrollProgress > 5 }">
         <div class="nav-container">
             <!-- Logo -->
-            <button class="nav-logo" aria-label="Retour à l'accueil" @click="handleNavClick('hero')">
+            <a
+                href="#hero"
+                class="nav-logo"
+                :aria-label="store.isFrench ? 'Retour en haut de page' : 'Back to top'"
+                @click.prevent="handleNavClick('hero')"
+            >
                 <svg viewBox="0 0 240 219" xmlns="http://www.w3.org/2000/svg" class="logo-svg">
                     <g transform="translate(0, 219) scale(0.1, -0.1)">
                         <path
@@ -30,38 +35,41 @@ const isActive = (id: SectionName) => {
                         />
                     </g>
                 </svg>
-            </button>
+            </a>
 
             <!-- Desktop Navigation -->
             <div class="nav-links desktop-only">
-                <button
+                <a
                     v-for="section in store.navSections"
                     :key="section.id"
+                    :href="`#${section.id}`"
                     class="nav-link"
                     :class="{ active: isActive(section.id) }"
-                    @click="handleNavClick(section.id)"
+                    :aria-current="isActive(section.id) ? 'location' : undefined"
+                    @click.prevent="handleNavClick(section.id)"
                 >
                     {{ section.label }}
                     <span class="nav-link-underline"></span>
-                </button>
+                </a>
             </div>
 
             <!-- Language Toggle & Menu Button -->
             <div class="nav-actions">
+                <!-- Les deux langues sont visibles, l'active est remplie : on sait où l'on est et où l'on va -->
                 <button
                     class="lang-toggle"
-                    :aria-label="store.isFrench ? 'Switch to English' : 'Passer en Français'"
+                    :aria-label="store.isFrench ? 'Switch to English' : 'Passer en français'"
                     @click="store.toggleLanguage"
                 >
-                    <Transition name="lang-flip" mode="out-in">
-                        <span :key="store.language" class="lang-code">{{ store.language.toUpperCase() }}</span>
-                    </Transition>
+                    <span class="lang-option" :class="{ active: store.isFrench }" aria-hidden="true">FR</span>
+                    <span class="lang-option" :class="{ active: !store.isFrench }" aria-hidden="true">EN</span>
                 </button>
 
                 <button
                     class="menu-toggle"
                     :class="{ active: store.isMenuOpen }"
-                    aria-label="Toggle menu"
+                    :aria-label="store.isFrench ? 'Ouvrir le menu' : 'Open menu'"
+                    :aria-expanded="store.isMenuOpen"
                     @click="store.toggleMenu"
                 >
                     <span class="menu-line"></span>
@@ -108,6 +116,7 @@ const isActive = (id: SectionName) => {
     gap: var(--space-sm);
     background: none;
     border: none;
+    text-decoration: none;
     padding: var(--space-xs);
     transition: transform 0.3s var(--ease-bounce);
 }
@@ -143,6 +152,8 @@ const isActive = (id: SectionName) => {
 
 .nav-link {
     position: relative;
+    display: inline-block;
+    text-decoration: none;
     font-family: var(--font-mono);
     font-size: 0.875rem;
     text-transform: uppercase;
@@ -187,66 +198,37 @@ const isActive = (id: SectionName) => {
 }
 
 .lang-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     font-weight: 700;
-    color: var(--text-primary);
     background: var(--bg-accent);
     border: none;
-    border-radius: 20px;
-    padding: var(--space-xs) var(--space-sm);
+    border-radius: 999px;
     cursor: pointer;
-    transition: all 0.3s var(--ease-smooth);
-    perspective: 400px;
-    overflow: hidden;
 }
 
-.lang-toggle:hover {
+.lang-option {
+    padding: 0.3rem 0.6rem;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    line-height: 1;
+    transition:
+        background 0.25s var(--ease-smooth),
+        color 0.25s var(--ease-smooth);
+}
+
+.lang-option.active {
     background: var(--accent-primary);
     color: var(--bg-primary);
-    transform: scale(1.05);
 }
 
-.lang-toggle:active {
-    transform: scale(0.92);
-    transition-duration: 0.1s;
-}
-
-.lang-code {
-    display: block;
-    transform-origin: center;
-    will-change: transform, opacity;
-}
-
-/* Flip animation on language change */
-.lang-flip-enter-active,
-.lang-flip-leave-active {
-    transition:
-        transform 0.4s var(--ease-bounce),
-        opacity 0.25s var(--ease-smooth);
-}
-
-.lang-flip-enter-from {
-    opacity: 0;
-    transform: rotateX(-90deg) translateY(-6px);
-}
-
-.lang-flip-leave-to {
-    opacity: 0;
-    transform: rotateX(90deg) translateY(6px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .lang-flip-enter-active,
-    .lang-flip-leave-active {
-        transition: opacity 0.15s linear;
-    }
-    .lang-flip-enter-from,
-    .lang-flip-leave-to {
-        transform: none;
-    }
-    .lang-toggle:active {
-        transform: none;
+@media (hover: hover) and (pointer: fine) {
+    .lang-toggle:hover .lang-option:not(.active) {
+        color: var(--text-primary);
     }
 }
 

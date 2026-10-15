@@ -2,9 +2,9 @@
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { useMotion } from '@vueuse/motion'
 import { computed, ref } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
 
-const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
 const preferredMotion = usePreferredReducedMotion()
 // usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
 const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
@@ -19,149 +19,157 @@ interface Experience {
     description: string[]
     stack?: string[]
     current?: boolean
+    // Activité menée en parallèle du poste principal (enseignement, freelance)
+    side?: boolean
 }
 
 const experiences = computed<Experience[]>(() => [
     {
-        period: store.isFrench ? 'Juin 2026 - Présent' : 'Jun. 2026 - Present',
-        title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
+        period: lang.isFrench ? 'Juin 2026 - Aujourd’hui' : 'Jun. 2026 - Present',
+        title: lang.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SOCOTEC',
         companyUrl: 'https://www.socotec.com/',
-        location: store.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
+        location: lang.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
         current: true,
-        description: store.isFrench
+        description: lang.isFrench
             ? [
-                  'Développement full-stack au sein de l’équipe logicielle du groupe SOCOTEC (testing, inspection & certification)',
-                  'Applications métier dans l’écosystème Vue 3 / TypeScript et APIs',
-                  'Contribution à l’outillage interne et aux composants partagés (socotec.io)',
-                  'Qualité de code, tests et intégration continue',
+                  'Développement de l’application de mesure d’émissions atmosphériques du groupe : PWA offline-first (IndexedDB) pour les campagnes de terrain, bons de commande laboratoire et rapports réglementaires',
+                  'Migration du front de Vue 2 / Vuetify 2 / Vuex / webpack vers Vue 3 / Vuetify 3 / Pinia / Vite (≈ 300 fichiers), puis stabilisation en production',
+                  'Génération asynchrone des rapports : passage du service de rapports de gRPC à REST, workers Celery, événements Kafka, déploiement GitOps (FluxCD / Kubernetes)',
+                  'Retrait de la couche gRPC du back Django au profit d’APIs REST documentées (DRF, OpenAPI)',
+                  'Back Django / DRF : moteur de calcul et détection d’écarts réglementaires, fiabilisation (timeouts, requêtes N+1, tâches asynchrones)',
+                  'Outillage IA de l’équipe : contribution au plugin Claude Code interne (règles de revue sécurité / DRF / migrations, hook anti-secrets, audit de production)',
               ]
             : [
-                  'Full-stack development within SOCOTEC’s software team (testing, inspection & certification group)',
-                  'Business applications in the Vue 3 / TypeScript ecosystem and APIs',
-                  'Contribution to internal tooling and shared components (socotec.io)',
-                  'Code quality, testing and continuous integration',
-              ],
-        stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'PostgreSQL', 'Docker', 'CI/CD'],
-    },
-    {
-        period: store.isFrench ? 'Nov. 2025 - Juin 2026' : 'Nov. 2025 - Jun. 2026',
-        title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
-        company: 'SOGEDO',
-        location: 'Lyon',
-        description: store.isFrench
-            ? [
-                  'Refonte des plugins internes (auth, core, component) de Vue 2 vers Vue 3 (Composition API)',
-                  'Migration progressive avec amélioration de l’architecture et suppression de dette technique',
-                  'Introduction de TypeScript et standardisation du typage sur l’ensemble des nouveaux modules',
-                  'Création d’un package npm privé interne avec CLI pour générer du code et initialiser automatiquement les projets',
-                  'Mise en place de pipelines CI/CD GitLab avec GitLab Runner (lint, tests, build, versioning, déploiement)',
-                  'Automatisation des builds et des contrôles qualité pour sécuriser les mises en production',
-                  'Amélioration des performances front et de la maintenabilité du code',
-                  'Collaboration avec équipes backend .NET et équipes métiers',
-              ]
-            : [
-                  'Refactor of internal plugins (auth, core, component) from Vue 2 to Vue 3 (Composition API)',
-                  'Progressive migration with architectural improvements and technical debt reduction',
-                  'Introduction of TypeScript and standardization of strong typing across new modules',
-                  'Creation of a private internal npm package with CLI tools to scaffold code and initialize project structures',
-                  'Implementation of GitLab CI/CD pipelines with GitLab Runner (linting, testing, build, versioning, deployment)',
-                  'Automation of builds and quality checks to secure production releases',
-                  'Front-end performance and maintainability improvements',
-                  'Close collaboration with .NET backend and business teams',
+                  'Development of the group’s atmospheric-emission measurement application: offline-first PWA (IndexedDB) for field campaigns, lab order forms and regulatory reports',
+                  'Front-end migration from Vue 2 / Vuetify 2 / Vuex / webpack to Vue 3 / Vuetify 3 / Pinia / Vite (≈ 300 files), then stabilisation in production',
+                  'Asynchronous report generation: report service moved from gRPC to REST, Celery workers, Kafka events, GitOps deployment (FluxCD / Kubernetes)',
+                  'Decommissioning of the gRPC layer of the Django back end in favour of documented REST APIs (DRF, OpenAPI)',
+                  'Django / DRF back end: calculation engine and regulatory deviation detection, hardening (timeouts, N+1 queries, async tasks)',
+                  'Team AI tooling: contributions to the internal Claude Code plugin (security / DRF / migration review rules, secrets hook, production audit)',
               ],
         stack: [
             'Vue.js 3',
-            'TypeScript',
-            'Node.js',
-            'Vitest / Jest',
-            'GitLab CI/CD',
-            '.NET',
-            'Private npm package',
-            'CLI tooling',
+            'Vuetify',
+            'Vite',
+            'Pinia',
+            'Django / DRF',
+            'Celery',
+            'Kafka',
+            'PostgreSQL',
+            'Docker',
+            'Kubernetes / FluxCD',
+            'GitLab CI',
+            'Sentry',
         ],
     },
     {
-        period: 'Oct. 2023 - Nov. 2025',
-        title: store.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
-        company: 'SYSTRA',
-        companyUrl: 'https://www.systra.com/',
+        period: lang.isFrench ? 'Nov. 2025 - Juin 2026' : 'Nov. 2025 - Jun. 2026',
+        title: lang.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
+        company: 'SOGEDO',
         location: 'Lyon',
-        description: store.isFrench
+        description: lang.isFrench
             ? [
-                  "Architecture d'applications SIG traitant +10M de parcelles cadastrales",
-                  'Pipeline CI/CD Docker GitLab avec tests automatisés',
-                  "Intégration de modèles IA pour détection d'objets sur images aériennes",
-                  "Refonte modules d'authentification et gestion des droits",
-                  'Automatisation de processus métiers → gain de 30% de temps',
+                  'Refonte des plugins internes (auth, core, composants) de Vue 2 vers Vue 3 (Composition API) : migration progressive et réduction de la dette technique',
+                  'Introduction de TypeScript et standardisation du typage sur l’ensemble des nouveaux modules',
+                  'Package npm privé avec CLI pour générer du code et initialiser les projets',
+                  'Pipelines GitLab CI/CD avec GitLab Runner (lint, tests, build, versioning, déploiement) pour sécuriser les mises en production',
+                  'Collaboration avec les équipes backend .NET et les équipes métier',
               ]
             : [
-                  'Architecture of GIS applications processing +10M cadastral parcels',
-                  'Docker GitLab CI/CD pipeline with automated tests',
-                  'Integration of AI models for object detection on aerial images',
-                  'Redesign of authentication and rights management modules',
-                  'Business process automation → 30% time savings',
+                  'Refactor of the internal plugins (auth, core, components) from Vue 2 to Vue 3 (Composition API): progressive migration and technical debt reduction',
+                  'Introduction of TypeScript and standardised typing across all new modules',
+                  'Private npm package with a CLI to scaffold code and initialise projects',
+                  'GitLab CI/CD pipelines with GitLab Runner (lint, tests, build, versioning, deployment) to secure production releases',
+                  'Close collaboration with the .NET back-end and business teams',
               ],
-        stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'PostGIS', 'Docker', 'GitLab CI/CD'],
+        stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'Vitest / Jest', 'GitLab CI/CD', '.NET', 'npm privé', 'CLI'],
+    },
+    {
+        period: 'Oct. 2023 - Nov. 2025',
+        title: lang.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
+        company: lang.isFrench ? 'SYSTRA (ex-Modaal)' : 'SYSTRA (formerly Modaal)',
+        companyUrl: 'https://www.systra.com/',
+        location: 'Lyon',
+        description: lang.isFrench
+            ? [
+                  'Architecture d’applications SIG traitant plus de 10 millions de parcelles cadastrales (Vue 3, Node.js, PostGIS)',
+                  'Automatisation de processus métier en Python et PowerShell : environ 30 % de temps gagné',
+                  'Intégration de modèles IA de détection d’objets sur images aériennes',
+                  'Refonte de l’authentification et de la gestion des droits (RBAC)',
+                  'Pipelines CI/CD Docker / GitLab avec tests automatisés et déploiements continus',
+                  'Travail direct avec les Product Owners, structuration des pratiques Agile',
+              ]
+            : [
+                  'Architecture of GIS applications handling 10M+ cadastral parcels (Vue 3, Node.js, PostGIS)',
+                  'Business process automation in Python and PowerShell: about 30% time saved',
+                  'Integration of AI object-detection models on aerial imagery',
+                  'Redesign of authentication and rights management (RBAC)',
+                  'Docker / GitLab CI/CD pipelines with automated tests and continuous deployment',
+                  'Direct work with Product Owners, structuring of Agile practices',
+              ],
+        stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'PostGIS', 'Python', 'Docker', 'GitLab CI/CD'],
     },
     {
         period: '2020 - 2023',
-        title: store.isFrench ? 'Apprenti Développeur' : 'Apprentice Developer',
+        title: lang.isFrench ? 'Apprenti Développeur' : 'Apprentice Developer',
         company: 'Modaal',
         location: 'Lyon',
-        description: store.isFrench
+        description: lang.isFrench
             ? [
-                  "Conception architecture complète d'une application SIG",
-                  'Développement de processus ETL Python pour fichiers massifs (+5Go)',
-                  'API REST sécurisées avec validateurs de schéma',
-                  'Création de composants Vue.js réutilisables',
+                  'Conception de l’architecture complète d’une application SIG (Vue.js / Express / PostgreSQL)',
+                  'Processus ETL Python sur des fichiers massifs de plus de 5 Go (cadastre, Sitadel, valeurs foncières)',
+                  'API REST sécurisées avec validation de schéma sur données géospatiales',
+                  'Rédaction de spécifications fonctionnelles et techniques avec l’équipe produit',
               ]
             : [
-                  'Complete architecture design of a GIS application',
-                  'Development of Python ETL processes for massive files (+5GB)',
-                  'Secured REST APIs with schema validators',
-                  'Creation of reusable Vue.js components',
+                  'Complete architecture of a GIS application (Vue.js / Express / PostgreSQL)',
+                  'Python ETL processes over 5 GB+ files (cadastre, building permits, property values)',
+                  'Secured REST APIs with schema validation on geospatial data',
+                  'Functional and technical specifications written with the product team',
               ],
-        stack: ['Vue.js', 'Express', 'PostgreSQL', 'Python', 'Docker'],
+        stack: ['Vue.js', 'Express', 'PostgreSQL / PostGIS', 'Python', 'Docker'],
     },
     {
-        period: store.isFrench ? 'Janv. 2025 - Présent' : 'Jan. 2025 - Present',
-        title: store.isFrench ? 'Enseignant Vacataire Web Moderne' : 'Modern Web Development Lecturer',
-        company: store.isFrench ? 'Université Lyon 1' : 'Lyon 1 University',
+        period: lang.isFrench ? 'Depuis janv. 2025' : 'Since Jan. 2025',
+        title: lang.isFrench ? 'Enseignant vacataire — Développement web' : 'Part-time Lecturer — Web Development',
+        company: lang.isFrench ? 'Université Claude Bernard Lyon 1' : 'Claude Bernard University Lyon 1',
         companyUrl: 'https://www.univ-lyon1.fr/',
         location: 'Lyon',
-        description: store.isFrench
+        side: true,
+        description: lang.isFrench
             ? [
-                  'Animation de module pour étudiants de licence',
-                  'Formation Web Mordern, HTML/JS/CSS, framework VueJS, API, database',
-                  'Création de supports de cours et exercices pratiques',
+                  'Module de 30 h pour plus de 100 étudiants de licence (Informatique et Santé)',
+                  'HTML / CSS / JavaScript, Vue.js 3, TypeScript, APIs REST, Go, architecture de projet',
+                  'Conception des supports de cours, exercices pratiques et évaluations',
               ]
             : [
-                  'Module for licence students',
-                  'Training on Modern Web, HTML/JS/CSS, framework VueJS, API, database',
-                  'Creation of course materials and practical exercises',
+                  '30-hour module for 100+ undergraduate students (Computer Science and Health)',
+                  'HTML / CSS / JavaScript, Vue.js 3, TypeScript, REST APIs, Go, project architecture',
+                  'Course materials, hands-on exercises and assessments',
               ],
-        stack: ['HTML/JS/CSS', 'Vue.js 3', 'TypeScript', 'Vite', 'Golang'],
+        stack: ['HTML / CSS / JS', 'Vue.js 3', 'TypeScript', 'Vite', 'Go'],
     },
     {
-        period: store.isFrench ? 'Depuis 2021' : 'Since 2021',
-        title: store.isFrench ? 'Développeur Full-Stack Freelance' : 'Freelance Full-Stack Developer',
-        company: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
-        location: store.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
-        description: store.isFrench
+        period: lang.isFrench ? 'Depuis 2021' : 'Since 2021',
+        title: lang.isFrench ? 'Développeur Full-Stack Freelance' : 'Freelance Full-Stack Developer',
+        company: lang.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
+        location: lang.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
+        side: true,
+        description: lang.isFrench
             ? [
-                  'DishRank — app de notation de plats publiée sur iOS, Android et web (React Native + Next.js + Supabase)',
-                  'Messagerie omnicanale en production pour indépendants (Chatwoot + API Claude)',
-                  'ETF PEA — application web de suivi et d’analyse d’ETF éligibles au PEA',
-                  'Produits livrés de bout en bout : conception, développement, déploiement et maintenance',
+                  'DishRank — application de notation de plats publiée sur l’App Store, Google Play et le web (React Native / Expo, Next.js, Supabase), disponible en 5 langues',
+                  'Messagerie omnicanale pour tatoueurs, en production : WhatsApp, Instagram, Messenger et email réunis sur Chatwoot, brouillons de réponse générés par l’API Claude et validés par l’artiste',
+                  'ETF PEA — application de suivi et d’analyse des ETF éligibles au PEA (Next.js)',
+                  'Plus de 15 sites et outils sur mesure livrés de bout en bout : conception, développement, déploiement, maintenance',
               ]
             : [
-                  'DishRank — dish-rating app published on iOS, Android and web (React Native + Next.js + Supabase)',
-                  'Omnichannel messaging in production for independents (Chatwoot + Claude API)',
-                  'ETF PEA — web app to track and analyze PEA-eligible ETFs',
-                  'Products shipped end to end: design, development, deployment and maintenance',
+                  'DishRank — dish-rating app published on the App Store, Google Play and the web (React Native / Expo, Next.js, Supabase), available in 5 languages',
+                  'Omnichannel messaging for tattoo artists, in production: WhatsApp, Instagram, Messenger and email in one Chatwoot inbox, reply drafts generated by the Claude API and approved by the artist',
+                  'ETF PEA — web app to track and analyse PEA-eligible ETFs (Next.js)',
+                  '15+ custom websites and tools shipped end to end: design, development, deployment, maintenance',
               ],
-        stack: ['React Native', 'Next.js', 'Supabase', 'API Claude', 'Node.js'],
+        stack: ['React Native', 'Expo', 'Next.js', 'Supabase', 'Node.js', 'API Claude'],
     },
 ])
 
@@ -221,7 +229,8 @@ const downloadCV = () => {
             value: 1,
         })
     }
-    window.open('/cv/CV_Gregoire_Raturat.pdf', '_blank')
+    // Le PDF existe en deux langues ; on sert celle de l'interface
+    window.open(lang.isFrench ? '/cv/CV_Gregoire_Raturat.pdf' : '/cv/CV_Gregoire_Raturat_EN.pdf', '_blank')
 }
 
 // Refs pour les animations au scroll
@@ -260,16 +269,16 @@ if (import.meta.client) {
             <div ref="headerRef" class="cv-header">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ store.isFrench ? 'Mon Parcours' : 'My Journey' }}
+                    {{ lang.isFrench ? 'Mon Parcours' : 'My Journey' }}
                 </span>
                 <h2 class="section-title">
-                    {{ store.isFrench ? 'Expérience Professionnelle' : 'Professional Experience' }}
+                    {{ lang.isFrench ? 'Expérience Professionnelle' : 'Professional Experience' }}
                 </h2>
                 <p class="section-description">
                     {{
-                        store.isFrench
-                            ? 'Plus de 5 ans à concevoir et développer des applications web et mobile, de la conception à la mise en production.'
-                            : '5+ years designing and building web and mobile applications, from design through to production.'
+                        lang.isFrench
+                            ? 'Six ans à concevoir, développer et mettre en production des applications web et mobile, en entreprise comme en freelance.'
+                            : 'Six years designing, building and shipping web and mobile applications, in-house and as a freelancer.'
                     }}
                 </p>
 
@@ -283,7 +292,7 @@ if (import.meta.client) {
                             stroke-linejoin="round"
                         />
                     </svg>
-                    {{ store.isFrench ? 'Télécharger le CV' : 'Download Resume' }}
+                    {{ lang.isFrench ? 'Télécharger le CV' : 'Download Resume' }}
                 </button>
             </div>
 
@@ -341,7 +350,10 @@ if (import.meta.client) {
                                 {{ exp.period }}
                             </div>
                             <span v-if="exp.current" class="current-badge">
-                                {{ store.isFrench ? 'En cours' : 'Current' }}
+                                {{ lang.isFrench ? 'En cours' : 'Current' }}
+                            </span>
+                            <span v-else-if="exp.side" class="side-badge">
+                                {{ lang.isFrench ? 'En parallèle' : 'Alongside' }}
                             </span>
                         </div>
 
@@ -425,10 +437,10 @@ if (import.meta.client) {
             <div ref="statsRef" class="cv-stats">
                 <div
                     v-for="(stat, index) in [
-                        { number: '5+', label: store.isFrench ? 'Années d\'expérience' : 'Years of experience' },
-                        { number: '10M+', label: store.isFrench ? 'Données traitées' : 'Data processed' },
-                        { number: '100+', label: store.isFrench ? 'Étudiants formés' : 'Students trained' },
-                        { number: '15+', label: store.isFrench ? 'Projets livrés' : 'Projects delivered' },
+                        { number: '6', label: lang.isFrench ? 'Années d\'expérience' : 'Years of experience' },
+                        { number: '10M+', label: lang.isFrench ? 'Données traitées' : 'Data processed' },
+                        { number: '100+', label: lang.isFrench ? 'Étudiants formés' : 'Students trained' },
+                        { number: '20+', label: lang.isFrench ? 'Projets livrés' : 'Projects delivered' },
                     ]"
                     :key="index"
                     v-motion
@@ -662,6 +674,20 @@ if (import.meta.client) {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Même gabarit que .current-badge, en version discrète : enseignement et freelance menés en parallèle */
+.side-badge {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    padding: 4px 12px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--accent-secondary);
+    border-radius: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 @media (prefers-reduced-motion: no-preference) {

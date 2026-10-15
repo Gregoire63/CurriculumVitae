@@ -1,0 +1,297 @@
+/*
+ * Mise en page commune des deux CV (fr.html / en.html).
+ * Rendu par Chrome headless via scripts/build-cv.sh — les unités sont en mm/pt,
+ * pensées pour l'A4. Même palette et mêmes polices que le site.
+ */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+    --accent: #8b6f5c;
+    --accent-strong: #6e5747;
+    --accent-soft: #e5dbc8;
+    --bg-soft: #f5f0e8;
+    --line: #e8dfd0;
+    --text: #2a2826;
+    --text-2: #6b6560;
+    --muted: #9d9691;
+    --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+    --mono: 'Space Mono', 'Courier New', monospace;
+    --sans: 'DM Sans', system-ui, Arial, sans-serif;
+}
+
+@page {
+    size: A4;
+    margin: 11mm 12mm 12mm;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+body {
+    margin: 0;
+    font-family: var(--sans);
+    font-size: 9.3pt;
+    line-height: 1.38;
+    color: var(--text);
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+/* ---------- En-tête ---------- */
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8mm;
+    padding-bottom: 3.5mm;
+    border-bottom: 1.5pt solid var(--accent);
+    margin-bottom: 3.5mm;
+}
+
+h1 {
+    font-family: var(--serif);
+    font-size: 24pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin: 0 0 1.2mm;
+}
+
+.headline {
+    font-family: var(--mono);
+    font-size: 7.9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    margin: 0 0 2.4mm;
+}
+
+/* Deux lignes volontaires (coordonnées / liens) : un retour automatique laisserait un « · » orphelin */
+.contact {
+    margin: 0;
+    font-size: 8.6pt;
+    color: var(--text-2);
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.contact + .contact {
+    margin-top: 0.6mm;
+}
+
+.contact span + span::before {
+    content: '·';
+    margin: 0 1.8mm;
+    color: var(--muted);
+}
+
+.photo {
+    flex: none;
+    width: 23mm;
+    height: 29mm;
+    object-fit: cover;
+    border-radius: 3mm;
+}
+
+/* ---------- Sections ---------- */
+h2 {
+    font-family: var(--serif);
+    font-size: 12pt;
+    font-weight: 700;
+    color: var(--accent-strong);
+    margin: 4mm 0 1.8mm;
+    padding-bottom: 0.8mm;
+    border-bottom: 0.6pt solid var(--line);
+    break-after: avoid;
+}
+
+section:first-of-type h2 {
+    margin-top: 0;
+}
+
+.profile p {
+    margin: 0;
+}
+
+/* ---------- Expériences ---------- */
+.xp {
+    break-inside: avoid;
+    margin-bottom: 3mm;
+}
+
+.xp-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 4mm;
+}
+
+.xp h3 {
+    font-size: 10.4pt;
+    font-weight: 700;
+    margin: 0;
+}
+
+.company {
+    font-weight: 500;
+    color: var(--accent-strong);
+}
+
+.company::before {
+    content: '—';
+    margin: 0 1.5mm;
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.period {
+    font-family: var(--mono);
+    font-size: 7.7pt;
+    color: var(--text-2);
+    white-space: nowrap;
+}
+
+.side-tag {
+    font-family: var(--mono);
+    font-size: 6.8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    border: 0.5pt solid var(--line);
+    border-radius: 2mm;
+    padding: 0.2mm 1.5mm;
+    margin-left: 1.5mm;
+    vertical-align: middle;
+}
+
+.xp ul {
+    margin: 0.8mm 0 0.8mm;
+    padding-left: 3.8mm;
+}
+
+.xp li {
+    margin: 0 0 0.4mm;
+    padding-left: 0.4mm;
+}
+
+.xp li::marker,
+.edu li::marker {
+    color: var(--accent);
+}
+
+.stack {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 7.4pt;
+    color: var(--text-2);
+}
+
+.stack b {
+    color: var(--accent);
+}
+
+/* ---------- Projets ---------- */
+.proj {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.proj li {
+    position: relative;
+    margin: 0 0 1.1mm;
+    padding-left: 4mm;
+    break-inside: avoid;
+}
+
+.proj li::before {
+    content: '';
+    position: absolute;
+    left: 0.3mm;
+    top: 0.45em;
+    width: 1.6mm;
+    height: 1.6mm;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.url {
+    font-family: var(--mono);
+    font-size: 7.4pt;
+    color: var(--accent);
+}
+
+/* ---------- Compétences ---------- */
+.skills {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.6mm 6mm;
+    margin: 0;
+}
+
+.skills div {
+    break-inside: avoid;
+}
+
+.skills dt {
+    font-family: var(--mono);
+    font-size: 7.4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 0.3mm;
+}
+
+.skills dd {
+    margin: 0;
+}
+
+/* ---------- Formation / langues ---------- */
+.cols {
+    display: grid;
+    grid-template-columns: 1.45fr 1fr;
+    gap: 0 8mm;
+}
+
+.edu {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.edu li {
+    display: grid;
+    grid-template-columns: 21mm 1fr;
+    gap: 2mm;
+    margin-bottom: 1.1mm;
+}
+
+.edu .period {
+    padding-top: 0.3mm;
+}
+
+.kv {
+    margin: 0;
+}
+
+.kv dt {
+    font-family: var(--mono);
+    font-size: 7.4pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin: 0 0 0.3mm;
+}
+
+.kv dd {
+    margin: 0 0 1.6mm;
+}

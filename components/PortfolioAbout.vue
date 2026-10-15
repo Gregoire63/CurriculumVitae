@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, ref } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
 
-const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
 const preferredMotion = usePreferredReducedMotion()
 // usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
 const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
@@ -20,28 +20,28 @@ interface Degree {
 const degrees = computed<Degree[]>(() => [
     {
         year: '2024',
-        title: 'Vue.js Certified Developer',
-        school: 'Vue.js Official Certification',
+        title: 'Vue.js Certified Mid-Level Developer',
+        school: lang.isFrench ? 'Certification officielle Vue.js' : 'Official Vue.js certification',
         url: 'https://certificates.dev/vuejs',
         type: 'certification',
     },
     {
         year: '2021 - 2023',
-        title: store.isFrench ? "Mastère - Expert en Système d'Information" : 'Master - Information System Expert',
+        title: lang.isFrench ? "Mastère - Expert en Système d'Information" : 'Master - Information System Expert',
         school: 'ISITECH - Lyon',
         url: 'https://www.ecole-isitech.com/',
         type: 'degree',
     },
     {
         year: '2020 - 2021',
-        title: store.isFrench ? 'Bachelor - Responsable de Projet Informatique' : 'Bachelor - IT Project Manager',
+        title: lang.isFrench ? 'Bachelor - Responsable de Projet Informatique' : 'Bachelor - IT Project Manager',
         school: 'ISITECH - Lyon',
         url: 'https://www.ecole-isitech.com/',
         type: 'degree',
     },
     {
         year: '2017 - 2020',
-        title: store.isFrench ? 'Licence Informatique' : 'Computer Science Degree',
+        title: lang.isFrench ? 'Licence Informatique' : 'Computer Science Degree',
         school: 'Université Clermont Auvergne',
         url: 'https://www.uca.fr/',
         type: 'degree',
@@ -79,10 +79,10 @@ if (import.meta.client) {
             <div ref="headerRef" class="section-header">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ store.isFrench ? 'Formation' : 'Education' }}
+                    {{ lang.isFrench ? 'Formation' : 'Education' }}
                 </span>
                 <h2 class="section-title">
-                    {{ store.isFrench ? 'Diplômes & certification' : 'Degrees & certification' }}
+                    {{ lang.isFrench ? 'Diplômes & certification' : 'Degrees & certification' }}
                 </h2>
             </div>
 
@@ -111,7 +111,7 @@ if (import.meta.client) {
                     <div class="degree-top">
                         <span class="degree-year">{{ degree.year }}</span>
                         <span v-if="degree.type === 'certification'" class="degree-badge">
-                            {{ store.isFrench ? 'Certifié' : 'Certified' }}
+                            {{ lang.isFrench ? 'Certifié' : 'Certified' }}
                         </span>
                     </div>
                     <h3 class="degree-title">{{ degree.title }}</h3>

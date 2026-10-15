@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Grégoire Raturat — Full-Stack Developer — Resume</title>
+    <meta name="author" content="Grégoire Raturat" />
+    <link rel="stylesheet" href="cv.css" />
+</head>
+<body>
+    <header>
+        <div>
+            <h1>Grégoire Raturat</h1>
+            <p class="headline">Full-Stack Developer · Vue.js / TypeScript · Node.js / Django · DevOps</p>
+            <p class="contact">
+                <span>Lyon, France · Remote OK</span>
+                <span>+33 6 69 36 57 34</span>
+                <span><a href="mailto:gregoireraturatpro@gmail.com">gregoireraturatpro@gmail.com</a></span>
+            </p>
+            <p class="contact">
+                <span><a href="https://gregoire-raturat.fr">gregoire-raturat.fr</a></span>
+                <span><a href="https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/">linkedin.com/in/grégoire-raturat</a></span>
+                <span><a href="https://github.com/Gregoire63">github.com/Gregoire63</a></span>
+            </p>
+        </div>
+        <img class="photo" src="../public/photoCV.webp" alt="" />
+    </header>
+
+    <section class="profile">
+        <h2>Profile</h2>
+        <p>
+            Full-stack developer with 6 years of experience on web and mobile applications in production. Vue.js and
+            TypeScript on the front end, Node.js and Django on the back end, with a solid DevOps culture (Docker,
+            GitLab CI/CD, Kubernetes / FluxCD). Used to large technical migrations (Vue 2 → Vue 3, gRPC → REST),
+            micro-service architectures and cross-functional teams. I wire AI into real products: Claude API, MCP
+            servers, team tooling with Claude Code. Alongside my job, I teach web development at Lyon 1 University
+            and publish my own apps (DishRank, on the App Store and Google Play).
+        </p>
+    </section>
+
+    <section>
+        <h2>Professional experience</h2>
+
+        <article class="xp">
+            <div class="xp-head">
+                <h3>Full Stack Developer <span class="company">SOCOTEC, Lyon &amp; remote</span></h3>
+                <span class="period">Jun. 2026 – present</span>
+            </div>
+            <ul>
+                <li>The group's atmospheric-emission measurement application: offline-first PWA (IndexedDB) for field campaigns, lab order forms and regulatory reports</li>
+                <li>Front-end migration from Vue 2 / Vuetify 2 / Vuex / webpack to Vue 3 / Vuetify 3 / Pinia / Vite (≈ 300 files), then stabilisation in production</li>
+                <li>Asynchronous report generation: report service moved from gRPC to REST, Celery workers, Kafka events, GitOps deployment (FluxCD / Kubernetes)</li>
+                <li>Decommissioning of the Django back end's gRPC layer in favour of documented REST APIs (DRF, OpenAPI)</li>
+                <li>Django / DRF back end: calculation engine and regulatory deviation detection, hardening (timeouts, N+1 queries, async tasks)</li>
+                <li>Team AI tooling: contributions to the internal Claude Code plugin (security / DRF / migration review rules, secrets hook, production audit)</li>
+            </ul>
+            <p class="stack"><b>Stack</b> Vue.js 3 · Vuetify · Vite · Pinia · Django / DRF · Celery · Kafka · PostgreSQL · Docker · Kubernetes / FluxCD · GitLab CI · Sentry · SonarQube</p>
+        </article>
+
+        <article class="xp">
+            <div class="xp-head">
+                <h3>Full Stack Developer <span class="company">SOGEDO, Lyon</span></h3>
+                <span class="period">Nov. 2025 – Jun. 2026</span>
+            </div>
+            <ul>
+                <li>Refactor of the internal plugins (auth, core, components) from Vue 2 to Vue 3 (Composition API): progressive migration and technical debt reduction</li>
+                <li>Introduction of TypeScript and standardised typing across all new modules</li>
+                <li>Private npm package with a CLI to scaffold code and initialise projects</li>
+                <li>GitLab CI/CD pipelines with GitLab Runner (lint, tests, build, versioning, deployment) to secure production releases</li>
+                <li>Close collaboration with the .NET back-end and business teams</li>
+            </ul>
+            <p class="stack"><b>Stack</b> Vue.js 3 · TypeScript · Node.js · Vitest / Jest · GitLab CI/CD · .NET · private npm · CLI</p>
+        </article>
+
+        <article class="xp">
+            <div class="xp-head">
+                <h3>Full Stack Developer <span class="company">SYSTRA (formerly Modaal), Lyon</span></h3>
+                <span class="period">Oct. 2023 – Nov. 2025</span>
+            </div>
+            <ul>
+                <li>Architecture of GIS applications handling 10M+ cadastral parcels (Vue 3, Node.js, PostGIS)</li>
+                <li>Business process automation in Python and PowerShell: about 30% time saved</li>
+                <li>Integration of AI object-detection models on aerial imagery</li>
+                <li>Redesign of authentication and rights management (RBAC)</li>
+                <li>Docker / GitLab CI/CD pipelines with automated tests and continuous deployment</li>
+                <li>Direct work with Product Owners, structuring of Agile practices</li>
+            </ul>
+            <p class="stack"><b>Stack</b> Vue.js 3 · TypeScript · Node.js · PostGIS · Python · Docker · GitLab CI/CD</p>
+        </article>
+
+        <article class="xp">
+            <div class="xp-head">
+                <h3>Apprentice Developer <span class="company">Modaal, Lyon</span></h3>
+                <span class="period">2020 – 2023</span>
+            </div>
+            <ul>
+                <li>Complete architecture of a GIS application (Vue.js / Express / PostgreSQL)</li>
+                <li>Python ETL processes over 5 GB+ files (cadastre, building permits, property values)</li>
+                <li>Secured REST APIs with schema validation on geospatial data; functional and technical specifications with the product team</li>
+            </ul>
+            <p class="stack"><b>Stack</b> Vue.js · Express · PostgreSQL / PostGIS · Python · Docker</p>
+        </article>
+
+        <article class="xp">
+            <div class="xp-head">
+                <h3>Part-time Lecturer, Web Development <span class="company">Claude Bernard University Lyon 1</span><span class="side-tag">Alongside</span></h3>
+                <span class="period">Since Jan. 2025</span>
+            </div>
+            <ul>
+                <li>30-hour module for 100+ undergraduate students (Computer Science and Health): HTML / CSS / JavaScript, Vue.js 3, TypeScript, REST APIs, Go, project architecture</li>
+                <li>Course materials, hands-on exercises and assessments</li>
+            </ul>
+        </article>
+
+        <article class="xp">
+            <div class="xp-head">
+                <h3>Freelance Full-Stack Developer <span class="company">Self-employed, Lyon &amp; remote</span><span class="side-tag">Alongside</span></h3>
+                <span class="period">Since 2021</span>
+            </div>
+            <ul>
+                <li>15+ custom websites and tools shipped end to end: design, development, deployment, maintenance (Vue.js, React / Next.js, Node.js, Python, Firebase)</li>
+                <li>Own products published and maintained in production, detailed below</li>
+            </ul>
+        </article>
+    </section>
+
+    <section>
+        <h2>Projects &amp; products</h2>
+        <ul class="proj">
+            <li><strong>DishRank</strong> (2026) — Dish-rating app published on the App Store, Google Play and the web, in 5 languages: city rankings, friend groups, outings and shared lists. Designed, built and published solo. React Native / Expo, Next.js, Supabase, TypeScript. <span class="url">dishrank.fr</span></li>
+            <li><strong>Omnichannel messaging for tattoo artists</strong> (2026) — WhatsApp, Instagram, Messenger and email in a single Chatwoot inbox; reply drafts generated by the Claude API and approved by the artist before sending. In production. Node.js, PostgreSQL, Claude API.</li>
+            <li><strong>Damn Claude</strong> (2026) — Training and nutrition tracking PWA: programme, sessions, meals and recipes, Withings weight sync, passkey (WebAuthn) login. An MCP server exposes the data to Claude, which suggests changes approved in the app. Nuxt, TypeScript. <span class="url">damnclaude.gregoire-raturat.fr</span></li>
+            <li><strong>BabyName</strong> (2026) — First-name picker: Python pipeline over INSEE births 2023-2025 enriched from Wikidata and Wiktionary (19,600 names, phonetic grouping, confidence level per meaning, 17 countries), Claude-assisted enrichment with adversarial review. <span class="url">github.com/Gregoire63/BabyName</span></li>
+            <li><strong>ETF PEA</strong> (2026) — Tracking and analysis of PEA-eligible ETFs: dashboards, fund comparison, portfolio tracking. Next.js, Tailwind CSS. <span class="url">etf.gregoire-raturat.fr</span></li>
+        </ul>
+    </section>
+
+    <section>
+        <h2>Technical skills</h2>
+        <dl class="skills">
+            <div><dt>Frontend</dt><dd>Vue.js 3 / Nuxt, React / Next.js, TypeScript, Vuetify, Tailwind CSS, Pinia, Vite, offline-first PWA (IndexedDB), OpenLayers</dd></div>
+            <div><dt>Backend</dt><dd>Node.js (Express, Fastify), Python (Django / DRF, FastAPI), REST APIs / OpenAPI, micro-services, PostgreSQL / PostGIS, Supabase, MongoDB, Celery / Redis, Kafka</dd></div>
+            <div><dt>AI &amp; agents</dt><dd>Claude API (Anthropic), MCP (servers and clients), Claude Code (skills, plugins, hooks), object-detection models, data pipelines (INSEE, Wikidata)</dd></div>
+            <div><dt>Mobile</dt><dd>React Native, Expo / EAS Build, App Store / Play Store publishing, push notifications</dd></div>
+            <div><dt>DevOps &amp; tools</dt><dd>Git / GitLab CI/CD, Docker, Kubernetes / FluxCD (GitOps), Nginx, Linux, Netlify / Vercel / Cloudflare, Sentry, SonarQube, private npm packages, CLI tooling</dd></div>
+            <div><dt>Testing &amp; methods</dt><dd>Vitest / Jest, pytest, Playwright / Cypress (E2E), code review, Agile Scrum / Kanban, authentication (OIDC, JWT, RBAC, passkeys), functional and technical specifications</dd></div>
+        </dl>
+    </section>
+
+    <section class="cols">
+        <div>
+            <h2>Education</h2>
+            <ul class="edu">
+                <li><span class="period">2024</span><span><strong>Vue.js Certified Mid-Level Developer</strong> — official Vue.js certification</span></li>
+                <li><span class="period">2021 – 2023</span><span><strong>Master's degree, Information Systems Expert</strong> (AI &amp; Big Data, Infrastructure &amp; Cloud) — ISITECH, Lyon</span></li>
+                <li><span class="period">2020 – 2021</span><span><strong>Bachelor's degree, IT Project Manager</strong> — ISITECH, Lyon</span></li>
+                <li><span class="period">2017 – 2020</span><span><strong>Bachelor of Computer Science</strong> — Université Clermont Auvergne</span></li>
+            </ul>
+        </div>
+        <div>
+            <h2>Languages &amp; interests</h2>
+            <dl class="kv">
+                <dt>Languages</dt>
+                <dd>French (native) · English C1</dd>
+                <dt>Interests</dt>
+                <dd>Basketball, weight training, chess, board games, travel, volunteering</dd>
+            </dl>
+        </div>
+    </section>
+</body>
+</html>

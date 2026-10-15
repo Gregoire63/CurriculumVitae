@@ -10,7 +10,18 @@ const closePolicy = () => {
     store.setPrivacyPolicyOpen(false)
 }
 
-const lastUpdate = '17/02/2026'
+// Rouvre le bandeau de consentement pour changer d'avis
+const manageConsent = () => {
+    store.setPrivacyPolicyOpen(false)
+    store.setConsentOpen(true)
+}
+
+// Échap ferme la fenêtre, comme le bouton
+useEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && isOpen.value) closePolicy()
+})
+
+const lastUpdate = '15/10/2026'
 </script>
 
 <template>
@@ -308,10 +319,12 @@ const lastUpdate = '17/02/2026'
                         <div class="service-card">
                             <h3>Google Analytics 4</h3>
                             <p v-if="store.isFrench">
-                                Service d'analyse web de Google avec anonymisation IP. Configuration conforme RGPD.
+                                Service d'analyse web de Google, avec anonymisation IP. Il n'est chargé qu'après votre
+                                accord, donné ou refusé dans le bandeau affiché à la première visite.
                             </p>
                             <p v-else>
-                                Google's web analytics service with IP anonymization. GDPR-compliant configuration.
+                                Google's web analytics service, with IP anonymization. It only loads after you agree,
+                                in the banner shown on your first visit.
                             </p>
                             <ul>
                                 <li>
@@ -326,8 +339,8 @@ const lastUpdate = '17/02/2026'
                                     <strong>{{ store.isFrench ? 'Base légale' : 'Legal basis' }}</strong> :
                                     {{
                                         store.isFrench
-                                            ? 'Intérêt légitime (article 6.1.f RGPD)'
-                                            : 'Legitimate interest (Article 6.1.f GDPR)'
+                                            ? 'Consentement (article 6.1.a RGPD et article 82 de la loi Informatique et Libertés)'
+                                            : 'Consent (Article 6.1.a GDPR and Article 82 of the French Data Protection Act)'
                                     }}
                                 </li>
                                 <li>
@@ -337,8 +350,8 @@ const lastUpdate = '17/02/2026'
                                     :
                                     {{
                                         store.isFrench
-                                            ? 'USA (clauses contractuelles types)'
-                                            : 'USA (standard contractual clauses)'
+                                            ? 'USA (Data Privacy Framework UE–États-Unis)'
+                                            : 'USA (EU–US Data Privacy Framework)'
                                     }}
                                 </li>
                             </ul>
@@ -383,8 +396,8 @@ const lastUpdate = '17/02/2026'
                                     :
                                     {{
                                         store.isFrench
-                                            ? 'USA (certification Privacy Shield alternative)'
-                                            : 'USA (Privacy Shield alternative certification)'
+                                            ? 'USA (Data Privacy Framework UE–États-Unis et clauses contractuelles types)'
+                                            : 'USA (EU–US Data Privacy Framework and standard contractual clauses)'
                                     }}
                                 </li>
                             </ul>
@@ -452,8 +465,8 @@ const lastUpdate = '17/02/2026'
                                 <strong>{{ store.isFrench ? 'Google Analytics' : 'Google Analytics' }}</strong> :
                                 {{
                                     store.isFrench
-                                        ? 'Intérêt légitime à améliorer le site (article 6.1.f)'
-                                        : 'Legitimate interest to improve the site (Article 6.1.f)'
+                                        ? 'Consentement recueilli par le bandeau de mesure d’audience (article 6.1.a)'
+                                        : 'Consent given in the analytics banner (Article 6.1.a)'
                                 }}
                             </li>
                             <li>
@@ -649,6 +662,16 @@ const lastUpdate = '17/02/2026'
                                 <span>{{ store.isFrench ? 'Analytique' : 'Analytics' }}</span>
                             </div>
                             <div class="cookie-row">
+                                <span>portfolio-consent</span>
+                                <span>{{
+                                    store.isFrench
+                                        ? 'Mémoriser votre choix sur la mesure d’audience'
+                                        : 'Remember your analytics choice'
+                                }}</span>
+                                <span>{{ store.isFrench ? '6 mois' : '6 months' }}</span>
+                                <span>{{ store.isFrench ? 'Fonctionnel' : 'Functional' }}</span>
+                            </div>
+                            <div class="cookie-row">
                                 <span>portfolio-lang</span>
                                 <span>{{
                                     store.isFrench ? 'Mémoriser la langue choisie' : 'Remember chosen language'
@@ -659,6 +682,17 @@ const lastUpdate = '17/02/2026'
                         </div>
 
                         <h3>{{ store.isFrench ? 'Comment gérer les cookies' : 'How to Manage Cookies' }}</h3>
+                        <p v-if="store.isFrench">
+                            Les cookies Google Analytics ne sont déposés qu'avec votre accord. Vous pouvez changer
+                            d'avis à tout moment, ici ou via le lien « Gestion des cookies » en bas de page.
+                        </p>
+                        <p v-else>
+                            Google Analytics cookies are only set with your consent. You can change your mind at any
+                            time, here or with the “Cookie settings” link at the bottom of the page.
+                        </p>
+                        <button type="button" class="consent-manage" @click="manageConsent">
+                            {{ store.isFrench ? 'Modifier mon choix' : 'Change my choice' }}
+                        </button>
                         <p v-if="store.isFrench">
                             Vous pouvez à tout moment désactiver les cookies dans les paramètres de votre navigateur :
                         </p>
@@ -964,6 +998,25 @@ const lastUpdate = '17/02/2026'
     left: 0;
     color: var(--accent-primary);
     font-weight: bold;
+}
+
+.consent-manage {
+    display: inline-block;
+    margin: 0 0 var(--space-sm);
+    padding: 0.55rem 1.1rem;
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--bg-primary);
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.consent-manage:hover {
+    background: var(--accent-strong);
 }
 
 .privacy-section a {

@@ -48,6 +48,14 @@ const prevImage = () => {
 const goToImage = (index: number) => {
     currentImageIndex.value = index
 }
+
+// Clavier : Échap ferme, les flèches font défiler la galerie
+useEventListener('keydown', (e: KeyboardEvent) => {
+    if (!project.value) return
+    if (e.key === 'Escape') closeModal()
+    else if (e.key === 'ArrowRight') nextImage()
+    else if (e.key === 'ArrowLeft') prevImage()
+})
 </script>
 
 <template>
@@ -56,6 +64,9 @@ const goToImage = (index: number) => {
             <div
                 ref="modalPanel"
                 class="modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="project-modal-title"
                 :style="{ '--color': project.color || '139, 111, 92' }"
                 @click.stop
             >
@@ -66,7 +77,7 @@ const goToImage = (index: number) => {
                             <div class="modal-logo">
                                 <img :src="`${project.path}/logo.webp`" :alt="`${project.name} logo`" />
                             </div>
-                            <h2 class="project-title">{{ project.name }}</h2>
+                            <h2 id="project-modal-title" class="project-title">{{ project.name }}</h2>
                         </div>
                         <div class="project-info">
                             <span>{{ project.year }}</span>
@@ -80,8 +91,9 @@ const goToImage = (index: number) => {
                             v-if="project.url"
                             :href="project.url"
                             target="_blank"
+                            rel="noopener noreferrer"
                             class="action-button"
-                            aria-label="Visit project"
+                            :aria-label="store.isFrench ? 'Ouvrir le projet' : 'Open the project'"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                 <path
@@ -94,7 +106,11 @@ const goToImage = (index: number) => {
                             </svg>
                         </a>
 
-                        <button class="action-button close-button" aria-label="Close" @click="closeModal">
+                        <button
+                            class="action-button close-button"
+                            :aria-label="store.isFrench ? 'Fermer' : 'Close'"
+                            @click="closeModal"
+                        >
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                 <path
                                     d="M18 6L6 18M6 6L18 18"

@@ -103,8 +103,8 @@ const handleNavigate = (section: SectionName) => {
                     <p class="hero-description">
                         {{
                             store.isFrench
-                                ? 'Je conçois et développe des applications web et mobile, de la conception à la mise en production.'
-                                : 'I design and build web and mobile applications, from concept to production.'
+                                ? 'Je conçois et mets en production des applications web et mobile, du front à l’infrastructure. J’intègre aussi l’IA (API Claude, MCP) dans de vrais produits.'
+                                : 'I design and ship web and mobile applications, from front end to infrastructure. I also build AI (Claude API, MCP) into real products.'
                         }}
                     </p>
 
@@ -136,19 +136,19 @@ const handleNavigate = (section: SectionName) => {
                 <!-- Stats -->
                 <div ref="statsRef" class="hero-stats">
                     <div class="stat-item">
-                        <div class="stat-number">5+</div>
+                        <div class="stat-number">6</div>
                         <div class="stat-label">
                             {{ store.isFrench ? "Années d'expérience" : 'Years of experience' }}
                         </div>
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-item">
-                        <div class="stat-number">6+</div>
-                        <div class="stat-label">{{ store.isFrench ? 'Projets réalisés' : 'Projects completed' }}</div>
+                        <div class="stat-number">20+</div>
+                        <div class="stat-label">{{ store.isFrench ? 'Projets livrés' : 'Projects delivered' }}</div>
                     </div>
                     <div class="stat-divider"></div>
                     <div class="stat-item">
-                        <div class="stat-number">2</div>
+                        <div class="stat-number">4</div>
                         <div class="stat-label">{{ store.isFrench ? 'Apps en production' : 'Apps in production' }}</div>
                     </div>
                 </div>
@@ -171,7 +171,8 @@ const handleNavigate = (section: SectionName) => {
     width: 100%;
     max-width: 1400px;
     margin: 0 auto;
-    padding: var(--space-xl) var(--space-lg);
+    /* Bas réduit : l'indicateur de défilement suit désormais le contenu (pages/index.vue) */
+    padding: var(--space-xl) var(--space-lg) var(--space-md);
     z-index: 1;
 }
 

@@ -5,7 +5,7 @@ import { usePortfolioStore } from '~/stores/portfolio'
 useSEO({
     title: 'Développeur Full-Stack à Lyon',
     description:
-        'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.',
+        'Développeur full-stack à Lyon : Vue.js, React, Node.js et Django. Je conçois et mets en production des applications web et mobile.',
     keywords: [
         'développeur full-stack lyon',
         'développeur web',
@@ -14,11 +14,16 @@ useSEO({
         'react',
         'react native',
         'node.js',
+        'django',
         'typescript',
     ],
 })
 
 const store = usePortfolioStore()
+
+// Les sections s'hydratent 400 px avant d'entrer à l'écran : leur JavaScript est
+// prêt quand on y arrive, au lieu d'arriver pendant qu'on les regarde.
+const HYDRATE_AHEAD = { rootMargin: '400px' }
 
 useActiveSection()
 
@@ -82,29 +87,29 @@ const heroParallax = computed(() => {
             <div class="section-background light">
                 <div class="grid-pattern"></div>
             </div>
-            <LazyPortfolioCaseStudies hydrate-on-visible />
+            <LazyPortfolioCaseStudies :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         <!-- Other Projects Section (compact) -->
         <section id="projects" ref="projectsSection" class="section projects-compact-section">
-            <LazyPortfolioOtherProjects hydrate-on-visible />
+            <LazyPortfolioOtherProjects :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         <!-- Parcours / Expérience professionnelle -->
         <section id="cv" ref="cvSection" class="section cv-section">
-            <LazyPortfolioCv hydrate-on-visible />
+            <LazyPortfolioCv :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         <!-- Formation (secondaire) -->
         <section id="about" ref="aboutSection" class="section about-section">
-            <LazyPortfolioAbout hydrate-on-visible />
+            <LazyPortfolioAbout :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
         <!-- Skills Section -->
         <section id="skills" ref="skillsSection" class="section skills-section">
             <div class="section-background dark">
                 <div class="noise-overlay"></div>
             </div>
-            <LazyPortfolioSkills hydrate-on-visible />
+            <LazyPortfolioSkills :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         <!-- Contact Section -->
@@ -113,7 +118,7 @@ const heroParallax = computed(() => {
                 <div class="gradient-orb orb-1"></div>
                 <div class="gradient-orb orb-2"></div>
             </div>
-            <LazyPortfolioContact hydrate-on-visible />
+            <LazyPortfolioContact :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         </main>
@@ -130,7 +135,7 @@ const heroParallax = computed(() => {
         <div class="scroll-progress">
             <div class="scroll-progress-bar" :style="{ width: `${store.scrollProgress}%` }"></div>
         </div>
-        <LazyPortfolioFooter hydrate-on-visible />
+        <LazyPortfolioFooter :hydrate-on-visible="HYDRATE_AHEAD" />
     </div>
 </template>
 
@@ -156,22 +161,29 @@ const heroParallax = computed(() => {
     pointer-events: none;
 }
 
-/* Hero Section */
+/* Hero Section
+   En colonne : le contenu prend la hauteur disponible et l'indicateur de défilement
+   vient dessous, dans le flux. Positionné en absolu, il chevauchait les chiffres clés
+   dès que l'écran était peu haut (1440×900, 1366×768). */
 .hero-section {
+    flex-direction: column;
     background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
 }
 
 .hero-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    width: 100%;
     transition: transform 0.1s linear;
     will-change: transform;
 }
 
 /* Scroll Indicator */
 .scroll-indicator {
-    position: absolute;
-    bottom: var(--space-lg);
-    left: 50%;
-    transform: translateX(-50%);
+    position: relative;
+    flex-shrink: 0;
+    margin-bottom: var(--space-md);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -352,7 +364,7 @@ const heroParallax = computed(() => {
 
 @media (max-width: 768px) {
     .scroll-indicator {
-        bottom: var(--space-md);
+        margin-bottom: var(--space-sm);
     }
 }
 </style>

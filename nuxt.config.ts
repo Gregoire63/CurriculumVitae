@@ -85,7 +85,7 @@ export default defineNuxtConfig({
                 {
                     name: 'description',
                     content:
-                        'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.',
+                        'Développeur full-stack à Lyon : Vue.js, React, Node.js et Django. Je conçois et mets en production des applications web et mobile.',
                 },
                 { name: 'format-detection', content: 'telephone=no' },
                 { name: 'author', content: 'Grégoire Raturat' },
@@ -95,7 +95,7 @@ export default defineNuxtConfig({
                 {
                     property: 'og:description',
                     content:
-                        'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.',
+                        'Développeur full-stack à Lyon : Vue.js, React, Node.js et Django. Je conçois et mets en production des applications web et mobile.',
                 },
                 { property: 'og:type', content: 'website' },
                 { property: 'og:url', content: 'https://gregoire-raturat.fr' },
@@ -109,7 +109,7 @@ export default defineNuxtConfig({
                 {
                     name: 'twitter:description',
                     content:
-                        'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.',
+                        'Développeur full-stack à Lyon : Vue.js, React, Node.js et Django. Je conçois et mets en production des applications web et mobile.',
                 },
                 { name: 'twitter:image', content: 'https://gregoire-raturat.fr/og-image.jpg' },
                 // Thème
@@ -125,53 +125,8 @@ export default defineNuxtConfig({
                 { rel: 'manifest', href: '/site.webmanifest', key: 'manifest' },
                 { rel: 'dns-prefetch', href: 'https://www.googletagmanager.com' },
             ],
-            script: [
-                {
-                    type: 'application/ld+json',
-                    innerHTML: JSON.stringify({
-                        '@context': 'https://schema.org',
-                        '@graph': [
-                            {
-                                '@type': 'Person',
-                                '@id': 'https://gregoire-raturat.fr/#person',
-                                name: 'Grégoire Raturat',
-                                jobTitle: 'Développeur Full-Stack',
-                                url: 'https://gregoire-raturat.fr',
-                                image: 'https://gregoire-raturat.fr/og-image.jpg',
-                                sameAs: [
-                                    'https://github.com/Gregoire63',
-                                    'https://www.linkedin.com/in/gr%C3%A9goire-raturat-b671091aa/',
-                                    'https://www.malt.fr/profile/gregoireraturat',
-                                ],
-                                address: {
-                                    '@type': 'PostalAddress',
-                                    addressLocality: 'Lyon',
-                                    addressCountry: 'FR',
-                                },
-                                knowsAbout: [
-                                    'Vue.js', 'Nuxt.js', 'React', 'React Native', 'Next.js', 'Node.js',
-                                    'TypeScript', 'JavaScript', 'Python', 'Supabase', 'PostgreSQL',
-                                    'Full Stack Development', 'Web Development',
-                                ],
-                                alumniOf: {
-                                    '@type': 'EducationalOrganization',
-                                    name: 'ISITECH',
-                                },
-                            },
-                            {
-                                '@type': 'WebSite',
-                                '@id': 'https://gregoire-raturat.fr/#website',
-                                url: 'https://gregoire-raturat.fr',
-                                name: 'Grégoire Raturat — Portfolio',
-                                description:
-                                    'Portfolio de Grégoire Raturat, développeur full-stack à Lyon : applications web et mobile, de la conception à la mise en production.',
-                                author: { '@id': 'https://gregoire-raturat.fr/#person' },
-                                inLanguage: ['fr-FR', 'en-US'],
-                            },
-                        ],
-                    }),
-                },
-            ],
+            // Les données structurées (Person, WebSite) sont produites par useSEO() sur « / ».
+            // Un second bloc ici décrivait la même personne avec des valeurs différentes.
         },
         pageTransition: { name: 'page', mode: 'out-in' },
     },

@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import type { Project } from '~/stores/portfolio'
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, ref } from 'vue'
-import { type Project, usePortfolioStore } from '~/stores/portfolio'
+import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
 const preferredMotion = usePreferredReducedMotion()
 // usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
 const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
@@ -13,12 +16,50 @@ const { gtag } = useGtag()
 // On ne référence que des images .webp déjà présentes pour garder le site léger.
 const projects = computed<Project[]>(() => [
     {
+        name: 'Damn Claude',
+        summary: lang.isFrench
+            ? 'PWA de suivi sport et nutrition, synchronisée avec Withings, avec un serveur MCP qui laisse Claude proposer des ajustements.'
+            : 'Training and nutrition PWA synced with Withings, with an MCP server that lets Claude suggest adjustments.',
+        description: lang.isFrench
+            ? "Application PWA de suivi d'entraînement et de nutrition : programme et séances, repas, recettes et menus, synchronisation du poids via Withings, connexion par passkey (WebAuthn). Un serveur MCP expose les données à Claude, qui propose des modifications validées ensuite dans l'application."
+            : 'Training and nutrition tracking PWA: programme and sessions, meals, recipes and menus, weight sync via Withings, passkey (WebAuthn) login. An MCP server exposes the data to Claude, which suggests changes that are then approved in the app.',
+        year: '2026',
+        type: lang.isFrench ? 'Projet personnel' : 'Personal project',
+        url: 'https://damnclaude.gregoire-raturat.fr',
+        techno: [
+            { name: 'Nuxt', url: 'https://nuxt.com/' },
+            { name: 'MCP', url: 'https://modelcontextprotocol.io/' },
+            { name: 'WebAuthn', url: 'https://webauthn.guide/' },
+        ],
+        path: '/projects/damnclaude',
+        color: '139, 111, 92',
+    },
+    {
+        name: 'BabyName',
+        summary: lang.isFrench
+            ? "Aide au choix d'un prénom : 19 600 prénoms issus de l'INSEE, enrichis via Wikidata et le Wiktionnaire."
+            : 'First-name picker: 19,600 names from INSEE data, enriched from Wikidata and Wiktionary.',
+        description: lang.isFrench
+            ? "Aide au choix d'un prénom : pipeline Python sur les naissances INSEE 2023-2025, enrichies via Wikidata et le Wiktionnaire (19 600 prénoms, regroupement phonétique, niveau de confiance par signification, 17 pays). Enrichissement assisté par Claude avec relecture contradictoire."
+            : 'First-name picker: Python pipeline over INSEE births 2023-2025, enriched from Wikidata and Wiktionary (19,600 names, phonetic grouping, confidence level per meaning, 17 countries). Claude-assisted enrichment with adversarial review.',
+        year: '2026',
+        type: lang.isFrench ? 'Projet personnel' : 'Personal project',
+        url: 'https://github.com/Gregoire63/BabyName',
+        techno: [
+            { name: 'Python', url: 'https://www.python.org/' },
+            { name: 'TypeScript', url: 'https://www.typescriptlang.org/' },
+            { name: 'Claude', url: 'https://www.anthropic.com/claude' },
+        ],
+        path: '/projects/babyname',
+        color: '201, 178, 153',
+    },
+    {
         name: 'ETF PEA',
-        description: store.isFrench
+        description: lang.isFrench
             ? "Application web pour suivre et analyser les ETF éligibles au PEA : dashboards, comparaison de fonds et suivi de portefeuille d'investissement."
             : 'Web application to track and analyze PEA-eligible ETFs: dashboards, fund comparison and investment portfolio tracking.',
         year: '2026',
-        type: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
+        type: lang.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://etf.gregoire-raturat.fr',
         techno: [
             { name: 'Next.js', url: 'https://nextjs.org/' },
@@ -30,18 +71,18 @@ const projects = computed<Project[]>(() => [
         imgs: [
             { src: '/projects/etf-pea/dashboard_1.webp', title: 'Dashboard' },
             { src: '/projects/etf-pea/dashboard_2.webp', title: 'Dashboard' },
-            { src: '/projects/etf-pea/compare.webp', title: store.isFrench ? 'Comparaison' : 'Comparison' },
-            { src: '/projects/etf-pea/portfolio_1.webp', title: store.isFrench ? 'Portefeuille' : 'Portfolio' },
-            { src: '/projects/etf-pea/portfolio_2.webp', title: store.isFrench ? 'Portefeuille' : 'Portfolio' },
+            { src: '/projects/etf-pea/compare.webp', title: lang.isFrench ? 'Comparaison' : 'Comparison' },
+            { src: '/projects/etf-pea/portfolio_1.webp', title: lang.isFrench ? 'Portefeuille' : 'Portfolio' },
+            { src: '/projects/etf-pea/portfolio_2.webp', title: lang.isFrench ? 'Portefeuille' : 'Portfolio' },
         ],
     },
     {
         name: 'WebQuest',
-        description: store.isFrench
+        description: lang.isFrench
             ? "Plateforme interactive pour apprendre le développement web frontend directement dans le navigateur : HTML, CSS, JavaScript, APIs et authentification JWT."
             : 'Interactive platform to learn frontend web development directly in the browser: HTML, CSS, JavaScript, APIs and JWT authentication.',
         year: '2025',
-        type: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
+        type: lang.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://web-quests.onrender.com/',
         techno: [
             { name: 'Golang', url: 'https://go.dev/' },
@@ -53,11 +94,11 @@ const projects = computed<Project[]>(() => [
     },
     {
         name: 'CityZen',
-        description: store.isFrench
+        description: lang.isFrench
             ? 'Site vitrine élégant pour un salon de coiffure, inspiré de designs primés Awwwards. Interface moderne avec gestion de contenu via Firebase.'
             : 'Elegant showcase website for a hair salon, inspired by award-winning Awwwards designs. Modern interface with content management via Firebase.',
         year: '2023',
-        type: store.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
+        type: lang.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://cityzen-coiffure.fr/',
         techno: [
             { name: 'Vue.js', url: 'https://vuejs.org/' },
@@ -67,14 +108,14 @@ const projects = computed<Project[]>(() => [
         color: '148, 139, 115',
         imgs: [
             { src: '/projects/cityzen/menu.webp', title: 'Menu' },
-            { src: '/projects/cityzen/avis.webp', title: store.isFrench ? 'Avis' : 'Reviews' },
+            { src: '/projects/cityzen/avis.webp', title: lang.isFrench ? 'Avis' : 'Reviews' },
             { src: '/projects/cityzen/contact.webp', title: 'Contact' },
-            { src: '/projects/cityzen/admin_1.webp', title: store.isFrench ? 'Administration' : 'Admin' },
+            { src: '/projects/cityzen/admin_1.webp', title: lang.isFrench ? 'Administration' : 'Admin' },
         ],
     },
     {
         name: 'Model Viewer',
-        description: store.isFrench
+        description: lang.isFrench
             ? "Documentation complète sur l'intégration de composants 3D interactifs dans Vue.js avec ModelViewer et Three.js."
             : 'Complete documentation on integrating interactive 3D components in Vue.js with ModelViewer and Three.js.',
         year: '2023',
@@ -89,11 +130,11 @@ const projects = computed<Project[]>(() => [
     },
     {
         name: 'NextMusic',
-        description: store.isFrench
+        description: lang.isFrench
             ? "Application de bibliothèque musicale développée avec Next.js et Tailwind CSS, à l'interface élégante inspirée de designs Dribbble."
             : 'Music library application built with Next.js and Tailwind CSS, with an elegant Dribbble-inspired interface.',
         year: '2022',
-        type: store.isFrench ? 'Projet scolaire' : 'School project',
+        type: lang.isFrench ? 'Projet scolaire' : 'School project',
         url: 'https://next-music.netlify.app/bibliotheque',
         techno: [
             { name: 'Next.js', url: 'https://nextjs.org/' },
@@ -102,13 +143,13 @@ const projects = computed<Project[]>(() => [
         path: '/projects/nextmusic',
         color: '18, 18, 18',
         imgs: [
-            { src: '/projects/nextmusic/next-music-homescreen.webp', title: store.isFrench ? 'Accueil' : 'Home' },
+            { src: '/projects/nextmusic/next-music-homescreen.webp', title: lang.isFrench ? 'Accueil' : 'Home' },
             {
                 src: '/projects/nextmusic/next-music-biblioscreen.webp',
-                title: store.isFrench ? 'Bibliothèque' : 'Library',
+                title: lang.isFrench ? 'Bibliothèque' : 'Library',
             },
-            { src: '/projects/nextmusic/next-music-favoritescreen.webp', title: store.isFrench ? 'Favoris' : 'Favorites' },
-            { src: '/projects/nextmusic/next-music-search.webp', title: store.isFrench ? 'Recherche' : 'Search' },
+            { src: '/projects/nextmusic/next-music-favoritescreen.webp', title: lang.isFrench ? 'Favoris' : 'Favorites' },
+            { src: '/projects/nextmusic/next-music-search.webp', title: lang.isFrench ? 'Recherche' : 'Search' },
         ],
     },
 ])
@@ -160,10 +201,10 @@ const openProject = (project: Project) => {
             <div ref="headerRef" class="section-header">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ store.isFrench ? 'Aussi' : 'Also' }}
+                    {{ lang.isFrench ? 'Aussi' : 'Also' }}
                 </span>
                 <h2 class="section-title">
-                    {{ store.isFrench ? 'Autres projets' : 'Other projects' }}
+                    {{ lang.isFrench ? 'Autres projets' : 'Other projects' }}
                 </h2>
             </div>
 
@@ -194,7 +235,7 @@ const openProject = (project: Project) => {
                             height="32"
                         />
                         <span class="project-name">{{ project.name }}</span>
-                        <span class="project-description">{{ project.description }}</span>
+                        <span class="project-description">{{ project.summary || project.description }}</span>
                         <span class="project-tech">{{ project.techno[0].name }}</span>
                         <svg class="project-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path

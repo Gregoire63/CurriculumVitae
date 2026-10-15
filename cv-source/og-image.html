@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <title>Image de partage — gregoire-raturat.fr</title>
+    <!-- Rendu en 1200×630 par scripts/build-cv.sh og → public/og-image.jpg et .webp -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&family=Playfair+Display:wght@700&family=Space+Mono:wght@400;700&display=swap" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 1200px; height: 630px; overflow: hidden; }
+        body {
+            position: relative;
+            font-family: 'DM Sans', system-ui, sans-serif;
+            color: #2a2826;
+            background:
+                linear-gradient(rgba(139, 111, 92, 0.045) 1px, transparent 1px) 0 0 / 50px 50px,
+                linear-gradient(90deg, rgba(139, 111, 92, 0.045) 1px, transparent 1px) 0 0 / 50px 50px,
+                linear-gradient(135deg, #fefcf8 0%, #f5f0e8 100%);
+        }
+        .circle { position: absolute; border-radius: 50%; border: 1px solid rgba(139, 111, 92, 0.16); }
+        .c1 { width: 360px; height: 360px; right: 40px; top: -150px; }
+        .c2 { width: 240px; height: 240px; right: -70px; bottom: 30px; }
+        .text { position: absolute; left: 80px; top: 64px; width: 700px; }
+        .logo { width: 62px; height: 57px; fill: #8b6f5c; display: block; margin-bottom: 40px; }
+        .label { display: flex; align-items: center; gap: 18px; font-family: 'Space Mono', monospace; font-weight: 700;
+                 font-size: 21px; letter-spacing: 0.16em; text-transform: uppercase; color: #8b6f5c; }
+        .label::before { content: ''; width: 46px; height: 2px; background: #8b6f5c; }
+        h1 { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: 88px; line-height: 1.04;
+             letter-spacing: -0.01em; margin: 16px 0 22px; }
+        .tagline { font-size: 29px; line-height: 1.42; color: #6b6560; max-width: 690px; }
+        .chips { position: absolute; left: 80px; bottom: 58px; display: flex; gap: 14px; }
+        .chip { font-family: 'Space Mono', monospace; font-weight: 700; font-size: 18px; color: #6e5747;
+                background: #e8dfd0; border-radius: 999px; padding: 12px 22px; white-space: nowrap; }
+        .chip.dark { background: #6e5747; color: #fefcf8; }
+        .photo { position: absolute; right: 80px; top: 92px; width: 290px; height: 380px; border-radius: 30px;
+                 overflow: hidden; background: #e5dbc8;
+                 box-shadow: 0 24px 60px rgba(42, 40, 38, 0.14), 0 0 0 1px rgba(139, 111, 92, 0.1); }
+        .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .photo::after { content: ''; position: absolute; inset: 0;
+                        background: linear-gradient(180deg, transparent 62%, rgba(139, 111, 92, 0.28) 100%); }
+    </style>
+</head>
+<body>
+    <div class="circle c1"></div>
+    <div class="circle c2"></div>
+
+    <div class="text">
+        <svg class="logo" viewBox="0 0 240 219" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(0, 219) scale(0.1, -0.1)">
+                <path d="M5 2178 c-3 -7 -4 -497 -3 -1088 l3 -1075 79 -3 79 -3 625 623 c344 343 668 667 721 721 l95 98 -54 54 -54 55 -438 0 -439 0 3 -147 3 -148 173 -3 c129 -2 172 -6 172 -15 0 -12 -632 -638 -651 -645 -5 -2 -8 261 -7 635 l3 638 418 1 c230 1 421 4 424 8 4 4 -60 74 -142 156 l-150 150 -428 0 c-333 0 -429 -3 -432 -12z" />
+                <path d="M1330 2183 c0 -5 162 -170 361 -369 316 -316 360 -364 351 -380 -6 -11 -324 -331 -706 -713 -383 -381 -693 -697 -690 -702 3 -5 93 -9 200 -9 188 1 195 2 221 24 16 13 138 135 273 271 135 135 253 251 264 257 16 9 56 -27 300 -271 l282 -282 99 3 100 3 3 110 2 110 -275 275 c-151 151 -275 280 -275 285 0 6 124 134 275 285 l275 274 0 96 0 95 -323 323 -322 322 -208 0 c-114 0 -207 -3 -207 -7z" />
+            </g>
+        </svg>
+        <p class="label">Développeur Full-Stack · Lyon</p>
+        <h1>Grégoire Raturat</h1>
+        <p class="tagline">Applications web et mobile, de la conception à la mise en production.</p>
+    </div>
+
+    <div class="photo"><img src="../public/photoCV.webp" alt="" /></div>
+
+    <div class="chips">
+        <span class="chip">Vue.js · React · React Native</span>
+        <span class="chip">Node.js · Django</span>
+        <span class="chip dark">IA : API Claude · MCP</span>
+    </div>
+</body>
+</html>

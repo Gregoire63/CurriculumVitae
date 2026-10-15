@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { usePreferredReducedMotion } from '@vueuse/core'
 import { ref } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
 
-const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
 const preferredMotion = usePreferredReducedMotion()
 // usePreferredReducedMotion renvoie une string ('reduce' | 'no-preference'), toujours truthy : on la normalise en booleen
 const prefersReducedMotion = computed(() => preferredMotion.value === 'reduce')
@@ -16,7 +16,8 @@ const isSubmitting = ref(false)
 const isSuccess = ref(false)
 const isError = ref(false)
 
-const socialLinks = [
+// computed : le lien du CV suit la langue de l'interface
+const socialLinks = computed(() => [
     {
         name: 'Email',
         url: 'mailto:gregoireraturatpro@gmail.com',
@@ -38,12 +39,12 @@ const socialLinks = [
         icon: 'M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z',
     },
     {
-        name: 'CV',
-        url: '/cv/CV_Gregoire_Raturat.pdf',
+        name: lang.isFrench ? 'Télécharger le CV (PDF)' : 'Download resume (PDF)',
+        url: lang.isFrench ? '/cv/CV_Gregoire_Raturat.pdf' : '/cv/CV_Gregoire_Raturat_EN.pdf',
         icon: 'M3 24h19v-23h-1v22h-18v1zm17-24h-18v22h18v-22zm-3 17h-12v1h12v-1zm0-3h-12v1h12v-1zm0-3h-12v1h12v-1zm-7.348-3.863l.948.3c-.145.529-.387.922-.725 1.178-.338.257-.767.385-1.287.385-.643 0-1.171-.22-1.585-.659-.414-.439-.621-1.04-.621-1.802 0-.806.208-1.432.624-1.878.416-.446.963-.669 1.642-.669.592 0 1.073.175 1.443.525.221.207.386.505.496.892l-.968.231c-.057-.251-.177-.449-.358-.594-.182-.146-.403-.218-.663-.218-.359 0-.65.129-.874.386-.223.258-.335.675-.335 1.252 0 .613.11 1.049.331 1.308.22.26.506.39.858.39.26 0 .484-.082.671-.248.187-.165.322-.425.403-.779zm3.023 1.78l-1.731-4.842h1.06l1.226 3.584 1.186-3.584h1.037l-1.734 4.842h-1.044z',
         download: true,
     },
-]
+])
 
 const infoRef = ref<HTMLElement | null>(null)
 const formRef = ref<HTMLElement | null>(null)
@@ -149,16 +150,16 @@ const handleSubmit = async (e: Event) => {
                 <div ref="infoRef" class="contact-info">
                     <span class="section-label">
                         <span class="label-line"></span>
-                        {{ store.isFrench ? 'Restons en contact' : "Let's connect" }}
+                        {{ lang.isFrench ? 'Restons en contact' : "Let's connect" }}
                     </span>
 
                     <h2 class="section-title">
-                        {{ store.isFrench ? 'Contactez-moi' : 'Get in touch' }}
+                        {{ lang.isFrench ? 'Contactez-moi' : 'Get in touch' }}
                     </h2>
 
                     <p class="section-description">
                         {{
-                            store.isFrench
+                            lang.isFrench
                                 ? 'Un projet, une question ou simplement envie d’échanger ? Écrivez-moi, je réponds rapidement.'
                                 : 'A project, a question, or just want to connect? Write to me — I reply quickly.'
                         }}
@@ -171,7 +172,7 @@ const handleSubmit = async (e: Event) => {
                             :key="social.name"
                             :href="social.url"
                             :target="social.download || social.url.startsWith('mailto:') ? '_self' : '_blank'"
-                            :download="social.download ? 'CV_Gregoire_Raturat.pdf' : undefined"
+                            :download="social.download ? (lang.isFrench ? 'CV_Gregoire_Raturat.pdf' : 'CV_Gregoire_Raturat_EN.pdf') : undefined"
                             class="social-link"
                             :aria-label="social.name"
                         >
@@ -192,7 +193,7 @@ const handleSubmit = async (e: Event) => {
                             <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                         </svg>
                         <span>
-                            {{ store.isFrench 
+                            {{ lang.isFrench 
                                 ? "Erreur lors de l'envoi. Veuillez réessayer." 
                                 : "Error sending message. Please try again."
                             }}
@@ -211,7 +212,7 @@ const handleSubmit = async (e: Event) => {
                         <!-- Champ Name (ajouté pour correspondre à contact.html) -->
                         <div class="form-group">
                             <label for="name" class="form-label">
-                                {{ store.isFrench ? 'Nom' : 'Name' }}
+                                {{ lang.isFrench ? 'Nom' : 'Name' }}
                             </label>
                             <input
                                 id="name"
@@ -219,7 +220,7 @@ const handleSubmit = async (e: Event) => {
                                 type="text"
                                 name="name"
                                 class="form-input"
-                                :placeholder="store.isFrench ? 'Votre nom' : 'Your name'"
+                                :placeholder="lang.isFrench ? 'Votre nom' : 'Your name'"
                                 required
                             />
                         </div>
@@ -233,7 +234,7 @@ const handleSubmit = async (e: Event) => {
                                 type="email"
                                 name="email"
                                 class="form-input"
-                                :placeholder="store.isFrench ? 'votre@email.com' : 'your@email.com'"
+                                :placeholder="lang.isFrench ? 'votre@email.com' : 'your@email.com'"
                                 required
                             />
                         </div>
@@ -246,7 +247,7 @@ const handleSubmit = async (e: Event) => {
                                 v-model="message"
                                 name="message"
                                 class="form-textarea"
-                                :placeholder="store.isFrench ? 'Votre message...' : 'Your message...'"
+                                :placeholder="lang.isFrench ? 'Votre message...' : 'Your message...'"
                                 rows="6"
                                 required
                             ></textarea>
@@ -254,7 +255,7 @@ const handleSubmit = async (e: Event) => {
 
                         <button type="submit" class="submit-button" :disabled="isSubmitting">
                             <span v-if="!isSubmitting && !isSuccess">
-                                {{ store.isFrench ? 'Envoyer' : 'Send' }}
+                                {{ lang.isFrench ? 'Envoyer' : 'Send' }}
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                     <path
                                         d="M22 2L11 13M22 2L15 22L11 13L2 9L22 2Z"
@@ -280,7 +281,7 @@ const handleSubmit = async (e: Event) => {
                                         stroke-linejoin="round"
                                     />
                                 </svg>
-                                {{ store.isFrench ? 'Envoyé !' : 'Sent!' }}
+                                {{ lang.isFrench ? 'Envoyé !' : 'Sent!' }}
                             </span>
                         </button>
                     </form>

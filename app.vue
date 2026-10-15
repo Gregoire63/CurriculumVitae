@@ -43,12 +43,8 @@ onMounted(() => {
     handleDarkMode(darkModeQuery)
     darkModeQuery.addEventListener('change', handleDarkMode)
 
-    // Charger gtag après que la page est interactive
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(() => useGtag().initialize())
-    } else {
-        setTimeout(() => useGtag().initialize(), 2000)
-    }
+    // Google Analytics n'est plus chargé ici : CookieConsent.vue ne l'initialise
+    // qu'après accord du visiteur (exigence CNIL pour la mesure d'audience).
 })
 
 onUnmounted(() => {
@@ -62,6 +58,7 @@ onUnmounted(() => {
     <div class="app-container">
         <CustomCursor />
         <NuxtPage />
+        <CookieConsent />
     </div>
 </template>
 
@@ -74,7 +71,8 @@ onUnmounted(() => {
 
     --text-primary: #2a2826;
     --text-secondary: #6b6560;
-    --text-muted: #9d9691;
+    /* 4,5:1 sur --bg-secondary (WCAG AA pour les petits libellés) ; #9d9691 plafonnait à 2,9:1 */
+    --text-muted: #736c66;
 
     --accent-primary: #8b6f5c;
     /* Variante foncée pour petit texte sur fonds beige (contraste WCAG AA) */
@@ -104,6 +102,14 @@ onUnmounted(() => {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+/* Le curseur système n'est masqué que pendant que le curseur personnalisé tourne :
+   CustomCursor.vue pose cette classe uniquement sur grand écran, souris, sans
+   préférence « animations réduites ». Fenêtre étroite, tactile, page d'erreur ou
+   JavaScript indisponible : on garde le curseur normal. */
+html.has-custom-cursor,
+html.has-custom-cursor * {
     cursor: none !important;
 }
 

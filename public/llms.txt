@@ -1,23 +1,46 @@
 # Grégoire Raturat — Développeur Full-Stack (Lyon)
 
-> Développeur full-stack basé à Lyon (France). Je conçois et développe des applications web et mobile, de la conception à la mise en production.
+> Développeur full-stack basé à Lyon (France). Je conçois et mets en production des applications web et mobile : front Vue.js ou React, back Node.js ou Django, CI/CD et exploitation comprises. J'intègre aussi des modèles d'IA (API Claude, MCP) dans de vrais produits.
 
 ## À propos
 - Nom : Grégoire Raturat
-- Rôle : Développeur Full-Stack
+- Rôle : Développeur Full-Stack (SOCOTEC, Lyon) · enseignant vacataire en développement web (Université Lyon 1) · freelance
+- Expérience : 6 ans (depuis 2020)
 - Localisation : Lyon, France (remote possible)
 - Site : https://gregoire-raturat.fr
+- CV : https://gregoire-raturat.fr/cv/CV_Gregoire_Raturat.pdf (FR) · https://gregoire-raturat.fr/cv/CV_Gregoire_Raturat_EN.pdf (EN)
+
+## Parcours
+- 2026 – aujourd'hui : Développeur Full Stack, SOCOTEC (Lyon & remote). Application de mesure d'émissions atmosphériques (PWA offline-first) : migration Vue 2 → Vue 3 / Vite / Pinia, génération asynchrone de rapports (REST, Celery, Kafka, FluxCD / Kubernetes), back Django / DRF, outillage IA de l'équipe (plugin Claude Code interne).
+- 2025 – 2026 : Développeur Full Stack, SOGEDO (Lyon). Migration Vue 2 → Vue 3, TypeScript, package npm privé avec CLI, pipelines GitLab CI/CD.
+- 2023 – 2025 : Développeur Full Stack, SYSTRA ex-Modaal (Lyon). Applications SIG (+10 M de parcelles cadastrales), automatisation Python, modèles IA de détection d'objets, CI/CD Docker / GitLab.
+- 2020 – 2023 : Apprenti développeur, Modaal (Lyon). Architecture d'une application SIG, ETL Python sur fichiers massifs, API REST.
+- Depuis 2025 : Enseignant vacataire, Université Claude Bernard Lyon 1. Module de 30 h pour 100+ étudiants (HTML/CSS/JS, Vue.js 3, TypeScript, APIs REST, Go).
+- Depuis 2021 : Freelance, 15+ projets livrés.
 
 ## Réalisations
-- [DishRank](https://dishrank.fr) : application de notation de plats publiée sur iOS, Android et web (React Native, Next.js, Supabase, TypeScript).
-- Messagerie omnicanale : boîte de réception unifiée en production pour indépendants, construite sur Chatwoot (WhatsApp, Instagram, Messenger, email).
-- [ETF PEA](https://etf.gregoire-raturat.fr) : application web de suivi et d'analyse des ETF éligibles au PEA.
+- [DishRank](https://dishrank.fr) : application de notation de plats publiée sur l'App Store, Google Play et le web (React Native / Expo, Next.js, Supabase, TypeScript), 5 langues.
+- Messagerie omnicanale : boîte de réception unifiée en production pour tatoueurs, construite sur Chatwoot (WhatsApp, Instagram, Messenger, email), brouillons de réponse générés par l'API Claude et validés par l'artiste.
+- [ETF PEA](https://etf.gregoire-raturat.fr) : application web de suivi et d'analyse des ETF éligibles au PEA (Next.js).
+- [Damn Claude](https://damnclaude.gregoire-raturat.fr) : PWA de suivi d'entraînement et de nutrition (Nuxt), synchronisation Withings, passkeys, serveur MCP pour Claude.
+- [BabyName](https://github.com/Gregoire63/BabyName) : aide au choix d'un prénom, pipeline Python sur les données INSEE / Wikidata / Wiktionnaire, enrichissement assisté par Claude.
 
 ## Compétences
-- Frontend : Vue.js / Nuxt, React / Next.js, TypeScript, Tailwind CSS
-- Mobile : React Native, Expo, publication App Store / Play Store
-- Backend : Node.js, Supabase, PostgreSQL, PostGIS, API REST
-- DevOps : Docker, GitLab CI/CD, Nginx, Netlify / Vercel
+- Frontend : Vue.js 3 / Nuxt, React / Next.js, TypeScript, Vuetify, Tailwind CSS, Pinia, Vite, PWA offline-first
+- Backend : Node.js (Express, Fastify), Python (Django / DRF, FastAPI), API REST / OpenAPI, PostgreSQL / PostGIS, Supabase, Celery / Redis, Kafka, Auth (OIDC, JWT, RBAC, passkeys)
+- IA & agents : API Claude (Anthropic), MCP (serveurs & clients), Claude Code (skills, plugins, hooks), détection d'objets, pipelines de données
+- Mobile : React Native, Expo / EAS Build, publication App Store / Play Store, notifications push
+- DevOps : Git / GitLab CI/CD, Docker, Kubernetes / FluxCD (GitOps), Nginx, Linux, Netlify / Vercel / Cloudflare, Sentry, SonarQube
+- Tests & méthodes : Vitest / Jest, pytest, Playwright / Cypress, Agile (Scrum / Kanban), revue de code
+
+## Formation
+- 2024 : Vue.js Certified Mid-Level Developer (certification officielle Vue.js)
+- 2021 – 2023 : Mastère Expert en Systèmes d'Information (IA & Big Data, Infrastructure & Cloud), ISITECH Lyon
+- 2020 – 2021 : Bachelor Responsable de Projet Informatique, ISITECH Lyon
+- 2017 – 2020 : Licence Informatique, Université Clermont Auvergne
+
+## Langues
+- Français (langue maternelle), Anglais (C1)
 
 ## Contact
 - Email : gregoireraturatpro@gmail.com

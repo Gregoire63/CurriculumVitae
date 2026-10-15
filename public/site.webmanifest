@@ -1,7 +1,7 @@
 {
-  "name": "Grégoire Raturat — Product Engineer Full-Stack",
+  "name": "Grégoire Raturat — Développeur Full-Stack",
   "short_name": "G. Raturat",
-  "description": "Product Engineer Full-Stack freelance à Lyon : MVP web & mobile, pipelines IA (RAG, API Claude) et développement assisté par IA.",
+  "description": "Développeur full-stack à Lyon : applications web et mobile (Vue.js, React, Node.js, Django), de la conception à la mise en production.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#fefcf8",

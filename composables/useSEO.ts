@@ -22,9 +22,9 @@ export interface SEOOptions {
 
 const SITE_URL = 'https://gregoire-raturat.fr'
 const SITE_NAME = 'Grégoire Raturat — Développeur Full-Stack'
-// ~128 caractères : sous la limite d'affichage (~160) des snippets Google
+// ~130 caractères : sous la limite d'affichage (~160) des snippets Google
 const DEFAULT_DESCRIPTION =
-    'Développeur full-stack à Lyon. Je conçois et développe des applications web et mobile, de la conception à la mise en production.'
+    'Développeur full-stack à Lyon : Vue.js, React, Node.js et Django. Je conçois et mets en production des applications web et mobile.'
 
 export const useSEO = (options: SEOOptions = {}) => {
     const route = useRoute()
@@ -145,8 +145,14 @@ export const useSEO = (options: SEOOptions = {}) => {
             name: config.author,
             jobTitle: 'Développeur Full-Stack',
             url: config.baseUrl,
-            image: ogImage,
+            image: `${SITE_URL}/photoCV.webp`,
             sameAs: [config.github, config.linkedin, config.malt],
+            worksFor: {
+                '@type': 'Organization',
+                name: 'SOCOTEC',
+                url: 'https://www.socotec.com/',
+            },
+            knowsLanguage: ['fr', 'en'],
             description: config.defaultDescription,
             email: config.email,
             address: {
@@ -165,8 +171,13 @@ export const useSEO = (options: SEOOptions = {}) => {
                 'Next.js',
                 'Node.js',
                 'Python',
+                'Django',
                 'PostgreSQL',
                 'Supabase',
+                'Docker',
+                'Kubernetes',
+                'Claude API',
+                'Model Context Protocol',
                 'Full Stack Development',
             ],
             alumniOf: [
@@ -175,7 +186,18 @@ export const useSEO = (options: SEOOptions = {}) => {
                     name: 'ISITECH',
                     url: 'https://www.ecole-isitech.com/',
                 },
+                {
+                    '@type': 'CollegeOrUniversity',
+                    name: 'Université Clermont Auvergne',
+                    url: 'https://www.uca.fr/',
+                },
             ],
+            hasCredential: {
+                '@type': 'EducationalOccupationalCredential',
+                name: 'Vue.js Certified Mid-Level Developer',
+                credentialCategory: 'certification',
+                url: 'https://certificates.dev/vuejs',
+            },
         }
 
         script.push({
@@ -228,9 +250,8 @@ export const useSEO = (options: SEOOptions = {}) => {
         meta,
         link,
         script,
-        htmlAttrs: {
-            lang: pageLocale,
-        },
+        // Pas d'htmlAttrs.lang ici : app.vue le tient à jour avec la langue choisie.
+        // Une valeur fixe posée par la page l'écrasait et laissait lang="fr" en anglais.
     })
 
     // useSeoMeta pour meilleure compatibilité avec Nuxt 3

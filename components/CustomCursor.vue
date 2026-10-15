@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
-// On désactive le curseur custom uniquement sur les vrais appareils tactiles
-// (pointeur grossier / pas de survol). `maxTouchPoints > 0` était trop large :
-// un portable à écran tactile a un pointeur fin, la souris custom doit y marcher.
-// On aligne ainsi le JS sur la media query CSS qui affiche le curseur.
-const isMobile = import.meta.client && window.matchMedia('(hover: none), (pointer: coarse)').matches
+// Le curseur personnalisé ne tourne que sur grand écran, avec une souris (pointeur
+// fin, survol possible), et si le visiteur n'a pas demandé moins d'animations — il
+// est fait d'inertie et de vibrations. Dans tous les autres cas le curseur système
+// reste visible : la classe `has-custom-cursor` (qui le masque, cf. app.vue) n'est
+// posée que pendant que celui-ci est réellement affiché.
+const CURSOR_QUERY = '(min-width: 1024px) and (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)'
+const enabled = ref(false)
+let cursorMedia: MediaQueryList | null = null
 const cursorDot = ref<HTMLElement | null>(null)
 const cursorOutline = ref<HTMLElement | null>(null)
 
@@ -55,8 +58,7 @@ const handleMouseUp = () => {
     isClicking.value = false
 }
 
-onMounted(() => {
-    if(isMobile) return
+const start = () => {
     // Initialiser au centre de l'écran
     const centerX = window.innerWidth / 2
     const centerY = window.innerHeight / 2
@@ -123,25 +125,45 @@ onMounted(() => {
 
     // Démarrer l'animation
     animate()
-})
+    enabled.value = true
+    document.documentElement.classList.add('has-custom-cursor')
+}
 
-onUnmounted(() => {
-    if(isMobile) return
+const stop = () => {
     window.removeEventListener('mousemove', handleMouseMove)
     window.removeEventListener('mouseover', handleMouseOver)
     window.removeEventListener('mousedown', handleMouseDown)
     window.removeEventListener('mouseup', handleMouseUp)
-    
+
     if (animationFrameId) {
         cancelAnimationFrame(animationFrameId)
     }
+    enabled.value = false
+    document.documentElement.classList.remove('has-custom-cursor')
+}
+
+// Redimensionnement de fenêtre ou changement de préférence en cours de visite
+const handleMediaChange = (e: MediaQueryListEvent | MediaQueryList) => {
+    if (e.matches && !enabled.value) start()
+    else if (!e.matches && enabled.value) stop()
+}
+
+onMounted(() => {
+    cursorMedia = window.matchMedia(CURSOR_QUERY)
+    handleMediaChange(cursorMedia)
+    cursorMedia.addEventListener('change', handleMediaChange)
+})
+
+onUnmounted(() => {
+    cursorMedia?.removeEventListener('change', handleMediaChange)
+    if (enabled.value) stop()
 })
 </script>
 
 <template>
     <!-- Curseur custom (seulement sur desktop) -->
     <ClientOnly>
-        <div class="custom-cursor">
+        <div v-show="enabled" class="custom-cursor" aria-hidden="true">
             <!-- Outline (suit avec effet d'inertie) - EN PREMIER pour être derrière -->
             <div
                 ref="cursorOutline"
@@ -162,30 +184,10 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Affiché seulement quand le script l'a activé (v-show) : cf. CURSOR_QUERY */
 .custom-cursor {
-    /* Cacher sur mobile et tablette */
-    display: none;
     pointer-events: none;
     z-index: 9999;
-}
-
-/* Afficher uniquement sur desktop */
-@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
-    .custom-cursor {
-        display: block;
-    }
-
-    /* Cacher le curseur par défaut */
-    :deep(body) {
-        cursor: none;
-    }
-
-    /* Garder le curseur par défaut sur les éléments de formulaire */
-    :deep(input),
-    :deep(textarea),
-    :deep(select) {
-        cursor: text !important;
-    }
 }
 
 /* Outline (cercle qui suit avec effet flottant) */

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { usePortfolioStore } from '~/stores/portfolio'
 
-const store = usePortfolioStore()
+// Langue de rendu alignée sur le HTML prérendu jusqu'au montage (section hydratée en différé)
+const lang = useLang()
 const isVisible = ref(false)
 
 interface Skill {
     category: string
-    icon: 'server' | 'layout' | 'check' | 'terminal' | 'mobile'
+    icon: 'server' | 'layout' | 'check' | 'terminal' | 'mobile' | 'ai'
     skills: string[]
 }
 
@@ -16,12 +16,14 @@ const skillsData = computed<Skill[]>(() => [
         category: 'Frontend',
         icon: 'layout',
         skills: [
-            'Vue.js / Nuxt',
+            'Vue.js 3 / Nuxt',
             'React / Next.js',
             'TypeScript',
+            'Vuetify',
             'Tailwind CSS',
             'Pinia',
-            'HTML5 / CSS3',
+            'Vite',
+            lang.isFrench ? 'PWA offline-first (IndexedDB)' : 'Offline-first PWA (IndexedDB)',
             'OpenLayers',
         ],
     },
@@ -29,15 +31,25 @@ const skillsData = computed<Skill[]>(() => [
         category: 'Backend',
         icon: 'server',
         skills: [
-            'Node.js (Express)',
-            store.isFrench ? 'API REST' : 'REST APIs',
-            'PostgreSQL',
-            'PostGIS',
+            'Node.js (Express, Fastify)',
+            'Python (Django / DRF, FastAPI)',
+            lang.isFrench ? 'API REST / OpenAPI' : 'REST APIs / OpenAPI',
+            'PostgreSQL / PostGIS',
             'Supabase',
-            'MongoDB',
-            'Redis',
-            '.NET',
-            'Auth (JWT, RBAC)',
+            'Celery / Redis',
+            'Kafka',
+            'Auth (OIDC, JWT, RBAC, passkeys)',
+        ],
+    },
+    {
+        category: lang.isFrench ? 'IA & agents' : 'AI & agents',
+        icon: 'ai',
+        skills: [
+            lang.isFrench ? 'API Claude (Anthropic)' : 'Claude API (Anthropic)',
+            lang.isFrench ? 'MCP (serveurs & clients)' : 'MCP (servers & clients)',
+            'Claude Code (skills, plugins, hooks)',
+            lang.isFrench ? 'Détection d’objets (vision)' : 'Object detection (vision)',
+            lang.isFrench ? 'Pipelines de données' : 'Data pipelines',
         ],
     },
     {
@@ -45,34 +57,36 @@ const skillsData = computed<Skill[]>(() => [
         icon: 'mobile',
         skills: [
             'React Native',
-            'Expo',
-            'EAS Build',
-            store.isFrench ? 'Publication App Store / Play Store' : 'App Store / Play Store publishing',
-            store.isFrench ? 'Notifications push' : 'Push notifications',
+            'Expo / EAS Build',
+            lang.isFrench ? 'Publication App Store / Play Store' : 'App Store / Play Store publishing',
+            lang.isFrench ? 'Notifications push' : 'Push notifications',
         ],
     },
     {
-        category: store.isFrench ? 'DevOps & Outils' : 'DevOps & Tools',
+        category: lang.isFrench ? 'DevOps & Outils' : 'DevOps & Tools',
         icon: 'terminal',
         skills: [
-            'Git',
-            'GitLab CI/CD',
+            'Git / GitLab CI/CD',
             'Docker',
+            'Kubernetes / FluxCD (GitOps)',
             'Nginx',
             'Linux',
-            'Netlify / Vercel',
-            store.isFrench ? 'Packages npm privés' : 'Private npm packages',
-            store.isFrench ? 'Outillage CLI (Node.js)' : 'CLI tooling (Node.js)',
+            'Netlify / Vercel / Cloudflare',
+            'Sentry',
+            'SonarQube',
+            lang.isFrench ? 'Packages npm privés' : 'Private npm packages',
+            lang.isFrench ? 'Outillage CLI (Node.js)' : 'CLI tooling (Node.js)',
         ],
     },
     {
-        category: store.isFrench ? 'Tests & Méthodes' : 'Testing & Methods',
+        category: lang.isFrench ? 'Tests & Méthodes' : 'Testing & Methods',
         icon: 'check',
         skills: [
             'Vitest / Jest',
-            'Cypress (E2E)',
+            'pytest',
+            'Playwright / Cypress (E2E)',
             'Agile (Scrum / Kanban)',
-            store.isFrench ? 'Revue de code' : 'Code review',
+            lang.isFrench ? 'Revue de code' : 'Code review',
         ],
     },
 ])
@@ -133,11 +147,11 @@ onMounted(() => {
                     Stack
                 </span>
                 <h2 class="section-title">
-                    {{ store.isFrench ? 'Compétences techniques' : 'Technical skills' }}
+                    {{ lang.isFrench ? 'Compétences techniques' : 'Technical skills' }}
                 </h2>
                 <p class="section-description">
                     {{
-                        store.isFrench
+                        lang.isFrench
                             ? 'Les technologies avec lesquelles je travaille au quotidien.'
                             : 'The technologies I work with day to day.'
                     }}
@@ -169,6 +183,9 @@ onMounted(() => {
                                 </template>
                                 <template v-else-if="skillGroup.icon === 'mobile'">
                                     <rect x="7" y="2" width="10" height="20" rx="2" /><path d="M11 18h2" />
+                                </template>
+                                <template v-else-if="skillGroup.icon === 'ai'">
+                                    <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z" />
                                 </template>
                                 <template v-else>
                                     <path d="M3 7l9-4 9 4-9 4-9-4zM3 12l9 4 9-4M3 17l9 4 9-4" />
