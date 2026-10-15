@@ -6,8 +6,9 @@
 #   scripts/build-cv.sh fr         # un seul
 #   scripts/build-cv.sh og         # l'image de partage (public/og-image.jpg et .webp)
 #
-# Chrome télécharge les polices Google à la volée : il faut le réseau. Sans lui,
-# le PDF sort quand même, avec les polices de repli déclarées dans cv.css.
+# Les polices sont dans cv-source/fonts/ (versions fixes, lisibles par les ATS) :
+# pas besoin de réseau. Après génération, `pdftotext <pdf> -` doit se lire dans
+# l'ordre visuel et `pdffonts <pdf>` ne doit lister aucune police « Type 3 ».
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

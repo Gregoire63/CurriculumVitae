@@ -2,8 +2,15 @@
  * Mise en page commune des deux CV (fr.html / en.html).
  * Rendu par Chrome headless via scripts/build-cv.sh — les unités sont en mm/pt,
  * pensées pour l'A4. Même palette et mêmes polices que le site.
+ *
+ * Pensé pour être lu par les ATS (logiciels de tri de candidatures) :
+ * - une seule colonne de lecture, pour que l'ordre du texte extrait suive l'ordre
+ *   visuel (les grilles en deux colonnes mélangeaient compétences et formation) ;
+ * - rien entre un intitulé de poste et ses dates ;
+ * - polices fixes intégrées en TrueType (fonts/fonts.css), pas en « Type 3 ».
+ * Vérification : pdftotext public/cv/CV_Gregoire_Raturat.pdf - doit se lire dans l'ordre.
  */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Playfair+Display:wght@600;700&family=Space+Mono:wght@400;700&display=swap');
+@import url('fonts/fonts.css');
 
 :root {
     --accent: #8b6f5c;
@@ -160,19 +167,6 @@ section:first-of-type h2 {
     white-space: nowrap;
 }
 
-.side-tag {
-    font-family: var(--mono);
-    font-size: 6.8pt;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    border: 0.5pt solid var(--line);
-    border-radius: 2mm;
-    padding: 0.2mm 1.5mm;
-    margin-left: 1.5mm;
-    vertical-align: middle;
-}
-
 .xp ul {
     margin: 0.8mm 0 0.8mm;
     padding-left: 3.8mm;
@@ -183,8 +177,7 @@ section:first-of-type h2 {
     padding-left: 0.4mm;
 }
 
-.xp li::marker,
-.edu li::marker {
+.xp li::marker {
     color: var(--accent);
 }
 
@@ -230,68 +223,37 @@ section:first-of-type h2 {
     color: var(--accent);
 }
 
-/* ---------- Compétences ---------- */
-.skills {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.6mm 6mm;
-    margin: 0;
-}
-
-.skills div {
+/* ---------- Compétences : une catégorie par ligne ---------- */
+.skills p,
+.lines p {
+    margin: 0 0 1.2mm;
     break-inside: avoid;
 }
 
-.skills dt {
-    font-family: var(--mono);
-    font-size: 7.4pt;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--accent);
-    margin-bottom: 0.3mm;
+/* Même police et même taille que le texte : un intitulé plus petit, dans une autre
+   police, sortait de sa ligne à l'extraction et se retrouvait après sa liste. */
+.label {
+    font-weight: 700;
+    color: var(--accent-strong);
 }
 
-.skills dd {
-    margin: 0;
-}
-
-/* ---------- Formation / langues ---------- */
-.cols {
-    display: grid;
-    grid-template-columns: 1.45fr 1fr;
-    gap: 0 8mm;
-}
-
+/* ---------- Formation : période, diplôme et école sur une même ligne ----------
+   Des dates alignées à droite formaient une colonne que l'extraction lisait à part. */
 .edu {
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    break-inside: avoid;
+    margin-bottom: 1.4mm;
 }
 
-.edu li {
-    display: grid;
-    grid-template-columns: 21mm 1fr;
-    gap: 2mm;
-    margin-bottom: 1.1mm;
-}
-
-.edu .period {
-    padding-top: 0.3mm;
-}
-
-.kv {
+.edu p {
     margin: 0;
 }
 
-.kv dt {
-    font-family: var(--mono);
-    font-size: 7.4pt;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+.edu-period {
+    font-weight: 500;
     color: var(--accent);
-    margin: 0 0 0.3mm;
 }
 
-.kv dd {
-    margin: 0 0 1.6mm;
+.edu .detail {
+    margin-top: 0.2mm;
+    color: var(--text-2);
 }

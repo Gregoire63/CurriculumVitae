@@ -1,0 +1,57 @@
+/*
+ * Polices du CV et de l'image de partage, en versions fixes (non variables).
+ *
+ * Chrome intègre une police variable dans un PDF au format « Type 3 », que
+ * certains ATS (logiciels de tri de candidatures) lisent mal. Ces fichiers
+ * statiques, servis par Google Fonts, sont intégrés en TrueType. Ils évitent aussi
+ * d'avoir besoin du réseau pour générer le CV.
+ *
+ * Licence SIL Open Font License 1.1 : voir OFL-*.txt dans ce dossier.
+ */
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url('DMSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 500;
+    font-display: block;
+    src: url('DMSans-Medium.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'DM Sans';
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+    src: url('DMSans-Bold.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Playfair Display';
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+    src: url('PlayfairDisplay-Bold.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Space Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url('SpaceMono-Regular.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Space Mono';
+    font-style: normal;
+    font-weight: 700;
+    font-display: block;
+    src: url('SpaceMono-Bold.ttf') format('truetype');
+}

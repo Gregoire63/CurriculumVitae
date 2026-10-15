@@ -46,9 +46,16 @@ pas édités à la main : ils sont générés depuis `cv-source/fr.html` et
 headless.
 
 ```bash
-scripts/build-cv.sh      # régénère les deux PDF (Chrome + réseau pour les polices)
+scripts/build-cv.sh      # régénère les deux PDF (Chrome, polices locales)
 scripts/build-cv.sh og   # régénère l'image de partage public/og-image.jpg / .webp
 ```
+
+Le PDF est pensé pour les ATS, les logiciels qui trient les candidatures en lisant
+le texte extrait. D'où une seule colonne de lecture, rien entre un intitulé de
+poste et ses dates, et des polices fixes dans `cv-source/fonts/` : Chrome intègre
+les polices variables au format « Type 3 », que certains ATS lisent mal. Après une
+modification, `pdftotext` doit restituer le texte dans l'ordre visuel, et
+`pdffonts` ne doit lister aucune police Type 3.
 
 Le contenu du CV vit donc à deux endroits : les composants `PortfolioCv.vue` /
 `PortfolioSkills.vue` pour le site, et `cv-source/` pour le PDF. Une expérience qui
