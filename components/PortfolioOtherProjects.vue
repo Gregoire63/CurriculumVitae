@@ -16,6 +16,25 @@ const { gtag } = useGtag()
 // On ne référence que des images .webp déjà présentes pour garder le site léger.
 const projects = computed<Project[]>(() => [
     {
+        name: lang.isFrench ? 'Messagerie omnicanale' : 'Omnichannel messaging',
+        summary: lang.isFrench
+            ? 'Une boîte de réception unique pour les tatoueurs : WhatsApp, Instagram, Messenger et email, avec des brouillons de réponse rédigés par l’API Claude.'
+            : 'A single inbox for tattoo artists: WhatsApp, Instagram, Messenger and email, with reply drafts written by the Claude API.',
+        description: lang.isFrench
+            ? "Une messagerie qui regroupe WhatsApp, Instagram, Messenger et email au même endroit, construite sur Chatwoot. Des brouillons de réponse sont proposés à l'artiste, qui garde la main : chaque message est relu et validé avant envoi. Utilisée en production par des tatoueurs."
+            : 'A messaging tool that brings WhatsApp, Instagram, Messenger and email together in one place, built on Chatwoot. Draft replies are suggested to the artist, who stays in control: every message is reviewed and approved before it goes out. Used in production by tattoo artists.',
+        year: '2026',
+        type: lang.isFrench ? 'Produit SaaS' : 'SaaS product',
+        techno: [
+            { name: 'Chatwoot', url: 'https://www.chatwoot.com/' },
+            { name: 'Node.js', url: 'https://nodejs.org/' },
+            { name: 'PostgreSQL', url: 'https://www.postgresql.org/' },
+            { name: lang.isFrench ? 'API Claude' : 'Claude API', url: 'https://docs.anthropic.com/' },
+        ],
+        path: '/projects/messagerie',
+        color: '110, 87, 71',
+    },
+    {
         name: 'ETF PEA',
         description: lang.isFrench
             ? "Application web pour suivre et analyser les ETF éligibles au PEA : dashboards, comparaison de fonds et suivi de portefeuille d'investissement."

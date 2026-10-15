@@ -25,7 +25,9 @@ const lastUpdate = '15/10/2026'
 </script>
 
 <template>
-    <Transition name="privacy-modal">
+    <!-- appear : la fenêtre est montée à sa première ouverture (hydratation différée) ;
+         sans lui, cette première fois s'affichait d'un coup, sans le rebond des suivantes -->
+    <Transition name="privacy-modal" appear>
         <div v-if="isOpen" class="privacy-overlay" @click="closePolicy">
             <div class="privacy-card" @click.stop>
                 <!-- Close button -->
@@ -847,6 +849,12 @@ const lastUpdate = '15/10/2026'
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* Au sommet du rebond d'ouverture, la feuille monte un peu au-dessus de sa place
+       (jusqu'à environ 10 % de sa hauteur) et laissait voir l'arrière-plan sous elle.
+       Cette ombre pleine, de la couleur de la feuille, prolonge son fond vers le bas :
+       elle reste visuellement collée au bord de l'écran. L'ombre n'est pas rognée
+       par l'overflow de la carte, et l'overlay la coupe au bas de l'écran. */
+    box-shadow: 0 30vh 0 var(--bg-primary);
 }
 
 /* Scrollbar */

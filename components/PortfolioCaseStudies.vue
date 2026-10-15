@@ -95,18 +95,6 @@ const content = computed<{ label: string; title: string; description: string; ca
                       screenshots: BABYNAMED_SHOTS_FR,
                   },
                   {
-                      id: 'inbox',
-                      status: 'En production',
-                      statusKind: 'live',
-                      tabLabel: 'SaaS',
-                      meta: '2026 · Produit SaaS',
-                      title: 'Messagerie omnicanale',
-                      tagline: 'Une boîte de réception unique pour les tatoueurs',
-                      summary:
-                          "Une messagerie qui regroupe WhatsApp, Instagram, Messenger et email au même endroit, construite sur Chatwoot. Des brouillons de réponse sont proposés à l'artiste, qui garde la main : chaque message est relu et validé avant envoi. Utilisée en production par des tatoueurs.",
-                      tech: ['Chatwoot', 'Node.js', 'PostgreSQL', 'API Claude'],
-                  },
-                  {
                       id: 'damnclaude',
                       status: 'Open source',
                       statusKind: 'oss',
@@ -158,18 +146,6 @@ const content = computed<{ label: string; title: string; description: string; ca
                       tech: ['Nuxt', 'Cloudflare D1', 'Python', 'Expo'],
                       links: [{ label: 'babynamed.fr', url: 'https://babynamed.fr', track: 'babynamed_web' }],
                       screenshots: BABYNAMED_SHOTS_EN,
-                  },
-                  {
-                      id: 'inbox',
-                      status: 'Live in production',
-                      statusKind: 'live',
-                      tabLabel: 'SaaS',
-                      meta: '2026 · SaaS product',
-                      title: 'Omnichannel messaging',
-                      tagline: 'A single inbox for tattoo artists',
-                      summary:
-                          'A messaging tool that brings WhatsApp, Instagram, Messenger and email together in one place, built on Chatwoot. Draft replies are suggested to the artist, who stays in control: every message is reviewed and approved before it goes out. Used in production by tattoo artists.',
-                      tech: ['Chatwoot', 'Node.js', 'PostgreSQL', 'Claude API'],
                   },
                   {
                       id: 'damnclaude',
@@ -228,6 +204,8 @@ const trackOutbound = (label: string) => {
 // ─────────────────────────────────────────────────────────────
 const activeIndex = ref(0)
 const caseCount = computed(() => content.value.cases.length)
+// Sens du dernier changement : la nouvelle fiche arrive de ce côté, l'ancienne part de l'autre
+const direction = ref<'next' | 'prev'>('next')
 const tablistRef = ref<HTMLElement | null>(null)
 const tabEls: HTMLElement[] = []
 
@@ -252,10 +230,17 @@ const revealCarousel = () => {
     window.scrollTo({ top: window.scrollY + top - 110, behavior: prefersReducedMotion.value ? 'auto' : 'smooth' })
 }
 
-const selectCase = (index: number, { focus = false, reveal = false } = {}) => {
+// `dir` est imposé par les flèches et le glissement (qui bouclent : « suivant »
+// depuis la dernière fiche revient à la première, en arrivant par la droite) ;
+// pour un onglet, le sens découle de sa position par rapport à l'onglet actif.
+const selectCase = (
+    index: number,
+    { focus = false, reveal = false, dir }: { focus?: boolean; reveal?: boolean; dir?: 'next' | 'prev' } = {},
+) => {
     const n = caseCount.value
     const next = ((index % n) + n) % n
     if (next !== activeIndex.value) {
+        direction.value = dir ?? (next > activeIndex.value ? 'next' : 'prev')
         activeIndex.value = next
         if (typeof gtag !== 'undefined') {
             gtag('event', 'select_content', {
@@ -273,16 +258,16 @@ const selectCase = (index: number, { focus = false, reveal = false } = {}) => {
 
 // Clavier sur les onglets, selon le motif « tabs » du WAI-ARIA : flèches, Début, Fin
 const onTabKeydown = (e: KeyboardEvent, index: number) => {
-    const targets: Record<string, number> = {
-        ArrowRight: index + 1,
-        ArrowLeft: index - 1,
-        Home: 0,
-        End: caseCount.value - 1,
+    const targets: Record<string, [number, 'next' | 'prev' | undefined]> = {
+        ArrowRight: [index + 1, 'next'],
+        ArrowLeft: [index - 1, 'prev'],
+        Home: [0, undefined],
+        End: [caseCount.value - 1, undefined],
     }
     const target = targets[e.key]
-    if (target === undefined) return
+    if (!target) return
     e.preventDefault()
-    selectCase(target, { focus: true })
+    selectCase(target[0], { focus: true, dir: target[1] })
 }
 
 // Glissement horizontal du doigt. Ignoré sur la bande de captures, qui défile elle-même.
@@ -301,7 +286,7 @@ const onTouchEnd = (e: TouchEvent) => {
     const dy = t.clientY - touchStart.y
     touchStart = null
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-        selectCase(activeIndex.value + (dx < 0 ? 1 : -1), { reveal: true })
+        selectCase(activeIndex.value + (dx < 0 ? 1 : -1), { reveal: true, dir: dx < 0 ? 'next' : 'prev' })
     }
 }
 </script>
@@ -358,129 +343,129 @@ const onTouchEnd = (e: TouchEvent) => {
                 </div>
 
                 <div class="cases-stage" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
-                    <article
-                        v-for="(cs, index) in content.cases"
-                        v-show="index === activeIndex"
-                        :id="`case-panel-${cs.id}`"
-                        :key="cs.id"
-                        class="case-study"
-                        role="tabpanel"
-                        :aria-labelledby="`case-tab-${cs.id}`"
-                    >
-                        <!-- Meta column -->
-                        <div class="case-meta">
-                            <div class="case-badges">
-                                <span class="case-status" :class="cs.statusKind">{{ cs.status }}</span>
-                                <span class="case-date">{{ cs.meta }}</span>
-                            </div>
-                            <h3 class="case-title">{{ cs.title }}</h3>
-                            <p class="case-tagline">{{ cs.tagline }}</p>
-                            <div class="case-tech">
-                                <span v-for="tech in cs.tech" :key="tech" class="tech-tag">{{ tech }}</span>
-                            </div>
-                        </div>
-
-                        <!-- Narrative column -->
-                        <div class="case-body">
-                            <div class="case-block">
-                                <p class="case-summary">{{ cs.summary }}</p>
-
-                                <!-- Store badges (DishRank) -->
-                                <div v-if="cs.hasStoreBadges" class="store-badges">
-                                    <a
-                                        :href="DISHRANK_APP_STORE_URL"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="store-badge"
-                                        @click="trackOutbound('dishrank_app_store')"
-                                    >
-                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                            <path
-                                                d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.702"
-                                            />
-                                        </svg>
-                                        <span class="store-text">
-                                            <small>{{ lang.isFrench ? 'Télécharger dans' : 'Download on the' }}</small>
-                                            <strong>{{ lang.isFrench ? "l'App Store" : 'App Store' }}</strong>
-                                        </span>
-                                    </a>
-                                    <a
-                                        :href="DISHRANK_PLAY_STORE_URL"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="store-badge"
-                                        @click="trackOutbound('dishrank_play_store')"
-                                    >
-                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                                            <path
-                                                d="M22.018 13.298l-3.919 2.218-3.515-3.493 3.543-3.521 3.891 2.202a1.49 1.49 0 0 1 0 2.594zM1.337.924a1.486 1.486 0 0 0-.112.568v21.017c0 .217.045.419.124.6l11.155-11.087L1.337.924zm12.207 10.065l3.258-3.238L3.45.195a1.466 1.466 0 0 0-.946-.179l11.04 10.973zm0 2.067l-11 10.933c.298.036.612-.016.906-.183l13.324-7.54-3.23-3.21z"
-                                            />
-                                        </svg>
-                                        <span class="store-text">
-                                            <small>{{ lang.isFrench ? 'Disponible sur' : 'Get it on' }}</small>
-                                            <strong>Google Play</strong>
-                                        </span>
-                                    </a>
-                                    <a
-                                        :href="DISHRANK_WEB_URL"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="web-link"
-                                        @click="trackOutbound('dishrank_web')"
-                                    >
-                                        dishrank.fr
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                            <path
-                                                d="M7 17L17 7M17 7H7M17 7V17"
-                                                stroke="currentColor"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            />
-                                        </svg>
-                                    </a>
+                    <Transition v-for="(cs, index) in content.cases" :key="cs.id" :name="`case-slide-${direction}`">
+                        <article
+                            v-show="index === activeIndex"
+                            :id="`case-panel-${cs.id}`"
+                            class="case-study"
+                            role="tabpanel"
+                            :aria-labelledby="`case-tab-${cs.id}`"
+                        >
+                            <!-- Meta column -->
+                            <div class="case-meta">
+                                <div class="case-badges">
+                                    <span class="case-status" :class="cs.statusKind">{{ cs.status }}</span>
+                                    <span class="case-date">{{ cs.meta }}</span>
                                 </div>
-
-                                <!-- Liens (projets sans badges de stores) -->
-                                <div v-else-if="cs.links" class="store-badges">
-                                    <a
-                                        v-for="link in cs.links"
-                                        :key="link.url"
-                                        :href="link.url"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="web-link"
-                                        @click="trackOutbound(link.track)"
-                                    >
-                                        {{ link.label }}
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                            <path
-                                                d="M7 17L17 7M17 7H7M17 7V17"
-                                                stroke="currentColor"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            />
-                                        </svg>
-                                    </a>
-                                </div>
-
-                                <!-- Captures d'écran -->
-                                <div v-if="cs.screenshots" class="case-shots">
-                                    <img
-                                        v-for="shot in cs.screenshots"
-                                        :key="shot.src"
-                                        :src="shot.src"
-                                        :alt="shot.alt"
-                                        :width="SHOT_WIDTH"
-                                        :height="SHOT_HEIGHT"
-                                        loading="lazy"
-                                        class="case-shot"
-                                    />
+                                <h3 class="case-title">{{ cs.title }}</h3>
+                                <p class="case-tagline">{{ cs.tagline }}</p>
+                                <div class="case-tech">
+                                    <span v-for="tech in cs.tech" :key="tech" class="tech-tag">{{ tech }}</span>
                                 </div>
                             </div>
-                        </div>
-                    </article>
+
+                            <!-- Narrative column -->
+                            <div class="case-body">
+                                <div class="case-block">
+                                    <p class="case-summary">{{ cs.summary }}</p>
+
+                                    <!-- Store badges (DishRank) -->
+                                    <div v-if="cs.hasStoreBadges" class="store-badges">
+                                        <a
+                                            :href="DISHRANK_APP_STORE_URL"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="store-badge"
+                                            @click="trackOutbound('dishrank_app_store')"
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path
+                                                    d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.702"
+                                                />
+                                            </svg>
+                                            <span class="store-text">
+                                                <small>{{ lang.isFrench ? 'Télécharger dans' : 'Download on the' }}</small>
+                                                <strong>{{ lang.isFrench ? "l'App Store" : 'App Store' }}</strong>
+                                            </span>
+                                        </a>
+                                        <a
+                                            :href="DISHRANK_PLAY_STORE_URL"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="store-badge"
+                                            @click="trackOutbound('dishrank_play_store')"
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                                <path
+                                                    d="M22.018 13.298l-3.919 2.218-3.515-3.493 3.543-3.521 3.891 2.202a1.49 1.49 0 0 1 0 2.594zM1.337.924a1.486 1.486 0 0 0-.112.568v21.017c0 .217.045.419.124.6l11.155-11.087L1.337.924zm12.207 10.065l3.258-3.238L3.45.195a1.466 1.466 0 0 0-.946-.179l11.04 10.973zm0 2.067l-11 10.933c.298.036.612-.016.906-.183l13.324-7.54-3.23-3.21z"
+                                                />
+                                            </svg>
+                                            <span class="store-text">
+                                                <small>{{ lang.isFrench ? 'Disponible sur' : 'Get it on' }}</small>
+                                                <strong>Google Play</strong>
+                                            </span>
+                                        </a>
+                                        <a
+                                            :href="DISHRANK_WEB_URL"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="web-link"
+                                            @click="trackOutbound('dishrank_web')"
+                                        >
+                                            dishrank.fr
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path
+                                                    d="M7 17L17 7M17 7H7M17 7V17"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                />
+                                            </svg>
+                                        </a>
+                                    </div>
+
+                                    <!-- Liens (projets sans badges de stores) -->
+                                    <div v-else-if="cs.links" class="store-badges">
+                                        <a
+                                            v-for="link in cs.links"
+                                            :key="link.url"
+                                            :href="link.url"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="web-link"
+                                            @click="trackOutbound(link.track)"
+                                        >
+                                            {{ link.label }}
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                                <path
+                                                    d="M7 17L17 7M17 7H7M17 7V17"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                />
+                                            </svg>
+                                        </a>
+                                    </div>
+
+                                    <!-- Captures d'écran -->
+                                    <div v-if="cs.screenshots" class="case-shots">
+                                        <img
+                                            v-for="shot in cs.screenshots"
+                                            :key="shot.src"
+                                            :src="shot.src"
+                                            :alt="shot.alt"
+                                            :width="SHOT_WIDTH"
+                                            :height="SHOT_HEIGHT"
+                                            loading="lazy"
+                                            class="case-shot"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    </Transition>
                 </div>
 
                 <!-- Flèches et position -->
@@ -489,7 +474,7 @@ const onTouchEnd = (e: TouchEvent) => {
                         type="button"
                         class="case-arrow"
                         :aria-label="lang.isFrench ? 'Projet précédent' : 'Previous project'"
-                        @click="selectCase(activeIndex - 1, { reveal: true })"
+                        @click="selectCase(activeIndex - 1, { reveal: true, dir: 'prev' })"
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -503,7 +488,7 @@ const onTouchEnd = (e: TouchEvent) => {
                         type="button"
                         class="case-arrow"
                         :aria-label="lang.isFrench ? 'Projet suivant' : 'Next project'"
-                        @click="selectCase(activeIndex + 1, { reveal: true })"
+                        @click="selectCase(activeIndex + 1, { reveal: true, dir: 'next' })"
                     >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -767,7 +752,8 @@ const onTouchEnd = (e: TouchEvent) => {
 .case-tabs {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: var(--space-sm);
     margin-bottom: var(--space-md);
 }
@@ -833,10 +819,50 @@ const onTouchEnd = (e: TouchEvent) => {
     color: var(--text-secondary);
 }
 
-/* Une fiche à la fois : celle qui apparaît glisse légèrement en place */
-@media (prefers-reduced-motion: no-preference) {
-    .case-study {
-        animation: case-in 0.45s var(--ease-out) both;
+/* Une fiche à la fois. Pendant un changement, l'ancienne et la nouvelle partagent
+   la même cellule de grille : elles se croisent sans pousser le reste de la page.
+   La nouvelle arrive du côté où l'on va, l'ancienne s'efface de l'autre côté. */
+.cases-stage {
+    display: grid;
+}
+
+.cases-stage > .case-study {
+    grid-area: 1 / 1;
+}
+
+.case-slide-next-enter-active,
+.case-slide-next-leave-active,
+.case-slide-prev-enter-active,
+.case-slide-prev-leave-active {
+    transition:
+        opacity 0.45s var(--ease-smooth),
+        transform 0.55s var(--ease-out);
+}
+
+.case-slide-next-leave-active,
+.case-slide-prev-leave-active {
+    pointer-events: none;
+}
+
+.case-slide-next-enter-from,
+.case-slide-prev-leave-to {
+    opacity: 0;
+    transform: translateX(80px);
+}
+
+.case-slide-next-leave-to,
+.case-slide-prev-enter-from {
+    opacity: 0;
+    transform: translateX(-80px);
+}
+
+/* Moins d'animations : un simple fondu, sans déplacement */
+@media (prefers-reduced-motion: reduce) {
+    .case-slide-next-enter-from,
+    .case-slide-prev-leave-to,
+    .case-slide-next-leave-to,
+    .case-slide-prev-enter-from {
+        transform: none;
     }
 }
 
@@ -944,18 +970,6 @@ const onTouchEnd = (e: TouchEvent) => {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
-    }
-}
-
-@keyframes case-in {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: none;
     }
 }
 </style>
