@@ -27,7 +27,7 @@ const degrees = computed<Degree[]>(() => [
     },
     {
         year: '2021 - 2023',
-        title: lang.isFrench ? "Mastère - Expert en Système d'Information" : 'Master - Information System Expert',
+        title: lang.isFrench ? "Mastère - Expert en Systèmes d'Information" : 'Master - Information Systems Expert',
         school: 'ISITECH - Lyon',
         url: 'https://www.ecole-isitech.com/',
         type: 'degree',

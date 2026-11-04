@@ -35,24 +35,24 @@ const SHOT_WIDTH = 440
 const SHOT_HEIGHT = 952
 
 const BABYNAMED_SHOTS_FR = [
-    { src: '/projects/babynamed/choisir-a-deux.webp', alt: 'babyNamed — choisir un prénom à deux' },
-    { src: '/projects/babynamed/catalogue.webp', alt: 'babyNamed — catalogue de prénoms' },
-    { src: '/projects/babynamed/fiche-prenom.webp', alt: 'babyNamed — fiche du prénom Louise' },
+    { src: '/projects/babynamed/choisir-a-deux.webp', alt: 'babyNamed : choisir un prénom à deux' },
+    { src: '/projects/babynamed/catalogue.webp', alt: 'babyNamed : catalogue de prénoms' },
+    { src: '/projects/babynamed/fiche-prenom.webp', alt: 'babyNamed : fiche du prénom Louise' },
 ]
 const BABYNAMED_SHOTS_EN = [
-    { src: '/projects/babynamed/choisir-a-deux.webp', alt: 'babyNamed — choosing a name together' },
-    { src: '/projects/babynamed/catalogue.webp', alt: 'babyNamed — name catalogue' },
-    { src: '/projects/babynamed/fiche-prenom.webp', alt: 'babyNamed — page for the name Louise' },
+    { src: '/projects/babynamed/choisir-a-deux.webp', alt: 'babyNamed: choosing a name together' },
+    { src: '/projects/babynamed/catalogue.webp', alt: 'babyNamed: name catalogue' },
+    { src: '/projects/babynamed/fiche-prenom.webp', alt: 'babyNamed: page for the name Louise' },
 ]
 const DAMNCLAUDE_SHOTS_FR = [
-    { src: '/projects/damnclaude/accueil.webp', alt: 'Damn Claude — tableau de bord du jour' },
-    { src: '/projects/damnclaude/seance.webp', alt: 'Damn Claude — séance en cours' },
-    { src: '/projects/damnclaude/propositions.webp', alt: 'Damn Claude — propositions de Claude à valider' },
+    { src: '/projects/damnclaude/accueil.webp', alt: 'Damn Claude : tableau de bord du jour' },
+    { src: '/projects/damnclaude/seance.webp', alt: 'Damn Claude : séance en cours' },
+    { src: '/projects/damnclaude/propositions.webp', alt: 'Damn Claude : propositions de Claude à valider' },
 ]
 const DAMNCLAUDE_SHOTS_EN = [
-    { src: '/projects/damnclaude/accueil.webp', alt: 'Damn Claude — today dashboard' },
-    { src: '/projects/damnclaude/seance.webp', alt: 'Damn Claude — workout in progress' },
-    { src: '/projects/damnclaude/propositions.webp', alt: 'Damn Claude — suggestions from Claude awaiting approval' },
+    { src: '/projects/damnclaude/accueil.webp', alt: 'Damn Claude: today dashboard' },
+    { src: '/projects/damnclaude/seance.webp', alt: 'Damn Claude: workout in progress' },
+    { src: '/projects/damnclaude/propositions.webp', alt: 'Damn Claude: suggestions from Claude awaiting approval' },
 ]
 
 const content = computed<{ label: string; title: string; description: string; cases: CaseStudy[] }>(() =>
@@ -75,9 +75,10 @@ const content = computed<{ label: string; title: string; description: string; ca
                       tech: ['React Native', 'Next.js', 'Supabase', 'TypeScript'],
                       hasStoreBadges: true,
                       screenshots: [
-                          { src: '/projects/dishrank/home-sm.webp', alt: 'DishRank — écran d’accueil' },
-                          { src: '/projects/dishrank/map-sm.webp', alt: 'DishRank — carte des plats' },
-                          { src: '/projects/dishrank/profil-sm.webp', alt: 'DishRank — profil' },
+                          { src: '/projects/dishrank/entre-amis.webp', alt: 'DishRank : on mange où ce soir, décider ensemble en un vote' },
+                          { src: '/projects/dishrank/recherche.webp', alt: 'DishRank : chercher un plat, pas un resto' },
+                          { src: '/projects/dishrank/plat.webp', alt: 'DishRank : chaque plat a sa note' },
+                          { src: '/projects/dishrank/classement.webp', alt: 'DishRank : les mieux notés de Lyon' },
                       ],
                   },
                   {
@@ -128,9 +129,10 @@ const content = computed<{ label: string; title: string; description: string; ca
                       tech: ['React Native', 'Next.js', 'Supabase', 'TypeScript'],
                       hasStoreBadges: true,
                       screenshots: [
-                          { src: '/projects/dishrank/home-sm.webp', alt: 'DishRank — home screen' },
-                          { src: '/projects/dishrank/map-sm.webp', alt: 'DishRank — dish map' },
-                          { src: '/projects/dishrank/profil-sm.webp', alt: 'DishRank — profile' },
+                          { src: '/projects/dishrank/entre-amis.webp', alt: 'DishRank: where do we eat tonight, decide together in one vote' },
+                          { src: '/projects/dishrank/recherche.webp', alt: 'DishRank: search for a dish, not a restaurant' },
+                          { src: '/projects/dishrank/plat.webp', alt: 'DishRank: every dish has its rating' },
+                          { src: '/projects/dishrank/classement.webp', alt: 'DishRank: the best-rated dishes in Lyon' },
                       ],
                   },
                   {
@@ -336,7 +338,7 @@ const onTouchEnd = (e: TouchEvent) => {
                         @click="selectCase(index)"
                         @keydown="onTabKeydown($event, index)"
                     >
-                        <span class="case-tab-index">{{ String(index + 1).padStart(2, '0') }}</span>
+                        <img :src="`/projects/${cs.id}/icone.webp`" alt="" width="28" height="28" class="case-tab-icon" />
                         <span class="case-tab-title">{{ cs.title }}</span>
                         <span class="case-tab-kind">{{ cs.tabLabel }}</span>
                     </button>
@@ -759,12 +761,14 @@ const onTouchEnd = (e: TouchEvent) => {
 }
 
 .case-tab {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.3rem;
     min-width: 0;
-    padding: 0.85rem 1.1rem;
+    /* À droite, la place du logo : le titre ne passe pas dessous */
+    padding: 0.85rem calc(1.1rem + 28px + 0.75rem) 0.85rem 1.1rem;
     font: inherit;
     text-align: left;
     color: var(--text-secondary);
@@ -793,11 +797,16 @@ const onTouchEnd = (e: TouchEvent) => {
     box-shadow: 0 12px 30px rgba(139, 111, 92, 0.14);
 }
 
-.case-tab-index {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    letter-spacing: 0.12em;
-    color: var(--accent-strong);
+/* Logo de l'app, dans le coin haut droit de la carte */
+.case-tab-icon {
+    position: absolute;
+    top: 0.85rem;
+    right: 1.1rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 22%;
+    outline: 1px solid rgba(42, 40, 38, 0.08);
+    outline-offset: -1px;
 }
 
 .case-tab-title {
@@ -953,12 +962,17 @@ const onTouchEnd = (e: TouchEvent) => {
     .case-tab {
         flex: 0 0 auto;
         max-width: 70vw;
-        padding: 0.7rem 0.95rem;
+        padding: 0.7rem calc(0.95rem + 28px + 0.6rem) 0.7rem 0.95rem;
         scroll-snap-align: start;
     }
 
     .case-tab-title {
         font-size: 1rem;
+    }
+
+    .case-tab-icon {
+        top: 0.7rem;
+        right: 0.95rem;
     }
 }
 

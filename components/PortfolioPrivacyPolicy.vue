@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
@@ -16,9 +16,44 @@ const manageConsent = () => {
     store.setConsentOpen(true)
 }
 
-// Échap ferme la fenêtre, comme le bouton
+const cardRef = ref<HTMLElement | null>(null)
+const closeRef = ref<HTMLButtonElement | null>(null)
+// Élément qui avait le focus à l'ouverture (lien du pied de page, du menu ou du bandeau)
+let opener: HTMLElement | null = null
+
+// Hydratation différée : on suit l'apparition de la feuille, comme pour le menu
+watch(cardRef, async (card, previous) => {
+    if (card && !previous) {
+        opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        await nextTick()
+        closeRef.value?.focus()
+    } else if (!card && previous) {
+        const active = document.activeElement
+        const focusInCard = !active || active === document.body || previous.contains(active)
+        if (opener?.isConnected && focusInCard) opener.focus()
+        opener = null
+    }
+})
+
+// Échap ferme la fenêtre, comme le bouton ; Tab reste dans la feuille
 useEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && isOpen.value) closePolicy()
+    if (!isOpen.value || !cardRef.value) return
+    if (e.key === 'Escape') {
+        closePolicy()
+        return
+    }
+    if (e.key !== 'Tab') return
+    const focusables = [...cardRef.value.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')]
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    if (!first || !last) return
+    if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+    }
 })
 
 const lastUpdate = '15/10/2026'
@@ -29,9 +64,22 @@ const lastUpdate = '15/10/2026'
          sans lui, cette première fois s'affichait d'un coup, sans le rebond des suivantes -->
     <Transition name="privacy-modal" appear>
         <div v-if="isOpen" class="privacy-overlay" @click="closePolicy">
-            <div class="privacy-card" @click.stop>
+            <div
+                ref="cardRef"
+                class="privacy-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="privacy-title"
+                @click.stop
+            >
                 <!-- Close button -->
-                <button class="close-button" aria-label="Close" @click="closePolicy">
+                <button
+                    ref="closeRef"
+                    type="button"
+                    class="close-button"
+                    :aria-label="store.isFrench ? 'Fermer' : 'Close'"
+                    @click="closePolicy"
+                >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                         <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
                     </svg>
@@ -43,8 +91,8 @@ const lastUpdate = '15/10/2026'
                         <span class="label-line"></span>
                         {{ store.isFrench ? 'Informations légales' : 'Legal Information' }}
                     </span>
-                    <h1 class="section-title">
-                        {{ store.isFrench ? 'Politique de Confidentialité' : 'Privacy Policy' }}
+                    <h1 id="privacy-title" class="section-title">
+                        {{ store.isFrench ? 'Politique de confidentialité' : 'Privacy Policy' }}
                     </h1>
                     <p class="last-update">
                         {{ store.isFrench ? `Dernière mise à jour : ${lastUpdate}` : `Last updated: ${lastUpdate}` }}

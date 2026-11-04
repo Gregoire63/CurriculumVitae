@@ -4,7 +4,10 @@ import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 const currentImageIndex = ref(0)
-const modalPanel = ref<HTMLElement>()
+const modalPanel = ref<HTMLElement | null>(null)
+const closeRef = ref<HTMLButtonElement | null>(null)
+// Élément qui avait le focus à l'ouverture (la ligne du projet) : il le retrouve à la fermeture
+let opener: HTMLElement | null = null
 
 const project = computed(() => store.activeProject)
 
@@ -49,12 +52,39 @@ const goToImage = (index: number) => {
     currentImageIndex.value = index
 }
 
-// Clavier : Échap ferme, les flèches font défiler la galerie
+// Hydratation différée : on suit l'apparition du panneau pour y placer le focus, puis le rendre
+watch(modalPanel, async (panel, previous) => {
+    if (panel && !previous) {
+        opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        await nextTick()
+        closeRef.value?.focus()
+    } else if (!panel && previous) {
+        const active = document.activeElement
+        const focusInPanel = !active || active === document.body || previous.contains(active)
+        if (opener?.isConnected && focusInPanel) opener.focus()
+        opener = null
+    }
+})
+
+// Clavier : Échap ferme, les flèches font défiler la galerie, Tab reste dans la fenêtre
 useEventListener('keydown', (e: KeyboardEvent) => {
     if (!project.value) return
     if (e.key === 'Escape') closeModal()
     else if (e.key === 'ArrowRight') nextImage()
     else if (e.key === 'ArrowLeft') prevImage()
+    else if (e.key === 'Tab' && modalPanel.value) {
+        const focusables = [...modalPanel.value.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')]
+        const first = focusables[0]
+        const last = focusables[focusables.length - 1]
+        if (!first || !last) return
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault()
+            last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault()
+            first.focus()
+        }
+    }
 })
 </script>
 
@@ -107,6 +137,8 @@ useEventListener('keydown', (e: KeyboardEvent) => {
                         </a>
 
                         <button
+                            ref="closeRef"
+                            type="button"
                             class="action-button close-button"
                             :aria-label="store.isFrench ? 'Fermer' : 'Close'"
                             @click="closeModal"
@@ -162,7 +194,7 @@ useEventListener('keydown', (e: KeyboardEvent) => {
                             <button
                                 v-if="project.imgs.length > 1"
                                 class="gallery-nav prev"
-                                aria-label="Previous image"
+                                :aria-label="store.isFrench ? 'Image précédente' : 'Previous image'"
                                 @click="prevImage"
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -178,7 +210,7 @@ useEventListener('keydown', (e: KeyboardEvent) => {
                             <button
                                 v-if="project.imgs.length > 1"
                                 class="gallery-nav next"
-                                aria-label="Next image"
+                                :aria-label="store.isFrench ? 'Image suivante' : 'Next image'"
                                 @click="nextImage"
                             >
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">

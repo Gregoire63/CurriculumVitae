@@ -32,6 +32,16 @@
     src: url('DMSans-Bold.ttf') format('truetype');
 }
 
+/* Newsreader 18pt Medium : nom et titres du CV */
+@font-face {
+    font-family: 'Newsreader';
+    font-style: normal;
+    font-weight: 500;
+    font-display: block;
+    src: url('Newsreader-Medium.ttf') format('truetype');
+}
+
+/* Playfair Display et Space Mono : seulement pour l'image de partage (og-image.html) */
 @font-face {
     font-family: 'Playfair Display';
     font-style: normal;

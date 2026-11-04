@@ -50,6 +50,13 @@ html {
   outline-offset: 4px;
 }
 
+/* Cibles du lien d'évitement et de la navigation : elles reçoivent le focus pour que
+   le clavier reparte de là, sans encadrer toute une section. */
+main:focus,
+main > section:focus {
+  outline: none;
+}
+
 /* Image optimization */
 img {
   max-width: 100%;

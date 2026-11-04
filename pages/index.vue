@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePreferredReducedMotion } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
@@ -53,8 +54,10 @@ onUnmounted(() => {
     window.removeEventListener('resize', updateViewportHeight)
 })
 
-// Parallax effects
+// Parallax effects : coupée pour qui demande moins d'animations
+const preferredMotion = usePreferredReducedMotion()
 const heroParallax = computed(() => {
+    if (preferredMotion.value === 'reduce') return 'none'
     const offset = Math.min(scrollY.value * 0.6, 250)
     return `translateY(${offset}px)`
 })
@@ -66,10 +69,11 @@ const heroParallax = computed(() => {
         <!-- Navigation -->
         <PortfolioNavigation />
 
-        <main>
+        <!-- Cible du lien d'évitement de la navigation -->
+        <main id="main" tabindex="-1">
 
         <!-- Hero Section -->
-        <section id="hero" ref="heroSection" class="section hero-section">
+        <section id="hero" class="section hero-section">
             <div class="hero-content" :style="{ transform: heroParallax }">
                 <PortfolioHero />
             </div>
@@ -83,7 +87,7 @@ const heroParallax = computed(() => {
         </section>
 
         <!-- Case Studies Section -->
-        <section id="cases" ref="casesSection" class="section cases-section">
+        <section id="cases" class="section cases-section">
             <div class="section-background light">
                 <div class="grid-pattern"></div>
             </div>
@@ -91,21 +95,21 @@ const heroParallax = computed(() => {
         </section>
 
         <!-- Other Projects Section (compact) -->
-        <section id="projects" ref="projectsSection" class="section projects-compact-section">
+        <section id="projects" class="section projects-compact-section">
             <LazyPortfolioOtherProjects :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         <!-- Parcours / Expérience professionnelle -->
-        <section id="cv" ref="cvSection" class="section cv-section">
+        <section id="cv" class="section cv-section">
             <LazyPortfolioCv :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
 
         <!-- Formation (secondaire) -->
-        <section id="about" ref="aboutSection" class="section about-section">
+        <section id="about" class="section about-section">
             <LazyPortfolioAbout :hydrate-on-visible="HYDRATE_AHEAD" />
         </section>
         <!-- Skills Section -->
-        <section id="skills" ref="skillsSection" class="section skills-section">
+        <section id="skills" class="section skills-section">
             <div class="section-background dark">
                 <div class="noise-overlay"></div>
             </div>
@@ -113,7 +117,7 @@ const heroParallax = computed(() => {
         </section>
 
         <!-- Contact Section -->
-        <section id="contact" ref="contactSection" class="section contact-section">
+        <section id="contact" class="section contact-section">
             <div class="section-background gradient">
                 <div class="gradient-orb orb-1"></div>
                 <div class="gradient-orb orb-2"></div>

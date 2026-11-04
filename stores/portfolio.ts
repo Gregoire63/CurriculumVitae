@@ -205,16 +205,24 @@ export const usePortfolioStore = defineStore('portfolio', {
             }
         },
 
-        navigateToSection(section: SectionName){
-            // 1. Fermer le menu
+        // Défile jusqu'à la section et y place le focus, pour que le clavier et les
+        // lecteurs d'écran reprennent là où l'on arrive. Le menu, s'il est ouvert, se
+        // ferme d'abord (300 ms : le temps de rendre le défilement de la page).
+        navigateToSection(section: SectionName) {
+            const wasMenuOpen = this.isMenuOpen
             this.setMenuOpen(false)
-            
-            setTimeout(() => {
-                document.getElementById(section)?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start',
-                })
-            }, 300)
+
+            const go = () => {
+                const target = document.getElementById(section)
+                if (!target) return
+                const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                target.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' })
+                if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1')
+                target.focus({ preventScroll: true })
+            }
+
+            if (wasMenuOpen) setTimeout(go, 300)
+            else go()
         },
         setConsentOpen(isOpen: boolean) {
             this.isConsentOpen = isOpen

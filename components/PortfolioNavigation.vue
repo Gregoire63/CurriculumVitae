@@ -3,6 +3,23 @@ import type { SectionName } from '~/stores/portfolio'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
+const { gtag } = useGtag()
+
+// Le CV PDF dans la langue de l'interface, accessible depuis la barre sur toute la page
+const cvUrl = computed(() => (store.isFrench ? '/cv/CV_Gregoire_Raturat.pdf' : '/cv/CV_Gregoire_Raturat_EN.pdf'))
+
+const trackCv = () => {
+    if (typeof gtag !== 'undefined') {
+        gtag('event', 'download', { event_category: 'engagement', event_label: 'CV_PDF_nav' })
+    }
+}
+
+// Lien d'évitement : le focus va au contenu, la nav est sautée
+const skipToMain = () => {
+    const main = document.getElementById('main')
+    main?.focus({ preventScroll: true })
+    main?.scrollIntoView({ block: 'start' })
+}
 
 const handleNavClick = (section: SectionName) => {
     store.navigateToSection(section)
@@ -16,6 +33,9 @@ const isActive = (id: SectionName) => {
 </script>
 
 <template>
+    <a href="#main" class="skip-link" @click.prevent="skipToMain">
+        {{ store.isFrench ? 'Aller au contenu' : 'Skip to content' }}
+    </a>
     <nav class="portfolio-nav" :class="{ scrolled: store.scrollProgress > 5 }">
         <div class="nav-container">
             <!-- Logo -->
@@ -65,9 +85,30 @@ const isActive = (id: SectionName) => {
                     <span class="lang-option" :class="{ active: !store.isFrench }" aria-hidden="true">EN</span>
                 </button>
 
+                <a
+                    :href="cvUrl"
+                    class="nav-cv"
+                    target="_blank"
+                    rel="noopener"
+                    :aria-label="store.isFrench ? 'Télécharger le CV (PDF)' : 'Download resume (PDF)'"
+                    @click="trackCv"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                            d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                    CV
+                </a>
+
                 <button
                     class="menu-toggle"
                     :class="{ active: store.isMenuOpen }"
+                    aria-controls="site-menu"
                     :aria-label="store.isFrench ? 'Ouvrir le menu' : 'Open menu'"
                     :aria-expanded="store.isMenuOpen"
                     @click="store.toggleMenu"
@@ -82,6 +123,25 @@ const isActive = (id: SectionName) => {
 </template>
 
 <style scoped>
+/* Lien d'évitement : hors écran jusqu'à ce qu'il reçoive le focus clavier */
+.skip-link {
+    position: fixed;
+    top: var(--space-xs);
+    left: var(--space-xs);
+    z-index: 1100;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.9375rem;
+    color: var(--bg-primary);
+    background: var(--text-primary);
+    border-radius: 8px;
+    text-decoration: none;
+    transform: translateY(-160%);
+}
+
+.skip-link:focus {
+    transform: none;
+}
+
 .portfolio-nav {
     position: fixed;
     top: 0;
@@ -229,6 +289,33 @@ const isActive = (id: SectionName) => {
 @media (hover: hover) and (pointer: fine) {
     .lang-toggle:hover .lang-option:not(.active) {
         color: var(--text-primary);
+    }
+}
+
+/* Téléchargement du CV : même pilule que le sélecteur de langue */
+.nav-cv {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    text-decoration: none;
+    border: 1px solid var(--accent-secondary);
+    border-radius: 999px;
+    transition:
+        background 0.25s var(--ease-smooth),
+        border-color 0.25s var(--ease-smooth),
+        color 0.25s var(--ease-smooth);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nav-cv:hover {
+        color: var(--bg-primary);
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
     }
 }
 

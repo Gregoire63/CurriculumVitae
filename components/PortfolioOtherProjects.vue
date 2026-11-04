@@ -76,8 +76,8 @@ const projects = computed<Project[]>(() => [
     {
         name: 'CityZen',
         description: lang.isFrench
-            ? 'Site vitrine élégant pour un salon de coiffure, inspiré de designs primés Awwwards. Interface moderne avec gestion de contenu via Firebase.'
-            : 'Elegant showcase website for a hair salon, inspired by award-winning Awwwards designs. Modern interface with content management via Firebase.',
+            ? 'Site vitrine pour un salon de coiffure, inspiré de sites primés sur Awwwards, avec gestion de contenu via Firebase.'
+            : 'Showcase website for a hair salon, inspired by Awwwards-winning sites, with content management via Firebase.',
         year: '2023',
         type: lang.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         url: 'https://cityzen-coiffure.fr/',
@@ -97,8 +97,8 @@ const projects = computed<Project[]>(() => [
     {
         name: 'Model Viewer',
         description: lang.isFrench
-            ? "Documentation complète sur l'intégration de composants 3D interactifs dans Vue.js avec ModelViewer et Three.js."
-            : 'Complete documentation on integrating interactive 3D components in Vue.js with ModelViewer and Three.js.',
+            ? "Documentation sur l'intégration de composants 3D interactifs dans Vue.js avec ModelViewer et Three.js."
+            : 'Documentation on integrating interactive 3D components in Vue.js with ModelViewer and Three.js.',
         year: '2023',
         type: 'Documentation',
         url: 'https://vue-and-modelviewer.netlify.app/',
@@ -112,8 +112,8 @@ const projects = computed<Project[]>(() => [
     {
         name: 'NextMusic',
         description: lang.isFrench
-            ? "Application de bibliothèque musicale développée avec Next.js et Tailwind CSS, à l'interface élégante inspirée de designs Dribbble."
-            : 'Music library application built with Next.js and Tailwind CSS, with an elegant Dribbble-inspired interface.',
+            ? "Application de bibliothèque musicale développée avec Next.js et Tailwind CSS, dont l'interface reprend des maquettes publiées sur Dribbble."
+            : 'Music library application built with Next.js and Tailwind CSS, with an interface based on mockups published on Dribbble.',
         year: '2022',
         type: lang.isFrench ? 'Projet scolaire' : 'School project',
         url: 'https://next-music.netlify.app/bibliotheque',
