@@ -18,12 +18,28 @@ if [[ -z "$CHROME" ]]; then
     exit 1
 fi
 
+# Racine du dépôt en URL file:// lisible par Chrome. Sous Windows (Git Bash), $PWD vaut
+# /c/... que Chrome ne sait pas ouvrir : `pwd -W` donne C:/..., à préfixer d'un « / ».
+# Même chose pour le PDF de sortie : Chrome ne résout pas un chemin relatif sous Windows.
+ROOT_URL="file://$PWD"
+OUT_ROOT="$PWD"
+if WIN_PWD="$(pwd -W 2>/dev/null)" && [[ "$WIN_PWD" != /* ]]; then
+    ROOT_URL="file:///$WIN_PWD"
+    OUT_ROOT="$WIN_PWD"
+fi
+
 build() { # $1 = langue (fr|en), $2 = PDF de sortie
     local src="cv-source/$1.html" out="$2"
+    # On part d'un fichier absent : si Chrome échoue, on le voit au lieu de relire l'ancien PDF.
+    rm -f "$out"
     # --virtual-time-budget laisse le temps aux polices d'arriver avant l'impression.
     # --no-sandbox : nécessaire dans certains conteneurs/sandboxes ; le fichier imprimé est local et le nôtre.
     "$CHROME" --headless=new --no-sandbox --disable-gpu --no-pdf-header-footer \
-        --virtual-time-budget=10000 --print-to-pdf="$out" "file://$PWD/$src" >/dev/null 2>&1
+        --virtual-time-budget=10000 --print-to-pdf="$OUT_ROOT/$out" "$ROOT_URL/$src" >/dev/null 2>&1 || true
+    if [[ ! -s "$out" ]]; then
+        echo "Échec : Chrome n'a pas produit $out (lancer la commande sans >/dev/null pour voir l'erreur)" >&2
+        exit 1
+    fi
     local pages
     pages=$(pdfinfo "$out" 2>/dev/null | awk '/^Pages/ {print $2}' || echo '?')
     echo "$out — $pages page(s)"
@@ -33,7 +49,7 @@ build_og() { # image Open Graph 1200×630, convertie par sharp (déjà dans node
     local png
     png="$(mktemp --suffix=.png)"
     "$CHROME" --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1200,630 \
-        --virtual-time-budget=10000 --screenshot="$png" "file://$PWD/cv-source/og-image.html" >/dev/null 2>&1
+        --virtual-time-budget=10000 --screenshot="$png" "$ROOT_URL/cv-source/og-image.html" >/dev/null 2>&1
     node -e "
 const sharp = require('sharp')
 const src = process.argv[1]

@@ -50,6 +50,13 @@ scripts/build-cv.sh      # régénère les deux PDF (Chrome, polices locales)
 scripts/build-cv.sh og   # régénère l'image de partage public/og-image.jpg / .webp
 ```
 
+Le script demande Chrome et `pdfinfo` (poppler). Sous Windows (Git Bash), Chrome n'est
+pas dans le PATH et poppler installé par winget non plus, d'où :
+
+```bash
+PATH="$LOCALAPPDATA/Microsoft/WinGet/Packages/oschwartz10612.Poppler_Microsoft.Winget.Source_8wekyb3d8bbwe/poppler-25.07.0/Library/bin:$PATH" CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe" bash scripts/build-cv.sh
+```
+
 Le PDF est pensé pour les ATS, les logiciels qui trient les candidatures en lisant
 le texte extrait. D'où une seule colonne de lecture, rien entre un intitulé de
 poste et ses dates, et des polices fixes dans `cv-source/fonts/` : Chrome intègre

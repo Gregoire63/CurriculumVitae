@@ -1,28 +1,27 @@
 /*
  * Mise en page commune des deux CV (fr.html / en.html).
- * Rendu par Chrome headless via scripts/build-cv.sh — les unités sont en mm/pt,
- * pensées pour l'A4. Même palette et mêmes polices que le site.
+ * Rendu par Chrome headless via scripts/build-cv.sh : les unités sont en mm/pt,
+ * pensées pour l'A4. Même papier, même encre et mêmes polices que le site
+ * (DM Sans pour le texte, Newsreader pour le nom et les titres).
  *
  * Pensé pour être lu par les ATS (logiciels de tri de candidatures) :
  * - une seule colonne de lecture, pour que l'ordre du texte extrait suive l'ordre
  *   visuel (les grilles en deux colonnes mélangeaient compétences et formation) ;
  * - rien entre un intitulé de poste et ses dates ;
+ * - les séparateurs sont du vrai texte dans le HTML, pas du contenu CSS (::before),
+ *   pour que l'extraction les lise comme on les voit ;
  * - polices fixes intégrées en TrueType (fonts/fonts.css), pas en « Type 3 ».
  * Vérification : pdftotext public/cv/CV_Gregoire_Raturat.pdf - doit se lire dans l'ordre.
  */
 @import url('fonts/fonts.css');
 
 :root {
-    --accent: #8b6f5c;
-    --accent-strong: #6e5747;
-    --accent-soft: #e5dbc8;
-    --bg-soft: #f5f0e8;
-    --line: #e8dfd0;
-    --text: #2a2826;
-    --text-2: #6b6560;
-    --muted: #9d9691;
-    --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
-    --mono: 'Space Mono', 'Courier New', monospace;
+    --ink: #1f1b16;
+    --ink-2: #5b5248;
+    --ink-3: #74695d;
+    --line: rgb(31 27 22 / 0.14);
+    --accent: #6e5747;
+    --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
     --sans: 'DM Sans', system-ui, Arial, sans-serif;
 }
 
@@ -45,7 +44,7 @@ body {
     font-family: var(--sans);
     font-size: 9.3pt;
     line-height: 1.38;
-    color: var(--text);
+    color: var(--ink);
 }
 
 a {
@@ -60,33 +59,30 @@ header {
     align-items: flex-start;
     gap: 8mm;
     padding-bottom: 3.5mm;
-    border-bottom: 1.5pt solid var(--accent);
+    border-bottom: 0.6pt solid var(--line);
     margin-bottom: 3.5mm;
 }
 
 h1 {
     font-family: var(--serif);
     font-size: 24pt;
-    font-weight: 700;
+    font-weight: 500;
     line-height: 1.05;
     letter-spacing: -0.01em;
     margin: 0 0 1.2mm;
 }
 
 .headline {
-    font-family: var(--mono);
-    font-size: 7.9pt;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--accent);
-    margin: 0 0 2.4mm;
+    font-size: 9.6pt;
+    color: var(--ink);
+    margin: 0 0 2.2mm;
 }
 
 /* Deux lignes volontaires (coordonnées / liens) : un retour automatique laisserait un « · » orphelin */
 .contact {
     margin: 0;
     font-size: 8.6pt;
-    color: var(--text-2);
+    color: var(--ink-2);
     display: flex;
     flex-wrap: wrap;
 }
@@ -98,7 +94,7 @@ h1 {
 .contact span + span::before {
     content: '·';
     margin: 0 1.8mm;
-    color: var(--muted);
+    color: var(--ink-3);
 }
 
 .photo {
@@ -106,16 +102,16 @@ h1 {
     width: 23mm;
     height: 29mm;
     object-fit: cover;
-    border-radius: 3mm;
+    border-radius: 2mm;
 }
 
 /* ---------- Sections ---------- */
 h2 {
     font-family: var(--serif);
-    font-size: 12pt;
-    font-weight: 700;
-    color: var(--accent-strong);
-    margin: 4mm 0 1.8mm;
+    font-size: 13pt;
+    font-weight: 500;
+    color: var(--accent);
+    margin: 3.6mm 0 1.6mm;
     padding-bottom: 0.8mm;
     border-bottom: 0.6pt solid var(--line);
     break-after: avoid;
@@ -132,7 +128,7 @@ section:first-of-type h2 {
 /* ---------- Expériences ---------- */
 .xp {
     break-inside: avoid;
-    margin-bottom: 3mm;
+    margin-bottom: 2.6mm;
 }
 
 .xp-head {
@@ -144,26 +140,18 @@ section:first-of-type h2 {
 
 .xp h3 {
     font-size: 10.4pt;
-    font-weight: 700;
+    font-weight: 500;
     margin: 0;
 }
 
 .company {
-    font-weight: 500;
-    color: var(--accent-strong);
-}
-
-.company::before {
-    content: '—';
-    margin: 0 1.5mm;
-    color: var(--muted);
     font-weight: 400;
+    color: var(--ink-2);
 }
 
 .period {
-    font-family: var(--mono);
-    font-size: 7.7pt;
-    color: var(--text-2);
+    font-size: 8.4pt;
+    color: var(--ink-2);
     white-space: nowrap;
 }
 
@@ -178,49 +166,42 @@ section:first-of-type h2 {
 }
 
 .xp li::marker {
-    color: var(--accent);
+    color: var(--ink-3);
 }
 
 .stack {
     margin: 0;
-    font-family: var(--mono);
-    font-size: 7.4pt;
-    color: var(--text-2);
+    font-size: 7.8pt;
+    color: var(--ink-3);
 }
 
 .stack b {
-    color: var(--accent);
+    font-weight: 500;
+    color: var(--ink-2);
 }
 
 /* ---------- Projets ---------- */
 .proj {
     margin: 0;
-    padding: 0;
-    list-style: none;
+    padding-left: 3.8mm;
 }
 
 .proj li {
-    position: relative;
     margin: 0 0 1.1mm;
-    padding-left: 4mm;
+    padding-left: 0.4mm;
     break-inside: avoid;
 }
 
-.proj li::before {
-    content: '';
-    position: absolute;
-    left: 0.3mm;
-    top: 0.45em;
-    width: 1.6mm;
-    height: 1.6mm;
-    border-radius: 50%;
-    background: var(--accent);
+.proj li::marker {
+    color: var(--ink-3);
+}
+
+.proj strong {
+    font-weight: 500;
 }
 
 .url {
-    font-family: var(--mono);
-    font-size: 7.4pt;
-    color: var(--accent);
+    color: var(--ink-3);
 }
 
 /* ---------- Compétences : une catégorie par ligne ---------- */
@@ -233,8 +214,7 @@ section:first-of-type h2 {
 /* Même police et même taille que le texte : un intitulé plus petit, dans une autre
    police, sortait de sa ligne à l'extraction et se retrouvait après sa liste. */
 .label {
-    font-weight: 700;
-    color: var(--accent-strong);
+    font-weight: 500;
 }
 
 /* ---------- Formation : période, diplôme et école sur une même ligne ----------
@@ -248,12 +228,15 @@ section:first-of-type h2 {
     margin: 0;
 }
 
-.edu-period {
+.edu strong {
     font-weight: 500;
-    color: var(--accent);
+}
+
+.edu-period {
+    color: var(--ink-2);
 }
 
 .edu .detail {
     margin-top: 0.2mm;
-    color: var(--text-2);
+    color: var(--ink-2);
 }
