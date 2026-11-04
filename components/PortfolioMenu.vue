@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SectionName } from '~/stores/portfolio'
 import { usePreferredReducedMotion } from '@vueuse/core'
+import { nextTick, ref, watch } from 'vue'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
@@ -19,9 +20,45 @@ const handleNavigate = (section: SectionName) => {
     store.navigateToSection(section)
 }
 
-// Échap ferme le menu
+const panelRef = ref<HTMLElement | null>(null)
+const closeRef = ref<HTMLButtonElement | null>(null)
+// Élément qui avait le focus à l'ouverture (le bouton du menu) : il le retrouve à la fermeture
+let opener: HTMLElement | null = null
+
+// Le composant s'hydrate au moment où le menu s'ouvre : on suit l'apparition du panneau.
+// La référence tombe à null dès le début de la sortie, panneau encore affiché.
+watch(panelRef, async (panel, previous) => {
+    if (panel && !previous) {
+        opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+        await nextTick()
+        closeRef.value?.focus()
+    } else if (!panel && previous) {
+        const active = document.activeElement
+        const focusInPanel = !active || active === document.body || previous.contains(active)
+        if (opener?.isConnected && focusInPanel) opener.focus()
+        opener = null
+    }
+})
+
+// Échap ferme le menu ; Tab tourne dans le panneau tant qu'il est ouvert
 useEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape' && store.isMenuOpen) store.setMenuOpen(false)
+    if (!store.isMenuOpen || !panelRef.value) return
+    if (e.key === 'Escape') {
+        store.setMenuOpen(false)
+        return
+    }
+    if (e.key !== 'Tab') return
+    const focusables = [...panelRef.value.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')]
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    if (!first || !last) return
+    if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+    }
 })
 
 const openPrivacyPolicy = () => {
@@ -34,6 +71,8 @@ const openPrivacyPolicy = () => {
     <Transition name="menu">
         <div v-if="store.isMenuOpen" class="menu-overlay" @click="store.setMenuOpen(false)">
             <div
+                id="site-menu"
+                ref="panelRef"
                 class="menu-panel"
                 role="dialog"
                 aria-modal="true"
@@ -46,6 +85,8 @@ const openPrivacyPolicy = () => {
                         <span class="logo-initial">GR</span>
                     </div>
                     <button
+                        ref="closeRef"
+                        type="button"
                         class="menu-close"
                         :aria-label="store.isFrench ? 'Fermer le menu' : 'Close menu'"
                         @click="store.setMenuOpen(false)"
@@ -139,8 +180,8 @@ const openPrivacyPolicy = () => {
                     <p class="menu-tagline">
                         {{
                             store.isFrench
-                                ? 'Transformons vos idées en réalité'
-                                : "Let's transform your ideas into reality"
+                                ? 'Développeur full-stack à Lyon'
+                                : 'Full-stack developer in Lyon'
                         }}
                     </p>
 

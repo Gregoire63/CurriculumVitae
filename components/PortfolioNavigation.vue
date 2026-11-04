@@ -4,6 +4,13 @@ import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
 
+// Lien d'évitement : le focus va au contenu, la nav est sautée
+const skipToMain = () => {
+    const main = document.getElementById('main')
+    main?.focus({ preventScroll: true })
+    main?.scrollIntoView({ block: 'start' })
+}
+
 const handleNavClick = (section: SectionName) => {
     store.navigateToSection(section)
 }
@@ -16,6 +23,9 @@ const isActive = (id: SectionName) => {
 </script>
 
 <template>
+    <a href="#main" class="skip-link" @click.prevent="skipToMain">
+        {{ store.isFrench ? 'Aller au contenu' : 'Skip to content' }}
+    </a>
     <nav class="portfolio-nav" :class="{ scrolled: store.scrollProgress > 5 }">
         <div class="nav-container">
             <!-- Logo -->
@@ -68,6 +78,7 @@ const isActive = (id: SectionName) => {
                 <button
                     class="menu-toggle"
                     :class="{ active: store.isMenuOpen }"
+                    aria-controls="site-menu"
                     :aria-label="store.isFrench ? 'Ouvrir le menu' : 'Open menu'"
                     :aria-expanded="store.isMenuOpen"
                     @click="store.toggleMenu"
@@ -82,6 +93,25 @@ const isActive = (id: SectionName) => {
 </template>
 
 <style scoped>
+/* Lien d'évitement : hors écran jusqu'à ce qu'il reçoive le focus clavier */
+.skip-link {
+    position: fixed;
+    top: var(--space-xs);
+    left: var(--space-xs);
+    z-index: 1100;
+    padding: var(--space-xs) var(--space-sm);
+    font-size: 0.9375rem;
+    color: var(--bg-primary);
+    background: var(--text-primary);
+    border-radius: 8px;
+    text-decoration: none;
+    transform: translateY(-160%);
+}
+
+.skip-link:focus {
+    transform: none;
+}
+
 .portfolio-nav {
     position: fixed;
     top: 0;

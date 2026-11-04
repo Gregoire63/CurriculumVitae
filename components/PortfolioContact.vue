@@ -13,8 +13,16 @@ const name = ref('')
 const email = ref('')
 const message = ref('')
 const isSubmitting = ref(false)
-const isSuccess = ref(false)
 const isError = ref(false)
+
+const EMAIL = 'gregoireraturatpro@gmail.com'
+
+// Message lu par les lecteurs d'écran à chaque changement d'état du formulaire
+const statusMessage = computed(() => {
+    if (isSubmitting.value) return lang.isFrench ? 'Envoi du message en cours' : 'Sending your message'
+    if (isError.value) return lang.isFrench ? 'Le message n’est pas parti' : 'Your message was not sent'
+    return ''
+})
 
 // computed : le lien du CV suit la langue de l'interface
 const socialLinks = computed(() => [
@@ -131,11 +139,7 @@ const handleSubmit = async (e: Event) => {
         if (error instanceof Error) {
             console.error('Error details:', error.message)
         }
-
-        // Reset de l'erreur après 5s
-        setTimeout(() => {
-            isError.value = false
-        }, 5000)
+        // L'erreur reste affichée jusqu'au prochain envoi : les champs sont conservés
     } finally {
         isSubmitting.value = false
     }
@@ -160,8 +164,8 @@ const handleSubmit = async (e: Event) => {
                     <p class="section-description">
                         {{
                             lang.isFrench
-                                ? 'Un projet, une question ou simplement envie d’échanger ? Écrivez-moi, je réponds rapidement.'
-                                : 'A project, a question, or just want to connect? Write to me — I reply quickly.'
+                                ? 'Une mission en freelance, un poste, une question sur un projet : écrivez-moi ici, ou directement par email.'
+                                : 'A freelance project, a job, a question about my work: write to me here, or directly by email.'
                         }}
                     </p>
 
@@ -187,20 +191,24 @@ const handleSubmit = async (e: Event) => {
                 <!-- Right Column - Form -->
                 <div ref="formRef" class="contact-form-wrapper">
                     <!-- Message d'erreur -->
-                    <div v-if="isError" class="error-message">
+                    <div v-if="isError" class="error-message" role="alert">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
                             <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                         </svg>
                         <span>
-                            {{ lang.isFrench 
-                                ? "Erreur lors de l'envoi. Veuillez réessayer." 
-                                : "Error sending message. Please try again."
-                            }}
+                            <template v-if="lang.isFrench">
+                                Le message n’est pas parti. Réessayez dans un instant, ou écrivez-moi à
+                                <a :href="`mailto:${EMAIL}`">{{ EMAIL }}</a>, vos champs sont conservés.
+                            </template>
+                            <template v-else>
+                                Your message was not sent. Try again in a moment, or email me at
+                                <a :href="`mailto:${EMAIL}`">{{ EMAIL }}</a>; your text is still here.
+                            </template>
                         </span>
                     </div>
 
-                    <form class="contact-form" name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" @submit="handleSubmit">
+                    <form class="contact-form" name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" :aria-busy="isSubmitting" @submit="handleSubmit">
                         <!-- Hidden fields requis par Netlify -->
                         <input type="hidden" name="form-name" value="contact" />
                         
@@ -247,14 +255,14 @@ const handleSubmit = async (e: Event) => {
                                 v-model="message"
                                 name="message"
                                 class="form-textarea"
-                                :placeholder="lang.isFrench ? 'Votre message...' : 'Your message...'"
+                                :placeholder="lang.isFrench ? 'Votre message' : 'Your message'"
                                 rows="6"
                                 required
                             ></textarea>
                         </div>
 
                         <button type="submit" class="submit-button" :disabled="isSubmitting">
-                            <span v-if="!isSubmitting && !isSuccess">
+                            <span v-if="!isSubmitting">
                                 {{ lang.isFrench ? 'Envoyer' : 'Send' }}
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                     <path
@@ -271,19 +279,8 @@ const handleSubmit = async (e: Event) => {
                                 <span class="loading-dot"></span>
                                 <span class="loading-dot"></span>
                             </span>
-                            <span v-else class="success">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                                    <path
-                                        d="M20 6L9 17L4 12"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    />
-                                </svg>
-                                {{ lang.isFrench ? 'Envoyé !' : 'Sent!' }}
-                            </span>
                         </button>
+                        <p class="sr-only" aria-live="polite">{{ statusMessage }}</p>
                     </form>
                 </div>
             </div>
@@ -435,6 +432,11 @@ const handleSubmit = async (e: Event) => {
 
 .error-message svg {
     flex-shrink: 0;
+}
+
+.error-message a {
+    color: inherit;
+    text-decoration: underline;
 }
 
 .contact-form {

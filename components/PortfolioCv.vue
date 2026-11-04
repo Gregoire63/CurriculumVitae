@@ -25,7 +25,7 @@ interface Experience {
 
 const experiences = computed<Experience[]>(() => [
     {
-        period: lang.isFrench ? 'Juin 2026 - Aujourd’hui' : 'Jun. 2026 - Present',
+        period: lang.isFrench ? 'Juin 2026 – aujourd’hui' : 'Jun. 2026 – present',
         title: lang.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SOCOTEC',
         companyUrl: 'https://www.socotec.com/',
@@ -34,7 +34,7 @@ const experiences = computed<Experience[]>(() => [
         description: lang.isFrench
             ? [
                   'Développement de l’application de mesure d’émissions atmosphériques du groupe : PWA offline-first (IndexedDB) pour les campagnes de terrain, bons de commande laboratoire et rapports réglementaires',
-                  'Migration du front de Vue 2 / Vuetify 2 / Vuex / webpack vers Vue 3 / Vuetify 3 / Pinia / Vite (≈ 300 fichiers), puis stabilisation en production',
+                  'Migration du front de Vue 2 / Vuetify 2 / Vuex / webpack vers Vue 3 / Vuetify 3 / Pinia / Vite (environ 300 fichiers), puis stabilisation en production',
                   'Génération asynchrone des rapports : passage du service de rapports de gRPC à REST, workers Celery, événements Kafka, déploiement GitOps (FluxCD / Kubernetes)',
                   'Retrait de la couche gRPC du back Django au profit d’APIs REST documentées (DRF, OpenAPI)',
                   'Back Django / DRF : moteur de calcul et détection d’écarts réglementaires, fiabilisation (timeouts, requêtes N+1, tâches asynchrones)',
@@ -42,7 +42,7 @@ const experiences = computed<Experience[]>(() => [
               ]
             : [
                   'Development of the group’s atmospheric-emission measurement application: offline-first PWA (IndexedDB) for field campaigns, lab order forms and regulatory reports',
-                  'Front-end migration from Vue 2 / Vuetify 2 / Vuex / webpack to Vue 3 / Vuetify 3 / Pinia / Vite (≈ 300 files), then stabilisation in production',
+                  'Front-end migration from Vue 2 / Vuetify 2 / Vuex / webpack to Vue 3 / Vuetify 3 / Pinia / Vite (about 300 files), then stabilisation in production',
                   'Asynchronous report generation: report service moved from gRPC to REST, Celery workers, Kafka events, GitOps deployment (FluxCD / Kubernetes)',
                   'Decommissioning of the gRPC layer of the Django back end in favour of documented REST APIs (DRF, OpenAPI)',
                   'Django / DRF back end: calculation engine and regulatory deviation detection, hardening (timeouts, N+1 queries, async tasks)',
@@ -61,10 +61,11 @@ const experiences = computed<Experience[]>(() => [
             'Kubernetes / FluxCD',
             'GitLab CI',
             'Sentry',
+            'SonarQube',
         ],
     },
     {
-        period: lang.isFrench ? 'Nov. 2025 - Juin 2026' : 'Nov. 2025 - Jun. 2026',
+        period: lang.isFrench ? 'Nov. 2025 – juin 2026' : 'Nov. 2025 – Jun. 2026',
         title: lang.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: 'SOGEDO',
         location: 'Lyon',
@@ -86,7 +87,7 @@ const experiences = computed<Experience[]>(() => [
         stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'Vitest / Jest', 'GitLab CI/CD', '.NET', 'npm privé', 'CLI'],
     },
     {
-        period: 'Oct. 2023 - Nov. 2025',
+        period: lang.isFrench ? 'Oct. 2023 – nov. 2025' : 'Oct. 2023 – Nov. 2025',
         title: lang.isFrench ? 'Développeur Full Stack' : 'Full Stack Developer',
         company: lang.isFrench ? 'SYSTRA (ex-Modaal)' : 'SYSTRA (formerly Modaal)',
         companyUrl: 'https://www.systra.com/',
@@ -111,8 +112,8 @@ const experiences = computed<Experience[]>(() => [
         stack: ['Vue.js 3', 'TypeScript', 'Node.js', 'PostGIS', 'Python', 'Docker', 'GitLab CI/CD'],
     },
     {
-        period: '2020 - 2023',
-        title: lang.isFrench ? 'Apprenti Développeur' : 'Apprentice Developer',
+        period: '2020 – 2023',
+        title: lang.isFrench ? 'Apprenti développeur' : 'Apprentice developer',
         company: 'Modaal',
         location: 'Lyon',
         description: lang.isFrench
@@ -131,8 +132,8 @@ const experiences = computed<Experience[]>(() => [
         stack: ['Vue.js', 'Express', 'PostgreSQL / PostGIS', 'Python', 'Docker'],
     },
     {
-        period: lang.isFrench ? 'Depuis janv. 2025' : 'Since Jan. 2025',
-        title: lang.isFrench ? 'Enseignant vacataire — Développement web' : 'Part-time Lecturer — Web Development',
+        period: lang.isFrench ? 'Janv. 2025 – aujourd’hui' : 'Jan. 2025 – present',
+        title: lang.isFrench ? 'Enseignant vacataire en développement web' : 'Part-time lecturer in web development',
         company: lang.isFrench ? 'Université Claude Bernard Lyon 1' : 'Claude Bernard University Lyon 1',
         companyUrl: 'https://www.univ-lyon1.fr/',
         location: 'Lyon',
@@ -151,25 +152,25 @@ const experiences = computed<Experience[]>(() => [
         stack: ['HTML / CSS / JS', 'Vue.js 3', 'TypeScript', 'Vite', 'Go'],
     },
     {
-        period: lang.isFrench ? 'Depuis 2021' : 'Since 2021',
-        title: lang.isFrench ? 'Développeur Full-Stack Freelance' : 'Freelance Full-Stack Developer',
+        period: lang.isFrench ? '2021 – aujourd’hui' : '2021 – present',
+        title: lang.isFrench ? 'Développeur full-stack freelance' : 'Freelance full-stack developer',
         company: lang.isFrench ? 'Auto-entrepreneur' : 'Self-employed',
         location: lang.isFrench ? 'Lyon & Remote' : 'Lyon & Remote',
         side: true,
         description: lang.isFrench
             ? [
-                  'DishRank — application de notation de plats publiée sur l’App Store, Google Play et le web (React Native / Expo, Next.js, Supabase), disponible en 5 langues',
-                  'babyNamed — application pour choisir le prénom de bébé à deux, à l’aveugle, en huit langues (Nuxt, Cloudflare)',
+                  'DishRank : application de notation de plats publiée sur l’App Store, Google Play et le web (React Native / Expo, Next.js, Supabase), disponible en 5 langues',
+                  'babyNamed : application pour choisir le prénom de bébé à deux, à l’aveugle, en huit langues (Nuxt, Cloudflare)',
                   'Messagerie omnicanale pour tatoueurs, en production : WhatsApp, Instagram, Messenger et email réunis sur Chatwoot, brouillons de réponse générés par l’API Claude et validés par l’artiste',
-                  'ETF PEA — application de suivi et d’analyse des ETF éligibles au PEA (Next.js)',
-                  'Plus de 15 sites et outils sur mesure livrés de bout en bout : conception, développement, déploiement, maintenance',
+                  'ETF PEA : application de suivi et d’analyse des ETF éligibles au PEA (Next.js)',
+                  'Plus de 15 sites et outils livrés pour des clients, de bout en bout : conception, développement, déploiement, maintenance',
               ]
             : [
-                  'DishRank — dish-rating app published on the App Store, Google Play and the web (React Native / Expo, Next.js, Supabase), available in 5 languages',
-                  'babyNamed — app to pick a baby name together, blind, in eight languages (Nuxt, Cloudflare)',
+                  'DishRank: dish-rating app published on the App Store, Google Play and the web (React Native / Expo, Next.js, Supabase), available in 5 languages',
+                  'babyNamed: app to pick a baby name together, blind, in eight languages (Nuxt, Cloudflare)',
                   'Omnichannel messaging for tattoo artists, in production: WhatsApp, Instagram, Messenger and email in one Chatwoot inbox, reply drafts generated by the Claude API and approved by the artist',
-                  'ETF PEA — web app to track and analyse PEA-eligible ETFs (Next.js)',
-                  '15+ custom websites and tools shipped end to end: design, development, deployment, maintenance',
+                  'ETF PEA: web app to track and analyse PEA-eligible ETFs (Next.js)',
+                  '15+ websites and tools shipped end to end for clients: design, development, deployment, maintenance',
               ],
         stack: ['React Native', 'Expo', 'Next.js', 'Nuxt', 'Supabase', 'Cloudflare', 'Node.js', 'API Claude'],
     },
@@ -271,10 +272,10 @@ if (import.meta.client) {
             <div ref="headerRef" class="cv-header">
                 <span class="section-label">
                     <span class="label-line"></span>
-                    {{ lang.isFrench ? 'Mon Parcours' : 'My Journey' }}
+                    {{ lang.isFrench ? 'Mon parcours' : 'My journey' }}
                 </span>
                 <h2 class="section-title">
-                    {{ lang.isFrench ? 'Expérience Professionnelle' : 'Professional Experience' }}
+                    {{ lang.isFrench ? 'Expérience professionnelle' : 'Professional experience' }}
                 </h2>
                 <p class="section-description">
                     {{
@@ -294,7 +295,7 @@ if (import.meta.client) {
                             stroke-linejoin="round"
                         />
                     </svg>
-                    {{ lang.isFrench ? 'Télécharger le CV' : 'Download Resume' }}
+                    {{ lang.isFrench ? 'Télécharger le CV' : 'Download resume' }}
                 </button>
             </div>
 
@@ -440,7 +441,7 @@ if (import.meta.client) {
                 <div
                     v-for="(stat, index) in [
                         { number: '6', label: lang.isFrench ? 'Années d\'expérience' : 'Years of experience' },
-                        { number: '10M+', label: lang.isFrench ? 'Données traitées' : 'Data processed' },
+                        { number: '10M+', label: lang.isFrench ? 'Parcelles cadastrales' : 'Cadastral parcels' },
                         { number: '100+', label: lang.isFrench ? 'Étudiants formés' : 'Students trained' },
                         { number: '20+', label: lang.isFrench ? 'Projets livrés' : 'Projects delivered' },
                     ]"

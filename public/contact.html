@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Message envoyé — Grégoire Raturat</title>
+    <title>Message envoyé · Grégoire Raturat</title>
     <!-- Pas de Google Fonts : la CSP (netlify.toml) n'autorise que les polices du site,
          la feuille était bloquée et la page tombait déjà sur les polices de repli. -->
     <style>
@@ -366,7 +366,7 @@
         </div>
       </div>
 
-      <h1 id="t-title">Message envoyé !</h1>
+      <h1 id="t-title">Message envoyé</h1>
       <p class="subtitle" id="t-subtitle">
         Merci pour votre message.<br />
         Je vous répondrai dans les plus brefs délais.
@@ -400,9 +400,9 @@
       // Localisation : reprend la langue choisie sur le site (même clé que le store Pinia)
       if (localStorage.getItem('portfolio-lang') === 'en') {
         document.documentElement.lang = 'en'
-        document.title = 'Message sent — Grégoire Raturat'
+        document.title = 'Message sent · Grégoire Raturat'
         document.getElementById('t-label').textContent = 'Success'
-        document.getElementById('t-title').textContent = 'Message sent!'
+        document.getElementById('t-title').textContent = 'Message sent'
         document.getElementById('t-subtitle').innerHTML =
           'Thank you for your message.<br />I will get back to you as soon as possible.'
         document.getElementById('t-info').innerHTML =

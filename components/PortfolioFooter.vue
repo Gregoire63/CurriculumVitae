@@ -92,7 +92,7 @@ const socialLinks = [
 
                 <!-- Social -->
                 <div class="footer-links">
-                    <h4 class="footer-heading">{{ lang.isFrench ? 'Suivez-moi' : 'Follow me' }}</h4>
+                    <h4 class="footer-heading">{{ lang.isFrench ? 'Profils' : 'Profiles' }}</h4>
                     <div class="footer-social">
                         <a
                             v-for="social in socialLinks"
@@ -114,8 +114,7 @@ const socialLinks = [
             <!-- Footer bottom -->
             <div class="footer-bottom">
                 <p class="copyright">
-                    © {{ currentYear }} Grégoire Raturat.
-                    {{ lang.isFrench ? 'Tous droits réservés.' : 'All rights reserved.' }}
+                    © {{ currentYear }} Grégoire Raturat
                 </p>
             </div>
         </div>

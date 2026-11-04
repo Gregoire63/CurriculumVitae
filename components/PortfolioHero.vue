@@ -103,8 +103,8 @@ const handleNavigate = (section: SectionName) => {
                     <p class="hero-description">
                         {{
                             store.isFrench
-                                ? 'Je conçois et mets en production des applications web et mobile, du front à l’infrastructure. J’intègre aussi l’IA (API Claude, MCP) dans de vrais produits.'
-                                : 'I design and ship web and mobile applications, from front end to infrastructure. I also build AI (Claude API, MCP) into real products.'
+                                ? 'Je conçois et mets en production des applications web et mobile, du front à l’infrastructure. J’intègre aussi l’IA (API Claude, MCP) dans des produits livrés.'
+                                : 'I design and ship web and mobile applications, from front end to infrastructure. I also build AI (Claude API, MCP) into shipped products.'
                         }}
                     </p>
 
