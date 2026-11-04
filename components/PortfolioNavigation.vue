@@ -3,6 +3,16 @@ import type { SectionName } from '~/stores/portfolio'
 import { usePortfolioStore } from '~/stores/portfolio'
 
 const store = usePortfolioStore()
+const { gtag } = useGtag()
+
+// Le CV PDF dans la langue de l'interface, accessible depuis la barre sur toute la page
+const cvUrl = computed(() => (store.isFrench ? '/cv/CV_Gregoire_Raturat.pdf' : '/cv/CV_Gregoire_Raturat_EN.pdf'))
+
+const trackCv = () => {
+    if (typeof gtag !== 'undefined') {
+        gtag('event', 'download', { event_category: 'engagement', event_label: 'CV_PDF_nav' })
+    }
+}
 
 // Lien d'évitement : le focus va au contenu, la nav est sautée
 const skipToMain = () => {
@@ -74,6 +84,26 @@ const isActive = (id: SectionName) => {
                     <span class="lang-option" :class="{ active: store.isFrench }" aria-hidden="true">FR</span>
                     <span class="lang-option" :class="{ active: !store.isFrench }" aria-hidden="true">EN</span>
                 </button>
+
+                <a
+                    :href="cvUrl"
+                    class="nav-cv"
+                    target="_blank"
+                    rel="noopener"
+                    :aria-label="store.isFrench ? 'Télécharger le CV (PDF)' : 'Download resume (PDF)'"
+                    @click="trackCv"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                            d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 20h14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                        />
+                    </svg>
+                    CV
+                </a>
 
                 <button
                     class="menu-toggle"
@@ -259,6 +289,33 @@ const isActive = (id: SectionName) => {
 @media (hover: hover) and (pointer: fine) {
     .lang-toggle:hover .lang-option:not(.active) {
         color: var(--text-primary);
+    }
+}
+
+/* Téléchargement du CV : même pilule que le sélecteur de langue */
+.nav-cv {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.8rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    text-decoration: none;
+    border: 1px solid var(--accent-secondary);
+    border-radius: 999px;
+    transition:
+        background 0.25s var(--ease-smooth),
+        border-color 0.25s var(--ease-smooth),
+        color 0.25s var(--ease-smooth);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nav-cv:hover {
+        color: var(--bg-primary);
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
     }
 }
 

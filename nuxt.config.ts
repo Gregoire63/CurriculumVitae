@@ -71,6 +71,14 @@ export default defineNuxtConfig({
             xxl: 1536,
         },
     },
+    // En dev seulement : depuis @nuxt/image 2.2, `ipxStatic` n'enregistre plus la route
+    // /_ipx pendant `nuxt dev` et la photo du hero sortait en 404. Le provider `ipx` la
+    // sert à la volée ; le build de prod garde `ipxStatic` et ses fichiers pré-générés.
+    $development: {
+        image: {
+            provider: 'ipx',
+        },
+    },
     robots: {
         disallow: [],
         sitemap: 'https://gregoire-raturat.fr/sitemap.xml',

@@ -239,11 +239,10 @@ const downloadCV = () => {
 // Refs pour les animations au scroll
 const headerRef = ref<HTMLElement | null>(null)
 const timelineRef = ref<HTMLElement | null>(null)
-const statsRef = ref<HTMLElement | null>(null)
 
 // Configuration des animations au montage (côté client uniquement)
 if (import.meta.client) {
-    const { fadeUp, scaleIn } = getVariants()
+    const { fadeUp } = getVariants()
 
     // Header animation
     useMotion(headerRef, {
@@ -251,17 +250,6 @@ if (import.meta.client) {
         visibleOnce: fadeUp?.visible,
     })
 
-    // Stats animation avec delay
-    useMotion(statsRef, {
-        initial: scaleIn?.initial,
-        visibleOnce: {
-            ...scaleIn?.visible,
-            transition: {
-                ...scaleIn?.visible.transition,
-                delay: 0.3,
-            },
-        },
-    })
 }
 </script>
 
@@ -433,40 +421,6 @@ if (import.meta.client) {
                             </span>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- Stats avec animation scale-in retardée -->
-            <div ref="statsRef" class="cv-stats">
-                <div
-                    v-for="(stat, index) in [
-                        { number: '6', label: lang.isFrench ? 'Années d\'expérience' : 'Years of experience' },
-                        { number: '10M+', label: lang.isFrench ? 'Parcelles cadastrales' : 'Cadastral parcels' },
-                        { number: '100+', label: lang.isFrench ? 'Étudiants formés' : 'Students trained' },
-                        { number: '20+', label: lang.isFrench ? 'Projets livrés' : 'Projects delivered' },
-                    ]"
-                    :key="index"
-                    v-motion
-                    :initial="prefersReducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.8, y: 20 }"
-                    :visibleOnce="
-                        prefersReducedMotion
-                            ? { opacity: 1 }
-                            : {
-                                  opacity: 1,
-                                  scale: 1,
-                                  y: 0,
-                                  transition: {
-                                      type: 'spring',
-                                      stiffness: 100,
-                                      damping: 20,
-                                      delay: 0.5 + index * 0.08,
-                                  },
-                              }
-                    "
-                    class="stat-card"
-                >
-                    <div class="stat-number">{{ stat.number }}</div>
-                    <div class="stat-label">{{ stat.label }}</div>
                 </div>
             </div>
         </div>
@@ -787,54 +741,6 @@ if (import.meta.client) {
     }
 }
 
-/* Stats */
-.cv-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: var(--space-md);
-    margin-top: var(--space-xl);
-}
-
-.stat-card {
-    background: var(--bg-primary);
-    border: 1px solid var(--bg-accent);
-    border-radius: 16px;
-    padding: var(--space-lg);
-    text-align: center;
-    transition:
-        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-        border-color 0.3s ease,
-        box-shadow 0.3s ease;
-    will-change: transform;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-    .stat-card:hover {
-        transform: translateY(-6px) scale(1.03);
-        border-color: var(--accent-primary);
-        box-shadow:
-            0 12px 35px rgba(139, 111, 92, 0.2),
-            0 4px 12px rgba(0, 0, 0, 0.08);
-    }
-}
-
-.stat-number {
-    font-family: var(--font-display);
-    font-size: 2.5rem;
-    font-weight: 700;
-    color: var(--accent-primary);
-    line-height: 1;
-    margin-bottom: var(--space-xs);
-}
-
-.stat-label {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-}
-
 /* Responsive */
 @media (max-width: 768px) {
     .cv-section {
@@ -843,9 +749,6 @@ if (import.meta.client) {
 
     .timeline {
         padding-left: 0;
-    }
-    .stat-card {
-        padding: 10px !important;
     }
     .timeline-item {
         gap: var(--space-md);
@@ -856,10 +759,6 @@ if (import.meta.client) {
     }
     .timeline-content {
         padding: var(--space-md);
-    }
-    .cv-stats {
-        margin-top: var(--space-md);
-        gap: var(--space-xs);
     }
     .experience-title {
         font-size: 1.25rem;
