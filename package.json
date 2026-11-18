@@ -35,10 +35,12 @@
     "typescript": "^5.7.2"
   },
   "overrides": {
+    "@nuxt/devtools": "^3.4.1",
     "esbuild": "^0.28.1",
-    "sharp": "^0.35.3",
+    "katex": "^0.18.2",
     "postcss": "^8.5.26",
-    "@nuxt/devtools": "^3.4.1"
+    "readdir-glob": "^4.0.0",
+    "sharp": "^0.35.3"
   },
   "engines": {
     "node": ">=22.12.0"
